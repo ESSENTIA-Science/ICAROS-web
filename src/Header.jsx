@@ -41,7 +41,7 @@ const Header = () => {
           <li><a onClick={() => { navigate("/rocket"); closeMenu(); }}>Rockets</a></li>
           <li><a onClick={() => { navigate("/gallery"); closeMenu(); }}>Gallery</a></li>
           <li><a onClick={() => { navigate("/member"); closeMenu(); }}>Members</a></li>
-          <li><a className="nav-simulate" onClick={() => {alert("준비 중 입니다");}}>Simulate</a></li>
+          <li><a href="https://simulate-icaros.netlify.app/" className="nav-simulate">Simulate</a></li>
         </ul>
       </div>
     </header>
