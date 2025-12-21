@@ -1,0 +1,250 @@
+html {
+  scroll-behavior: smooth;
+}
+
+html, body {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+@font-face { font-family: "WdscnUEx"; src: url("./assets/fonts/WidescreenUEx_Trial_Hair.ttf"); font-weight:100; font-style:normal; font-display:swap; }
+@font-face { font-family: "WdscnUEx"; src: url("./assets/fonts/WidescreenUEx_Trial_Th.ttf"); font-weight:200; font-style:normal; font-display:swap; }
+@font-face { font-family: "WdscnUEx"; src: url("./assets/fonts/WidescreenUEx_Trial_Lt.ttf"); font-weight:300; font-style:normal; font-display:swap; }
+@font-face { font-family: "WdscnUEx"; src: url("./assets/fonts/WidescreenUEx_Trial_Rg.ttf"); font-weight:400; font-style:normal; font-display:swap; }
+@font-face { font-family: "WdscnUEx"; src: url("./assets/fonts/WidescreenUEx_Trial_Md.ttf"); font-weight:500; font-style:normal; font-display:swap; }
+@font-face { font-family: "WdscnUEx"; src: url("./assets/fonts/WidescreenUEx_Trial_SBd.ttf"); font-weight:600; font-style:normal; font-display:swap; }
+@font-face { font-family: "WdscnUEx"; src: url("./assets/fonts/WidescreenUEx_Trial_Bd.ttf"); font-weight:700; font-style:normal; font-display:swap; }
+@font-face { font-family: "WdscnUEx"; src: url("./assets/fonts/WidescreenUEx_Trial_Blk.ttf"); font-weight:800; font-style:normal; font-display:swap; }
+@font-face { font-family: "WdscnUEx"; src: url("./assets/fonts/WidescreenUEx_Trial_XBd.ttf"); font-weight:900; font-style:normal; font-display:swap; }
+
+@font-face {
+	font-family: 'Pretendard';
+	font-weight: 900;
+	font-display: swap;
+	src: local('Pretendard Black'),
+		url("./assets/fonts/woff2/Pretendard-Black.woff2") format('woff2'),
+		url("./assets/fonts/woff/Pretendard-Black.woff") format('woff');
+}
+
+@font-face {
+	font-family: 'Pretendard';
+	font-weight: 800;
+	font-display: swap;
+	src: local('Pretendard ExtraBold'),
+		url("./assets/fonts/woff2/Pretendard-ExtraBold.woff2") format('woff2'),
+		url("./assets/fonts/woff/Pretendard-ExtraBold.woff") format('woff');
+}
+
+@font-face {
+	font-family: 'Pretendard';
+	font-weight: 700;
+	font-display: swap;
+	src: local('Pretendard Bold'),
+		url("./assets/fonts/woff2/Pretendard-Bold.woff2") format('woff2'),
+		url("./assets/fonts/woff/Pretendard-Bold.woff") format('woff');
+}
+
+@font-face {
+	font-family: 'Pretendard';
+	font-weight: 600;
+	font-display: swap;
+	src: local('Pretendard SemiBold'),
+		url("./assets/fonts/woff2/Pretendard-SemiBold.woff2") format('woff2'),
+		url("./assets/fonts/woff/Pretendard-SemiBold.woff") format('woff');
+}
+
+@font-face {
+	font-family: 'Pretendard';
+	font-weight: 500;
+	font-display: swap;
+	src: local('Pretendard Medium'),
+		url("./assets/fonts/woff2/Pretendard-Medium.woff2") format('woff2'),
+		url("./assets/fonts/woff/Pretendard-Medium.woff") format('woff');
+}
+
+@font-face {
+	font-family: 'Pretendard';
+	font-weight: 400;
+	font-display: swap;
+	src: local('Pretendard Regular'),
+		url("./assets/fonts/woff2/Pretendard-Regular.woff2") format('woff2'),
+		url("./assets/fonts/woff/Pretendard-Regular.woff") format('woff');
+}
+
+@font-face {
+	font-family: 'Pretendard';
+	font-weight: 300;
+	font-display: swap;
+	src: local('Pretendard Light'),
+		url("./assets/fonts/woff2/Pretendard-Light.woff2") format('woff2'),
+		url("./assets/fonts/woff/Pretendard-Light.woff") format('woff');
+}
+
+@font-face {
+	font-family: 'Pretendard';
+	font-weight: 200;
+	font-display: swap;
+	src: local('Pretendard ExtraLight'),
+		url("./assets/fonts/woff2/Pretendard-ExtraLight.woff2") format('woff2'),
+		url("./assets/fonts/woff/Pretendard-ExtraLight.woff") format('woff');
+}
+
+@font-face {
+	font-family: 'Pretendard';
+	font-weight: 100;
+	font-display: swap;
+	src: local('Pretendard Thin'),
+		url("./assets/fonts/woff2/Pretendard-Thin.woff2") format('woff2'),
+		url("./assets/fonts/woff/Pretendard-Thin.woff") format('woff');
+}
+
+
+
+div { box-sizing : border-box }
+
+body {
+  margin: 0;
+  background-color: #050d17;
+  color: #fdfdfd;
+  font-family: 'Pretendard', 'WdscnUEx', sans-serif;
+  overflow-x: hidden;
+}
+
+img { max-width: 100%; height: auto; display: block; }
+:root { --navbar-height: 72px; 
+  --gradr: linear-gradient(to right, #5A52FF, #00A3B5);
+  --gradl: linear-gradient(to left, #5A52FF, #00A3B5);
+  --gradb: linear-gradient(to bottom,#5A52FF, #00A3B5);
+  --gradt: linear-gradient(to top, #5A52FF, #00A3B5);
+}
+
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--navbar-height);
+  display: flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #fff;
+  z-index: 1000;
+  padding: 0 clamp(12px, 5vw, 60px);
+}
+
+.nav-content {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 12px;
+  /* 기본적으로 브랜드는 왼쪽, 메뉴/토글은 오른쪽으로 정렬 */
+  justify-content: flex-start;
+}
+
+.nav-brand { display: flex; align-items: center; }
+.nav-brand img.logo {
+  height: auto;
+  width: 200px;
+  max-height: 100%;
+}
+
+/* 데스크탑: 메뉴를 오른쪽에 플렉스 형태로 보여줌 */
+.nav-menu {
+  list-style: none;
+  display: flex;
+  gap: clamp(16px, 4vw, 48px);
+  margin: 0;
+  padding: 0;
+  order: 1;
+  margin-left: auto; /* 핵심: 메뉴를 오른쪽으로 밀어냄 */
+}
+/* 메뉴 링크 기본값 */
+.nav-menu a {
+  color: #fff;
+  text-decoration: none;
+  font-size: clamp(12px, 1.2vw, 16px);
+  font-weight: 400;
+  transition:
+    color 0.25s ease,
+    font-weight 0.25s ease,
+    background 0.4s ease;
+}
+
+/* hover 시 그라디언트 텍스트 + 두께 강조 */
+.nav-menu a:hover {
+  color: transparent;
+  font-weight: 700; /* 가변 폰트라면 font-variation-settings 사용 */
+  background: linear-gradient(90deg, #5A52FF, #00A3B5);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+/* 토글 버튼 (기본 숨김, 모바일/태블릿에서 표시) */
+.nav-toggle {
+  display: none;
+  background: transparent;
+  border: none;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  cursor: pointer;
+  order: 2;
+  margin-left: 12px; /* 메뉴와 토글 사이 간격 */
+}
+
+.nav-toggle .bar {
+  display: block;
+  width: 24px;
+  height: 2px;
+  margin: 5px auto;
+  background: #fff;
+}
+
+.not-found {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  padding: 24px;
+}
+
+.not-found__text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: 'Segoe UI';
+  gap: 18px;
+}
+
+.not-found__text canvas {
+  display: block;
+}
+
+.not-found__home {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 60px;
+  padding: 12px 22px;
+  background: var(--gradr);
+  color: #050d17;
+  text-decoration: none;
+  border-radius: 999px;
+  font-weight: 700;
+  box-shadow: 0 10px 30px rgba(0, 163, 181, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.not-found__home:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px rgba(0, 163, 181, 0.45);
+}
+
+.not-found__home:active {
+  transform: translateY(0);
+  opacity: 0.9;
+}

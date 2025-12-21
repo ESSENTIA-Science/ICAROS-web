@@ -1,0 +1,133 @@
+{
+  "rockets": [
+    {
+      "id": "icx1",
+      "name": "ICX-I",
+      "img": "/assets/img/rocket/icx1.webp",
+      "max_altitude_m": 200,
+      "size_m": 1.5,
+      "payload_kg": 0.5,
+      "engines": [
+        {
+          "type": "KNSB",
+          "thrust_n": 90,
+          "burn_time_s": 2
+        }
+      ]
+    },
+    {
+      "id": "icx1s",
+      "name": "ICX-Is",
+      "img": "/assets/img/rocket/icx1s.webp",
+      "max_altitude_m": 250,
+      "size_m": 1.6,
+      "payload_kg": 0.5,
+      "engines": [
+        {
+          "type": "KNSB",
+          "thrust_n": 90,
+          "burn_time_s": 2
+        },
+        {
+          "type": "Black Powder",
+          "thrust_n": 6.8,
+          "burn_time_s": 0.6,
+          "count": 3
+        }
+      ]
+    },
+    {
+      "id": "icx2",
+      "name": "ICX-II",
+      "img": "/assets/img/rocket/icx2.webp",
+      "max_altitude_m": 80,
+      "size_m": 1.7,
+      "payload_kg": 0.5,
+      "engines": [
+        {
+          "type": "KNSB",
+          "mode": "landing burn"
+        }
+      ]
+    },
+    {
+      "id": "icx2s",
+      "name": "ICX-IIs",
+      "img": "/assets/img/rocket/icx2s.webp",
+      "max_altitude_m": 130,
+      "size_m": 1.8,
+      "payload_kg": 0.5,
+      "engines": [
+        {
+          "type": "KNSB",
+          "thrust_n": 90,
+          "burn_time_s": 2
+        },
+        {
+          "type": "Black Powder",
+          "thrust_n": 6.8,
+          "burn_time_s": 0.6,
+          "count": 3
+        }
+      ]
+    },
+    {
+      "id": "icxmv1",
+      "name": "ICX MV-I",
+      "img": "/assets/img/rocket/icxmv1.webp",
+      "max_altitude_m": 200,
+      "size_m": 1.8,
+      "payload_kg": 0.8,
+      "engines": [
+        {
+          "type": "KNSB",
+          "thrust_n": 90,
+          "burn_time_s": 2
+        }
+      ]
+    },
+    {
+      "id": "icxmv1lr",
+      "name": "ICX MV-I LR",
+      "img": "/assets/img/rocket/icxmv1lr.webp",
+      "max_altitude_m": 250,
+      "size_m": 1.9,
+      "payload_kg": 0.8,
+      "engines": [
+        {
+          "type": "KNSB",
+          "thrust_n": 90,
+          "burn_time_s": 2
+        },
+        {
+          "type": "Black Powder",
+          "thrust_n": 6.8,
+          "burn_time_s": 0.6,
+          "count": 3
+        }
+      ]
+    },
+    {
+      "id": "icxmv1mirv",
+      "name": "ICX MV-I MIRV",
+      "img": "/assets/img/rocket/icxmv1lr.webp",
+      "max_altitude_m": 230,
+      "size_m": 1.9,
+      "payload_kg": 1.0,
+      "engines": [
+        {
+          "type": "KNSB",
+          "thrust_n": 90,
+          "burn_time_s": 2
+        },
+        {
+          "type": "Black Powder",
+          "thrust_n": 6.8,
+          "burn_time_s": 0.6,
+          "count": 3
+          
+        }
+      ]
+    }
+  ]
+}

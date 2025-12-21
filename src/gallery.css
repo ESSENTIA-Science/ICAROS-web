@@ -1,0 +1,184 @@
+/* ──────────────────────────────────────────────
+  Title
+────────────────────────────────────────────── */
+.title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  font-family: 'Pretendard', sans-serif;
+}
+
+h1 {
+  justify-self: start;
+  align-self: start;
+  text-align: left;
+  margin-left: clamp(16px, 6vw, 120px);
+  margin-top: clamp(4px, 8vw, 120px);
+  margin-bottom: 24px;
+  font-size: clamp(12px, 4vw, 64px);
+  font-weight: 100;
+  letter-spacing: 2px;
+}
+
+@media (max-width: 599px) {
+  h1 {
+    justify-self: center;
+    align-self: center;
+    text-align: center;
+    margin: 0;
+    padding-top: 72px;
+    padding-bottom: 24px;
+    font-weight: 200;
+    font-size: clamp(12px, 8vw, 128px);
+  }
+}
+
+.title p {
+  margin: 0;
+}
+
+.gallery-desc {
+  margin-bottom: 20px;
+  font-family: 'Pretendard', sans-serif;
+  font-weight: 300;
+  font-size: 18px;
+  color: #d0d0d0;
+  text-align: left;
+}
+
+/* ──────────────────────────────────────────────
+  Section
+────────────────────────────────────────────── */
+.gallery-section {
+  display: block;
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* ──────────────────────────────────────────────
+  Masonry Wrapper (🔥 핵심 영역)
+────────────────────────────────────────────── */
+.masonryGallery {
+  padding: 0 100px;
+  width: 100%;
+
+  /* 👇 처음엔 완전히 안 보이게 */
+  opacity: 0;
+  transform: translateY(48px);
+  pointer-events: none;
+
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Masonry 준비 완료 후 */
+.masonryGallery[data-ready="true"] {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+@media (max-width: 900px) {
+  .masonryGallery {
+    padding: 0 20px;
+  }
+}
+
+/* ──────────────────────────────────────────────
+  Modal Overlay
+────────────────────────────────────────────── */
+.gallery-modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: 2000;
+}
+
+/* ──────────────────────────────────────────────
+  Modal
+────────────────────────────────────────────── */
+.gallery-modal {
+  display: flex;
+  gap: 24px;
+  width: min(1100px, 92vw);
+  background: rgba(10, 16, 28, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+/* Image */
+.gallery-modal__img {
+  width: 55%;
+  height: auto;
+  max-height: 70vh;
+  object-fit: contain;
+  display: block;
+  background: #0d1524;
+}
+
+/* Body */
+.gallery-modal__body {
+  flex: 1;
+  padding: 20px 20px 20px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.gallery-modal__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.gallery-modal__desc {
+  margin: 0;
+  color: #d0d0d0;
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+/* Close Button */
+.gallery-modal__close {
+  align-self: flex-start;
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: 'Pretendard', sans-serif;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.gallery-modal__close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+/* ──────────────────────────────────────────────
+  Modal Responsive
+────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .gallery-modal {
+    flex-direction: column;
+  }
+
+  .gallery-modal__img {
+    width: 100%;
+    max-height: 60vh;
+  }
+
+  .gallery-modal__body {
+    padding: 0 20px 20px 20px;
+  }
+}
