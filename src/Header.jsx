@@ -19,7 +19,7 @@ const Header = () => {
 
         <a
           className="nav-simulate nav-simulate-mobile"
-          onClick={() => { alert("준비 중 입니다");}}
+          href="https://simulate-icaros.netlify.app/"
         >
           Simulate
         </a>
