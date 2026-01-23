@@ -8,8 +8,9 @@ import ScrollToTop from './component/ScrollToTop';
 
 const Home = lazy(() => import('./home.jsx'))
 const Member = lazy(() => import('./member.jsx'))
-const Gallery = lazy(() => import('./gallery.jsx'))
+const Posts = lazy(() => import('./posts.jsx'))
 const Rocket = lazy(() => import('./rocket.jsx'))
+const Admin = lazy(() => import('./admin.jsx'))
 
 function App() {
   return (
@@ -32,9 +33,14 @@ function App() {
             <Member/>
           </Suspense>
         } />
-        <Route path='/gallery' element={
+        <Route path='/posts' element={
           <Suspense fallback={null}>
-            <Gallery/>
+            <Posts/>
+          </Suspense>
+        } />
+        <Route path='/admin' element={
+          <Suspense fallback={null}>
+            <Admin/>
           </Suspense>
         } />
         <Route

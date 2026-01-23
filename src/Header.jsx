@@ -39,7 +39,7 @@ const Header = () => {
         <ul id="nav-menu" className={`nav-menu${isMenuOpen ? ' open' : ''}`}>
           <li><a href="#about" onClick={() => { navigate("/"); closeMenu(); }}>About Us</a></li>
           <li><a onClick={() => { navigate("/rocket"); closeMenu(); }}>Rockets</a></li>
-          <li><a onClick={() => { navigate("/gallery"); closeMenu(); }}>Gallery</a></li>
+          <li><a onClick={() => { navigate("/posts"); closeMenu(); }}>Posts</a></li>
           <li><a onClick={() => { navigate("/member"); closeMenu(); }}>Members</a></li>
           <li><a href="https://sim.icaros.kr/" className="nav-simulate">Simulate</a></li>
         </ul>
