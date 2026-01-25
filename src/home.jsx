@@ -215,12 +215,12 @@ function Home() {
             </a>
             <a
               className="contact-card"
-              href="https://www.instagram.com/icaros_icx"
+              href="https://www.instagram.com/icaros_aerospace/"
               target="_blank"
               rel="noreferrer"
             >
               <span className="contact-label">Instagram</span>
-              <span className="contact-value">@icaros_icx</span>
+              <span className="contact-value">@icaros_aerospace</span>
             </a>
           </div>
         </div>

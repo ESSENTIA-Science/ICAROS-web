@@ -126,6 +126,38 @@ img { max-width: 100%; height: auto; display: block; }
   --gradt: linear-gradient(to top, #5A52FF, #00A3B5);
 }
 
+/* Disable mobile tap highlight / focus ring */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+a,
+button,
+[role="button"],
+input,
+select,
+textarea {
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-appearance: none;
+}
+
+a:focus,
+button:focus,
+[role="button"]:focus,
+input:focus,
+select:focus,
+textarea:focus,
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 .navbar {
   position: fixed;
   top: 0;
@@ -450,36 +482,8 @@ h2 {
   padding-bottom: clamp(60px, 10vw, 200px);
 }
 
-.rockets-grid {
-  display: grid;
-  padding-top: clamp(40px, 10vw, 120px);
-  padding-bottom: clamp(32px, 8vw, 80px);
-  gap : clamp(24px, 8vw, 96px);
-}
 
-.rocket-block {
-  display: flex;
-  gap : clamp(16px, 4vw, 48px)
-}
 
-.rocket-text {
-  font-family: var(--font-kr);
-  font-size: clamp(8px, 1.5vw, 32px);
-  font-weight: 200;
-  color: #d0d0d0;
-  max-width: 1500px;
-  margin: 0;
-  padding-top: clamp(12px, 5vw, 60px);
-}
-
-.rocket-3d {
-  width: 500px;              /* 부모 영역 꽉 채우기 */
-  height: 500px;            /* 원하는 높이 */
-  background-color: #000;   /* 검정 배경 유지 */
-  border-radius: 12px;      /* 선택 사항 */
-  overflow: hidden;
-  box-shadow: 0 0 20px rgba(150, 100, 255, 0.3);         /* 스크롤 제거 */
-} 
 
 .rocket-3d { width: min(90vw, 500px); height: min(60vh, 500px); }
 .rocket p {
@@ -891,7 +895,7 @@ footer a:active {
 }
 
 @media (max-width: 599px) { /* phone */
-  :root { --navbar-height: 48px; }
+  :root { --navbar-height: 64px; }
   .nav-toggle { display: inline-block; }
   .nav-toggle { margin-left: 12px; order: 2; }
   .nav-content { margin-left: 16px; margin-right: 16px; }
@@ -915,7 +919,7 @@ footer a:active {
 
   .nav-content .nav-menu {
     position: fixed;
-    top: 48px;
+    top: 64px;
     left: 0; right: 0;
     display: block;
     background: rgba(0, 0, 0, 0.9);
@@ -959,7 +963,7 @@ footer a:active {
 
   .icaros_each {
     font-family: 'NanumSq';
-    font-size: clamp(8px, 1.5vw, 36px);
+    font-size: clamp(8px, 2.2vw, 64px);
     font-weight: 400;
     color: #d0d0d0;
     line-height: 2;
@@ -980,7 +984,7 @@ footer a:active {
 
   .kr-text {
     font-family: 'NanumSq';
-    font-size: clamp(8px, 2.8vw, 64px);
+    font-size: clamp(8px, 3vw, 64px);
     font-weight: 200;
     text-align: center;
     color: #d0d0d0;
@@ -995,7 +999,7 @@ footer a:active {
 
   .vision-content .kr-text {
     font-family: 'NanumSq';
-    font-size: clamp(8px, 2.8vw, 64px);
+    font-size: clamp(8px, 3vw, 64px);
     font-weight: 200;
     text-align: center;
     color: #d0d0d0;
@@ -1016,7 +1020,7 @@ footer a:active {
 
   .vision-blocks .kr-text {
     font-family: 'NanumSq';
-    font-size: clamp(8px, 2.8vw, 64px);
+    font-size: clamp(8px, 3.2w, 64px);
     font-weight: 200;
     text-align: center;
     color: #d0d0d0;
@@ -1119,6 +1123,17 @@ footer a:active {
   }
   .rocket-3d { width: 75vw; height: 50vh; }
 
+  .donate-usage-title {
+    font-size: 18px;
+    padding: 0;
+    margin: 0;
+  }
+
+  .donate-usage-list {
+    padding: 0;
+    margin: 0;
+  }
+
   /* Contact RWD */
   .contact-content {
     padding: clamp(48px, 4vh, 120px);
@@ -1156,8 +1171,8 @@ footer a:active {
     display: inline-flex;
     order: 1;
     margin-left: auto;
-    padding: clamp(4px, 1vw, 14px) clamp(6px, 3vw, 18px);
-    font-size: clamp(4px, 2vw, 16px);
+    padding: clamp(4px, 2vw, 14px) clamp(6px, 4vw, 18px);
+    font-size: clamp(4px, 3vw, 16px);
     font-weight: 400;
   }
 }
