@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import "./posts.css";
 import { supabase } from "./lib/supabase";
-import IcarosLogo from "./assets/ICAROS.svg";
+import IcarosLogo from "./assets/logo_black.svg";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
