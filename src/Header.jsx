@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { Routes, Route, Link, useNavigate, Outlet } from 'react-router-dom'
-const logoTextWhiteUrl = new URL('./assets/logo_text_white.png', import.meta.url).href
+const logoTextWhiteUrl = new URL('./assets/logo_text_white.svg', import.meta.url).href
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)

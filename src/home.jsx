@@ -1,7 +1,7 @@
 import './home.css'
 import { useMemo, useState } from 'react'
 
-const whiteIconUrl = new URL('./assets/white_icon.png', import.meta.url).href
+const whiteIconUrl = new URL('./assets/logo_white.svg', import.meta.url).href
 
 const DONATION_GOAL_AMOUNT = 2700000
 const DONATION_CURRENT_AMOUNT = 900000
