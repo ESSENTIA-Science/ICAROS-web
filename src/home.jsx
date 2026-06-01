@@ -65,17 +65,17 @@ function Home() {
         <div className="container">
           <div className="about-content">
             <h2 className="desktop-slogan">
-              We learn from <span className="g-highlight">COSMOS</span>, not textbooks
+              We build what flies, from <span className="g-highlight">UAVs</span> to rockets.
             </h2>
             <h2 className="mobile-slogan">
-              We learn from<br />
-              <span className="g-highlight">COSMOS</span> not textbooks
+              We build what flies,<br />
+              from <span className="g-highlight">UAVs</span> to rockets.
             </h2>
             <p className="kr-text">
-              실제 개발과 연구, 발사를 통해 발사체 기술을 이해하고 탐구하고자 합니다.<br />
-              철저히 학생 주도로 진행되며 팀원들끼리 서로 배우고 협력하는 학생 중심 연구 조직입니다.<br />
-              이 프로젝트는 창의적이고 혁신적인 사고를 추구하며, <br />
-              항공우주 기술 개발을 위해 연구하고자 합니다.
+              ICAROS는 무인기 설계와 비행 제어를 중심으로 항공우주 기술을 탐구하는 학생 연구 프로젝트입니다.<br />
+              우리는 비행기, 드론, 로켓 등을 직접 설계하고 제작하며, 실제 비행 데이터와 실험 결과를 바탕으로<br />더 나은 기체와 시스템을 만들어갑니다.
+              현재는 고정익 및 회전익 무인기 개발을 핵심 활동으로 하며<br />기체 구조 설계, 비행 제어, 센서 데이터 분석, 시험 비행을 통해 실질적인 항공우주 프로젝트를 진행하고 있습니다.<br />
+              또한 로켓공학 분야에서는 추진 원리, 구조 설계, 비행 안정성, 회수 시스템 등을 이론 연구와 시뮬레이션<br />안전한 범위의 실험을 통해 함께 탐구합니다.
             </p>
           </div>
         </div>
@@ -86,38 +86,50 @@ function Home() {
         <h1>Vision</h1>
         <div className="container">
           <div className="vision-content">
+            <h2 className="desktop-slogan" style={{ textAlign: 'center', marginBottom: '2rem' }}>
+              We learn from <span className="g-highlight">COSMOS</span>, not textbooks.
+            </h2>
+            <h2 className="mobile-slogan" style={{ textAlign: 'center', marginBottom: '2rem' }}>
+              We learn from <span className="g-highlight">COSMOS</span>,<br />not textbooks.
+            </h2>
             <p className="kr-text">
-              ICAROS는 공학적 탐구를 기반으로 항공우주 기술을 개발하여,<br />
-              핵심 기술을 이해하고 현실에 적용하고자 합니다.<br />
-              우리는 다음 세 가지 핵심 가치를 기반으로 합니다.
+              ICAROS는 학생들이 직접 항공우주 시스템을 설계하고 검증하는 경험을 통해,<br />
+              미래 항공우주 기술을 이해하고 만들어갈 수 있는 기반을 쌓는 것을 목표로 합니다.<br />
+              우리는 단순히 기체를 제작하는 것에 그치지 않고,<br />
+              비행 원리, 제어 기술, 구조 설계, 추진 시스템을 종합적으로 탐구하며<br />
+              실제 문제를 해결하는 항공우주 프로젝트 팀으로 성장하고자 합니다.
             </p>
+          </div>
+        </div>
+      </section>
 
-            <div className="vision-blocks">
-              <div className="vision-item">
-                <h2><span className="g-highlight">I</span> - Icaros</h2>
-                <p className="kr-text">
-                  우리의 도전정신과 기술적 탐구심을 상징합니다.<br />
-                  ICAROS의 전설처럼 한계에 도전하며,<br />
-                  체계적 연구를 바탕으로 진보합니다.
-                </p>
-              </div>
+      {/* ================= RESEARCH AREAS ================= */}
+      <section id="research">
+        <h1>Research Areas</h1>
+        <div className="container">
+          <div className="vision-blocks">
+            <div className="vision-item">
+              <h2><span className="g-highlight">Unmanned</span> Aerial Vehicles</h2>
+              <p className="kr-text">
+                ICAROS의 핵심 연구 분야는 무인기입니다.<br />
+                고정익 및 회전익 무인기를 직접 설계하고 제작하며,<br />시험 비행을 통해 기체 성능과 안정성을 개선합니다.
+              </p>
+            </div>
 
-              <div className="vision-item">
-                <h2><span className="g-highlight">C</span> - Cosmos</h2>
-                <p className="kr-text">
-                  우주는 탐구의 장입니다.<br />
-                  우리는 우주로 나아가며,<br />
-                  지식과 영감을 얻고자 합니다.
-                </p>
-              </div>
+            <div className="vision-item">
+              <h2><span className="g-highlight">Flight</span> Control & Data</h2>
+              <p className="kr-text">
+                비행 제어 시스템, 자세 안정화, 센서 데이터 분석을 연구합니다.<br />
+                실제 비행 데이터를 바탕으로 기체의 문제점을 파악하고,<br />더 안정적이고 정밀한 비행을 목표로 개선을 진행합니다.
+              </p>
+            </div>
 
-              <div className="vision-item">
-                <h2><span className="g-highlight">X</span> - eXplorer</h2>
-                <p className="kr-text">
-                  기술을 개발하고 활용하려는 우리의 탐구정신입니다.<br />
-                  ICAROS의 모든 연구는 탐구와 탐험입니다.
-                </p>
-              </div>
+            <div className="vision-item">
+              <h2><span className="g-highlight">Rocketry</span> & Propulsion</h2>
+              <p className="kr-text">
+                로켓 공학과 추진 시스템은 고체연료 과학 로켓을<br />직접 개발하고 발사하며 이론 연구, 시뮬레이션, 구조 설계<br />안전한 범위의 실험을 중심으로 탐구합니다.<br />
+                추진 원리, 비행 안정성, 회수 시스템 등을 연구하며<br />항공우주 기술에 대한 이해를 확장합니다.
+              </p>
             </div>
           </div>
         </div>
@@ -129,8 +141,12 @@ function Home() {
         <div className="container">
           <div className="mission-content">
             <p className="kr-text">
-              ICAROS는 고체추진 로켓을 제작하며 기술 개발과 발사 적용을 목표로 합니다.<br />
-              모델로켓, 캔위성 등 심도 있는 실험과 시스템 개발을 집중적으로 수행합니다.
+              ICAROS는 고정익 무인기와 회전익 무인기를 중심으로 직접 설계, 제작, 시험 비행을 진행합니다.<br />
+              또한 로켓공학 분야에서는 추진 원리와 구조 설계, 비행 안정성, 회수 시스템 등을<br />현실적이고 안전한 범위 안에서 탐구합니다.<br />
+              우리는 실제 제작과 실험을 통해 항공우주 기술을 경험하고,<br />
+              실패와 개선 과정을 반복하며 더 나은 시스템을 만들어가는 것을 목표로 합니다.<br />
+              <br />
+              주요 활동은 다음과 같습니다.
             </p>
 
             <p
@@ -138,13 +154,11 @@ function Home() {
               style={{ lineHeight: 2.5 }}
             >
               <span className="highlight">
-                모델로켓, 캔위성 등 실제 우주탐사 시스템 개발 및 검증<br />
-                물리·전자·프로그래밍 설계에 통합된 학문 간 융합 수업<br />
-                로켓 발사 및 자체 제어, 위성 정보 수집 등 미션 수행
-              </span>
-              <br />
-              <span className="g-highlight">
-                국내 최초 고체연료 기반 모델로켓 착륙 개발
+                고정익 및 회전익 무인기 설계, 제작, 비행 시험<br />
+                비행 제어 시스템과 자세 안정화 기술 연구<br />
+                항공 구조, 공력, 추진 시스템에 대한 실험 및 분석<br />
+                로켓공학 이론 연구, 시뮬레이션, 구조 설계 탐구<br />
+                실제 비행 데이터 기반의 기체 개선 및 프로젝트 확장
               </span>
             </p>
           </div>
@@ -157,25 +171,26 @@ function Home() {
         <div className="donate-container">
           <div className="donate-text">
             <p className="kr-text">
-              ICAROS는 학생이 주도하여 모델 로켓과 캔위성 및 로켓 제어와<br />
-              착륙 시스템 등 항공우주 시스템을 연구·개발하는 단체입니다.<br />
-              하지만 이러한 연구에는 많은 비용이 요구됩니다.
+              ICAROS는 학생들이 직접 항공우주 기술을 실험하고 발전시켜 나가는 프로젝트입니다.<br />
+              여러분의 후원은 새로운 기체를 제작하고, 더 안전하고 정밀한 실험 환경을 만드는 데 사용됩니다.
             </p>
 
             <h2 className="donate-usage-title">
-              여러분의 후원금은 이렇게 사용됩니다
+              여러분의 후원금은 이렇게 사용됩니다.
             </h2>
 
             <ul className="donate-usage-list kr-text">
-              <li>자재비 : 2,200,000 ₩</li>
-              <li>시험장 대여비 : 150,000 ₩</li>
-              <li>이동비 및 잡화비 : 100,000 ₩</li>
-              <li>Web 개발비 : 50,000 ₩</li>
+              <li>무인기 제작 부품</li>
+              <li>전자 장비 및 비행 제어 장치</li>
+              <li>배터리, 센서, 통신 장비</li>
+              <li>3D 프린팅 재료 및 구조 제작 비용</li>
+              <li>시험 비행 및 안전 장비</li>
+              <li>로켓공학 연구 자료와 시뮬레이션 환경 구축</li>
             </ul>
           </div>
 
           <div className="donate-bar">
-            <h3>“Every donation fuels innovation.”</h3>
+            <h3>“Every donation brings the next flight closer.”</h3>
 
             <div className="donation-container">
               <div className="donation-amount" id="current-amount">
@@ -190,13 +205,12 @@ function Home() {
               <div className="percent-text" id="percent-text">
                 {Math.round(donationPercent)}%
               </div>
-              <a href="#contact" className="donate-btn" onClick={() => { alert("후원 페이지 준비 중 입니다");}}>후원 문의하기</a>
+              <a href="#contact" className="donate-btn" onClick={() => { alert("후원 페이지 준비 중 입니다"); }}>후원 문의하기</a>
 
             </div>
 
             <p className="kr-text">
-              여러분의 후원은 학생들이 주도하는 항공우주 연구를 한 단계 더 발전시킵니다.<br />
-              모든 후원금은 투명하게 관리되며 연구·교육 목적 외에는 사용되지 않습니다.
+              작은 지원이 새로운 기체의 이륙과 더 깊은 항공우주 탐구로 이어집니다.
             </p>
           </div>
         </div>
@@ -206,7 +220,8 @@ function Home() {
         <h1>Contact</h1>
         <div className="contact-content">
           <p className="kr-text">
-            언제든 연락 주세요. 이메일과 인스타그램 DM 모두 열려 있습니다.
+            ICAROS는 무인기, 항공우주, 로켓공학에 관심 있는 사람들과 함께 성장하고 있습니다.<br />
+            프로젝트 참여, 협업, 후원 문의는 언제든지 연락해 주세요.
           </p>
           <div className="contact-grid">
             <a className="contact-card" href="mailto:air091226@naver.com">

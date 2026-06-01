@@ -53,7 +53,7 @@ const Footer = () => {
   return(
     <>
       <footer>
-        <p>© 2025 ICAROS | All Rights Reserved</p>
+        <p>© 2026 ICAROS. All Rights Reserved.</p>
         <p>
           Made by{' '}
           <a href="https://aidengoldkr.dev" target="_blank" rel="noreferrer">
