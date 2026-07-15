@@ -54,12 +54,6 @@ const Footer = () => {
     <>
       <footer>
         <p>© 2026 ICAROS. All Rights Reserved.</p>
-        <p>
-          Made by{' '}
-          <a href="https://aidengoldkr.dev" target="_blank" rel="noreferrer">
-            @aidengoldkr
-          </a>
-        </p>
       </footer>
     </>
   )

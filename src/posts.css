@@ -439,3 +439,30 @@ h1 {
   color: #1b64da;
   text-decoration: underline;
 }
+
+.posts-more {
+  display: flex;
+  justify-content: center;
+  padding: 0 24px 80px;
+}
+
+.posts-more__btn {
+  padding: 12px 32px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  font-family: 'Pretendard', sans-serif;
+  font-size: 14px;
+  transition: background 0.2s ease;
+}
+
+.posts-more__btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.posts-more__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

@@ -1,20 +1,28 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import './rocket.css';
-import rocketData from './assets/rocket_info.json';
-
-const groupA = ['icx1', 'icx1s', 'icx2', 'icx2s'];
-const groupB = ['icxmv1', 'icxmv1lr', 'icxmv1mirv'];
+import { supabase } from './lib/supabase';
 
 const Rocket = () => {
   const [activeGroup, setActiveGroup] = useState('A');
   const [selectedRocket, setSelectedRocket] = useState(null);
-  const rockets = rocketData.rockets || [];
+  const [rockets, setRockets] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await supabase
+        .from('rockets')
+        .select('*')
+        .order('series', { ascending: true })
+        .order('sort_order', { ascending: true });
+      if (error) console.error('[rocket] fetch error:', error);
+      setRockets(data || []);
+      setLoading(false);
+    })();
+  }, []);
 
   const visibleRockets = useMemo(
-    () =>
-      rockets.filter((r) =>
-        activeGroup === 'A' ? groupA.includes(r.id) : groupB.includes(r.id)
-      ),
+    () => rockets.filter((r) => r.series === activeGroup),
     [activeGroup, rockets]
   );
 
@@ -42,20 +50,24 @@ const Rocket = () => {
           </button>
         </div>
 
-        <div className="rocket-row">
-          {visibleRockets.map((rocket) => (
-            <div
-              key={rocket.id}
-              className="rocket-item"
-              onClick={() => setSelectedRocket(rocket)}
-            >
-              <div className="rocket-figure">
-                <img src={rocket.img} alt={rocket.name} loading="lazy" decoding="async" />
-                <p className="rocket-name">{rocket.name}</p>
+        {loading ? (
+          <p className="posts-loading">Loading...</p>
+        ) : (
+          <div className="rocket-row">
+            {visibleRockets.map((rocket) => (
+              <div
+                key={rocket.id}
+                className="rocket-item"
+                onClick={() => setSelectedRocket(rocket)}
+              >
+                <div className="rocket-figure">
+                  <img src={rocket.img} alt={rocket.name} loading="lazy" decoding="async" />
+                  <p className="rocket-name">{rocket.name}</p>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {selectedRocket && (
           <div className="rocket-modal-overlay" onClick={() => setSelectedRocket(null)}>

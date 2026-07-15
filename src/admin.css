@@ -408,3 +408,199 @@
     width: 100%;
   }
 }
+
+/* ── 통합 CMS: 상단바 / 탭 ── */
+.admin-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.admin-topbar__session {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: clamp(4px, 8vw, 120px) clamp(16px, 6vw, 120px) 0 0;
+}
+
+.editor-session__email {
+  font-size: 13px;
+  color: #9aa4b2;
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: min(1200px, 92vw);
+  margin: 0 auto 24px;
+}
+
+.admin-tab {
+  padding: 10px 20px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: #cfd6e0;
+  cursor: pointer;
+  font-family: 'Pretendard', sans-serif;
+  font-size: 14px;
+}
+
+.admin-tab--active {
+  background: #fff;
+  color: #111;
+  border-color: #fff;
+  font-weight: 600;
+}
+
+/* ── CMS 폼 (로켓/멤버/랜딩) ── */
+.cms-panel {
+  width: min(1200px, 92vw);
+  margin: 0 auto 80px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+.cms-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  background: #fff;
+  color: #111;
+}
+
+.cms-form--wide {
+  width: min(1200px, 92vw);
+  margin: 0 auto 80px;
+}
+
+.cms-form__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.cms-form__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.cms-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #444;
+}
+
+.cms-field input,
+.cms-field select,
+.cms-field textarea,
+.cms-textarea {
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+  color: #111;
+  background: #fff;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.cms-field input:disabled {
+  background: #f0f0f0;
+  color: #888;
+}
+
+.cms-textarea {
+  resize: vertical;
+}
+
+.cms-img-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cms-img-preview {
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
+.cms-img-preview--round {
+  border-radius: 50%;
+}
+
+.cms-engines__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cms-engine {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr) auto;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.cms-engine input {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.cms-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  font-size: 11px;
+  vertical-align: middle;
+}
+
+.cms-section {
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  padding: 16px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cms-section legend {
+  padding: 0 8px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+@media (max-width: 720px) {
+  .cms-engine {
+    grid-template-columns: 1fr 1fr;
+  }
+}
