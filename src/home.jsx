@@ -63,7 +63,7 @@ function Home() {
       <section id="hero">
         <img src={whiteIconUrl} alt="ICAROS Logo" className="hero-logo" />
         <p className="icaros_each">
-          <span className="highlight">I</span>ntelligent{' '}
+          <span className="highlight">I</span>nnovation{' '}
           <span className="highlight">C</span>reative{' '}
           <span className="highlight">A</span>stronautics &{' '}
           <span className="highlight">R</span>ocketry{' '}
