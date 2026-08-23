@@ -238,3 +238,67 @@ D2 에 따라 `icaros` 스키마를 그 RDS 에 두면, 거기 들어가는 것�
   단 리뉴얼의 전제가 "Supabase 를 런타임에서 완전히 제거"이므로 채택 시 그 요구사항과의 충돌을 명시해야 한다.
 - **Vercel Secure Compute(VPC 연결)** 는 기술적으로 존재하나 Enterprise 요금제다. 학생단체 예산에서 검토 대상이 아니다.
 - `essentia_infra` 확인: **RDS 에 `icaros` 스키마를 만들지 않았고, 결정 전까지 만들지 않는다.**
+
+
+---
+
+## D17 — ICAROS 데이터는 **ESSENTIA RDS 에 둔다.** 바꾸는 것은 접근 경로다
+
+사용자 결정(2026-08-23): "RDS 에 둬야지 다른 걸 변경해."
+→ D16 의 "가(전용 DB 분리)" 권고는 **채택되지 않았다.** `icaros` 스키마는 예정대로 그 RDS 에 만든다.
+D2(별도 `icaros` 스키마)도 그대로 유효하며, `ddl-auto: validate` 회피 장치로서 **오히려 더 중요해졌다** —
+같은 인스턴스를 쓰는 이상 그 결합이 남기 때문이다.
+
+### 바꿔야 하는 것 — 네트워크 도달성
+
+현재: RDS 퍼블릭 액세스 OFF, 인바운드 5432 는 EC2 보안 그룹 하나만 허용. Vercel 에서 도달 불가.
+
+| | 방식 | 판단 |
+|---|---|---|
+| **가** | **퍼블릭 액세스 ON + SSL 강제 + `icaros` 스키마 전용 최소권한 role** | **권장.** 아래 참조 |
+| 나 | EC2 안에 ICAROS 데이터 API 를 띄우고 Vercel 이 그걸 호출 | 서비스가 하나 더 늘고, 우리가 그걸 운영해야 한다. Community 용 D1 과 별개의 두 번째 API |
+| 다 | RDS Proxy | 여전히 VPC 안이다. **문제를 풀지 못한다** |
+| 라 | ICAROS 를 Vercel 이 아니라 같은 VPC 안(EC2/컨테이너)에 배포 | 요구사항의 "독립 Vercel 프로젝트" 전제를 깬다 |
+
+### 가안의 구체 형태
+
+노출 위험의 실체는 "감사 증적·전자서명·탈퇴 스냅샷이 든 DB 를 인터넷에 연다"였다.
+그 위험을 **권한으로 봉인**하는 것이 이 안의 요지다.
+
+1. `rds.force_ssl = 1` — 평문 접속 거부
+2. ICAROS 전용 role 을 만들고 **`public` 스키마에 대한 grant 를 하나도 주지 않는다**
+   ```sql
+   revoke all on schema public from icaros_app;
+   grant usage on schema icaros to icaros_app;
+   grant select, insert, update, delete on all tables in schema icaros to icaros_app;
+   alter default privileges in schema icaros grant ... to icaros_app;
+   ```
+   → 그 자격증명이 유출돼도 `forum_*`·`user`·`audit` 계열에 **닿지 않는다.** DDL 권한도 없다
+   (마이그레이션은 별도 role 로, 배포 파이프라인에서만).
+3. 보안 그룹: Vercel 은 Enterprise(Secure Compute) 가 아니면 고정 egress IP 가 없다.
+   → 5432 를 CIDR 로 좁힐 수 없으므로 **인증·권한·SSL 이 유일한 방어선**이 된다. 이 점을 명시적으로 받아들인다.
+4. 강한 무작위 비밀번호 + 주기적 로테이션. 가능하면 IAM DB 인증 검토.
+
+**남는 잔여 위험**: DB 인스턴스의 인증 표면이 인터넷에 노출된다. 무차별 대입·0-day 대상이 된다.
+`icaros_app` role 이 뚫려도 ICAROS 데이터까지가 한계지만, 인스턴스 자체에 대한 공격 표면은 늘어난다.
+**사용자가 이 트레이드오프를 알고 선택한 것으로 기록한다.**
+
+### 실행 순서 (전부 사용자·`essentia_infra` 영역)
+1. RDS 퍼블릭 액세스 ON + `rds.force_ssl`
+2. `icaros` 스키마 생성 + `icaros_app` role (위 grant)
+3. 마이그레이션 전용 role 분리
+4. 접속 문자열 전달 → 내가 마이그레이션 적용 후 Preview 배포
+
+**밤샘 작업은 이것과 무관하게 로컬 postgres:17 로 계속 진행한다.**
+
+---
+
+## D18 — 디스플레이 폰트를 오픈소스로 교체
+
+`WidescreenUEx_Trial_*` 는 라이선스 확인 없이 배포할 수 없고(파일명이 Trial), 9파일 ~900KB 미서브셋 TTF 다.
+→ 동등한 wide grotesque 오픈소스로 교체하고 woff2 서브셋. D10 종결.
+
+## D19 — 3D: 변환 도구 설치 승인. 단 로켓에 붙이지 않는다
+
+`icx-2.fbx` → GLB 변환과 3D 인프라는 만들되, **홈 히어로에만** 쓴다.
+`icx2`(ICX-II) 로켓 행을 되살리는 것은 팀 판단이 필요해 하지 않는다 — `rocket_models.rocket_id` 는 null 로 둔다.
