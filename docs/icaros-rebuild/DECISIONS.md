@@ -7,7 +7,7 @@
 |---|---|---|---|---|
 | D1 | **Posts는 (A) ESSENTIA 서비스 토큰 경로**로 Community와 단일 원본 연동 | 확정 (착수 시점 미정) | 카테고리 권한·레이트리밋·`author_role` 스냅샷·이미지 MIME 검증·감사 로그·soft delete 규칙이 ESSENTIA 한 곳에 유지됨 | (B) 읽기 전용 — 요구 미충족 / (C) DB 직접 write — 6개 규칙 이중 구현, 반드시 어긋남 |
 | D2 | ICAROS 테이블은 **별도 `icaros` 스키마** | 확정 | ESSENTIA가 `ddl-auto: validate`로 기동 → `public`에 낯선 테이블이 생기면 API 기동 실패 가능. `public.session` 이름 충돌도 회피 | `public.icaros_*` 접두사 |
-| D3 | 이미지·GLB는 **전부 private + `/api/media/{id}` 302 프록시** | 확정 | ESSENTIA에 공개 읽기 클래스 전례 없음 · CloudFront signed URL 구현체 없음 · 멤버 사진이 미성년자. 프록시 URL이 고정이라 `next/image` 캐시가 붙고 접근 통제 지점이 하나로 모임 | 공개용 CloudFront 배포 신설 — 기존 배포는 정적 사이트 전용 + OAC 묶임, 재사용 불가 |
+| D3 | 이미지·GLB는 **전부 private + `/api/media/{id}` 프록시** (전달 방식은 D15 로 수정 — 302 → 스트리밍) | 확정 | ESSENTIA에 공개 읽기 클래스 전례 없음 · CloudFront signed URL 구현체 없음 · 멤버 사진이 미성년자. 프록시 URL이 고정이라 `next/image` 캐시가 붙고 접근 통제 지점이 하나로 모임 | 공개용 CloudFront 배포 신설 — 기존 배포는 정적 사이트 전용 + OAC 묶임, 재사용 불가 |
 | D4 | S3 프리픽스 **`icaros-web/`**, 공개/비공개 분리 없음 | 확정 | 기존 12개 프리픽스 중 어느 것의 접두사도 아님(교차 삭제 사고 전력 대응). D3으로 단일 private 클래스 | `…/pub/` + `…/priv/` 이분 |
 | D5 | Vercel 런타임 AWS 인증 = **OIDC 역할 수임** | 확정 | ESSENTIA는 런타임에 장기 키를 두는 곳이 없음(EC2 인스턴스 프로파일, GHA OIDC). 로컬 `essentia` 프로필은 IAM 사용자 장기 키라 런타임 사용 불가 | IAM user access key |
 | D6 | CORS 오리진 = 프로덕션 도메인 + **고정 프리뷰 별칭 1개** | 확정 | `*.vercel.app`은 타인의 Vercel 앱까지 포함 | 프리뷰 와일드카드 |
@@ -17,6 +17,7 @@
 | D10 | 디스플레이 폰트 | **보류** | `WidescreenUEx_Trial_*` — 9파일 ~900KB 미서브셋 TTF, 파일명이 "Trial". 웹 라이선스 확인 필요 | — |
 | D11 | ICAROS 게시판 | ✅ **해제 — 만들 필요 없음. 이미 존재** | `projects`에 ICAROS 행이 이미 있고(`2cb1ee87-9a24-4ea8-b38c-6c9d30eea042`) 카테고리로 동적 부착 중. `forum_posts.project_id` FK 경로도 열려 있음 | `forum_categories` 행 신설 / `projects` 행 신설 — **둘 다 하면 안 됨** |
 | D13 | Posts 작성자 = **ICAROS 서비스 계정** FK로 전건 귀속 | 확정 | 레거시에 작성자 데이터가 전무(컬럼·서명 모두 0). 서비스 계정은 탈퇴하지 않아 익명화 공백이 성립하지 않고, FK가 채워져 소유·수정·삭제가 일관됨. D1 작업에 포함 | 글별 실명 귀속(수작업 18~19건 + 운영 DB 대조) / FK NULL + `author_name='ICAROS'`(마이페이지 관리 불가) |
+| D15 | `/api/media/[id]` 는 302 가 아니라 **바이트를 스트리밍**한다 (D3 수정) | 확정 | 검토에서 Next 16.3.2 소스로 확인: `src` 가 `/` 로 시작하면 `fetchInternalImage` 경로를 타는데 **`Location` 을 따라가는 코드가 없고** body 0바이트면 `ImageError(400)`. 리다이렉트 추적은 `fetchExternalImage` 뿐인데 절대 URL 이 필요하고 `remotePatterns: []` 가 그걸 거부한다 → **양쪽 다 막힘**. 스트리밍하면 presigned URL 이 클라이언트로 새는 경로도 함께 닫히고, 업로드 시점에 이미 ≤2MB WebP 라 비용이 작다 | 302 리다이렉트(현 구현 — 동작하지 않음) / `remotePatterns` 개방(presigned URL 이 캐시 키를 오염시키고 5~10분마다 miss) |
 | D14 | ICAROS 서비스 계정: `author_role = 'outsider'`, **`user` 행만 만들고 `members` 행은 만들지 않음** | 확정 | `public.role` enum은 `outsider`/`member`/`officer` 3개뿐이고 비-사람 값이 없다. `author_role`은 **표시 전용**(호출부 7곳 전부 DTO 조립, 인가는 `Viewer`가 별도 판정)이라 기능적 대가 0. `outsider`는 거짓을 주장하지 않는 유일한 값이고, 코드베이스가 이미 삭제된 글의 자리표시자로 `Role.OUTSIDER`를 쓴다. `members` 행을 만들면 **숨김 플래그가 없어** 공개 명단 `/members`에 뜨고 회원 수가 33→34로 보이며 회원 코드 대역(임원 `1XXXX`/회원 `2XXXX`)을 하나 소비한다 | `officer`(없는 권위 주장) / `member`(사람 계정과 배지 구분 불가) |
 | D12 | presigned **PUT** 채택 (POST 아님) | 확정 | 버킷이 공유 자원이고 ESSENTIA는 이미 presigned PUT + `content-type;host` 서명으로 타입을 강제한다. POST를 열면 **같은 버킷에 검증 모델이 두 개** 생긴다. 크기 상한은 ① 브라우저 전처리 ② `/confirm`의 `HeadObject` 검증 후 초과 시 삭제로 담보 | presigned POST + `content-length-range` — 보장은 더 강하지만 공유 버킷을 쪼개는 값을 못 함 |
 
