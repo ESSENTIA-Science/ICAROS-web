@@ -11,7 +11,7 @@
 | D4 | S3 프리픽스 **`icaros-web/`**, 공개/비공개 분리 없음 | 확정 | 기존 12개 프리픽스 중 어느 것의 접두사도 아님(교차 삭제 사고 전력 대응). D3으로 단일 private 클래스 | `…/pub/` + `…/priv/` 이분 |
 | D5 | Vercel 런타임 AWS 인증 = **OIDC 역할 수임** | 확정 | ESSENTIA는 런타임에 장기 키를 두는 곳이 없음(EC2 인스턴스 프로파일, GHA OIDC). 로컬 `essentia` 프로필은 IAM 사용자 장기 키라 런타임 사용 불가 | IAM user access key |
 | D6 | CORS 오리진 = 프로덕션 도메인 + **고정 프리뷰 별칭 1개** | 확정 | `*.vercel.app`은 타인의 Vercel 앱까지 포함 | 프리뷰 와일드카드 |
-| D7 | Neon은 **Preview 배포 직전에** 붙인다. Gate 4까지 **로컬 postgres:17** | 확정 | Neon 콘솔 접근 없이도 구현·검증 가능. role 권한 범위는 구현을 해봐야 정확히 정해짐 | 선행 Neon 접근권 확보 |
+| D7 | ~~Neon은 Preview 직전에 붙인다~~ → **무효 (D16)**. Gate 4까지 로컬 postgres:17 로 진행하는 부분만 유효 | 무효 | Neon 콘솔 접근 없이도 구현·검증 가능. role 권한 범위는 구현을 해봐야 정확히 정해짐 | 선행 Neon 접근권 확보 |
 | D8 | `VITE_ADMIN_PW` 유출 → **로테이션·history purge 미실시** | 확정 | 사용자 판단: 이미 폐기된 값. 리뉴얼로 Supabase 자체가 제거되며 해당 자격증명 계열 전부 무효화 | git-filter-repo + force-push |
 | D9 | 삭제된 `supabase/migrations/` **복구 안 함** | 확정 | `00-legacy-schema-snapshot.md`로 대체 기록. git history에 원문 존재 | `git restore supabase/` |
 | D10 | 디스플레이 폰트 | **보류** | `WidescreenUEx_Trial_*` — 9파일 ~900KB 미서브셋 TTF, 파일명이 "Trial". 웹 라이선스 확인 필요 | — |
@@ -149,3 +149,69 @@ select count(*) from pg_tables where schemaname = 'public'; -- ESSENTIA 테이�
 
 `DATABASE_URL_UNPOOLED` 를 쓴다. PgBouncer transaction 모드에서 DDL 은 예측 불가능하다.
 `drizzle-kit push` 는 **금지** — 라이브 DB 를 introspect 하므로 ESSENTIA 테이블이 시야에 들어온다.
+
+
+---
+
+## 🔴 D16 — ESSENTIA DB 가 Neon → AWS RDS 로 이관됨 (2026-08-23). 아키텍처 재검토 필요
+
+`essentia_infra` 통보. **이미 운영 중이고 되돌릴 계획 없음.**
+
+### 왜
+Neon 무료 티어 컴퓨트 한도 소진으로 서비스가 중단됐다. 트래픽 때문이 아니다(게시글 47건, 조회수 두 자리).
+원인은 클라이언트 형태의 불일치였다 — Hikari `keepalive-time: 120000` 이 2분마다 핑을 보내
+Neon 의 5분 절전 타이머를 계속 리셋해 컴퓨트가 24/7 가동됐고, `max_cu = 8` 오토스케일링이 배수로 소진했다.
+**상시 가동 JVM + 커넥션 풀이라는 형태가 서버리스 전제와 맞지 않았던 것**이지 Neon 자체의 문제가 아니다.
+
+### 무효가 된 것
+| | |
+|---|---|
+| D7 (Neon 제한 role 을 Preview 직전 생성) | RDS 이고, role 을 만들어도 네트워크가 닿지 않는다 |
+| 선택지 (B) "읽기는 DB 직접" | **읽기조차 불가능** |
+| pooled vs unpooled (`-pooler`) | RDS 에 그 개념이 없다 |
+| Neon branch 테스트 환경 | 없다. RDS 는 스냅샷 방식 |
+| P9 레거시 20건 **직접 DB insert** | 경로가 사라졌다 |
+
+### 🔴 상대가 과소평가한 부분 — 영향은 Community 접근만이 아니다
+
+RDS 는 퍼블릭 액세스가 꺼져 있고, 보안 그룹 인바운드(5432)가 **EC2 보안 그룹 하나만** 허용한다.
+**Vercel 에서 도달 자체가 불가능하다.**
+
+D2 에 따라 `icaros` 스키마를 그 RDS 에 두면, 거기 들어가는 것은:
+`site_settings`(랜딩 카피 전부) · `page_sections` · `rockets` · `rocket_engines` · `members` ·
+`media` · `admin_users` · `admin_sessions` · `auth_events` · `login_attempts` · `rocket_models` · `rocket_hotspots`
+
+즉 **ICAROS 앱이 자기 자신의 데이터베이스에 닿을 수 없다.** Community 연동이 막히는 게 아니라
+랜딩 페이지 렌더도, 관리자 로그인도 안 된다. 서비스 토큰으로 해결되는 범위가 아니다
+(ESSENTIA API 는 forum 만 노출하지 우리 테이블을 노출하지 않는다).
+
+### 선택지
+
+| | 방식 | ICAROS 자체 데이터 | Community 데이터 | 비용·위험 |
+|---|---|---|---|---|
+| **가** | **ICAROS 전용 DB 를 따로 둔다** (ESSENTIA RDS 와 분리) | 직접 접속 ✅ | ESSENTIA REST API 경유 (D1 서비스 토큰) | DB 1개 추가. **`ddl-auto: validate` 위험이 구조적으로 사라진다** |
+| 나 | ESSENTIA RDS 를 퍼블릭 개방 | ✅ | ✅ | 상대가 비권장. 감사 증적·전자서명이 든 DB 를 인터넷에 연다 |
+| 다 | RDS Proxy | ✅ | ✅ | 추가 과금. 여전히 VPC 안이라 Vercel 에서 못 닿는 건 동일 |
+| 라 | bastion 경유 | ✅ | ✅ | 서버리스에서 요청마다 SSH 터널은 성립하지 않는다 |
+
+**권장: 가.**
+- ICAROS 는 Vercel 서버리스라 **Neon 이 죽은 그 실패 모드에 해당하지 않는다.** 원인은 24/7 JVM + Hikari keepalive 였다.
+  요청 단위로 붙었다 끊는 Next.js 앱은 Neon 의 절전이 정상 작동하는 바로 그 형태다.
+- D2 의 존재 이유였던 `ddl-auto: validate` 위험이 **DB 가 분리되면 아예 성립하지 않는다.**
+  두 저장소가 한 DB 를 공유하던 구조적 위험이 사라진다.
+- Community 는 어차피 D1(서비스 토큰) 경유가 확정이므로, DB 를 나눠도 잃는 것이 없다.
+- 대가: DB 2개 운영. ICAROS 규모(카피 26행·로켓 4·멤버 27)에서는 무료 티어로 충분하다.
+
+**사용자 결정 사항** — 인프라 프로비저닝과 비용이 걸려 있어 내가 정할 수 없다.
+
+### 바뀌지 않은 것
+- 스키마·데이터 100% 동일(40테이블 행수 + md5 대조 확인), PostgreSQL 17.11
+- Flyway 가 여전히 `public` 단독 소유자, V18 적용, `ddl-auto: validate` 유지
+- ICAROS 게시판은 여전히 `projects` 행으로 존재, 기존 글 4건 그대로
+- **S3·AWS 관련(D3·D4·D5·D6·D12·D15) 전부 유효** — 버킷·프리픽스·CORS·IAM 논의는 영향 없음
+- 로컬 개발(docker postgres:17)은 영향 없음 → **Gate 4·5 작업은 계속 진행 가능**
+- 리전 싱가포르 → 서울, API 응답 414ms → 45ms
+
+### 즉시 지켜야 할 것
+- **Neon 프로젝트에 붙어서 개발하지 마라.** 롤백용으로 며칠 유지되지만 쓰기를 받지 않아 데이터가 갈린다.
+- P9 import 는 API 경유이거나 **EC2 안에서 사람이 실행하는 일회성 작업**이 된다.
