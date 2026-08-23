@@ -1,8 +1,8 @@
 import 'server-only'
 
-import { and, asc, desc, eq, gte, isNull, lt, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, isNull, lt, or, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { media, members, rockets, siteSettings, storageCleanupJobs } from '@/lib/db/schema'
+import { media, members, rockets, siteSettings, storageCleanupJobs, rocketModels } from '@/lib/db/schema'
 import { StorageError, describeError } from './errors'
 import { assertKeyWritable } from './keys'
 import { deleteObject, headObject } from './objects'
@@ -18,6 +18,8 @@ const MAX_ATTEMPTS = 10
 
 /** 확정되지 않은 채 이만큼 지난 `pending` 은 중단된 업로드로 본다. */
 const STALE_PENDING_MS = 30 * 60 * 1000
+/** 확정됐는데 아무 항목에도 붙지 않은 업로드를 회수하기까지 기다리는 시간. 편집 중인 폼을 지우면 안 된다. */
+const UNATTACHED_READY_MS = 24 * 60 * 60 * 1000
 
 /** 아직 처리되지 않은 잡. 재시도 대상과 포기된 것을 나누는 기준은 `attempts` 하나다. */
 const OPEN_JOB = isNull(storageCleanupJobs.completedAt)
@@ -130,7 +132,7 @@ export async function deleteMedia(mediaId: string): Promise<DeleteMediaResult> {
  * 참조 확인 없이 soft delete 하는 경로가 실제로 있었다.
  */
 export async function hasReferences(mediaId: string): Promise<boolean> {
-  const [rocketRefs, memberRefs, landingRefs] = await Promise.all([
+  const [rocketRefs, memberRefs, landingRefs, modelRefs] = await Promise.all([
     db.select({ id: rockets.id }).from(rockets).where(eq(rockets.coverMediaId, mediaId)).limit(1),
     db.select({ id: members.id }).from(members).where(eq(members.imageMediaId, mediaId)).limit(1),
     // `mediaId` 는 호출부에서 UUID 임을 확인했으므로 LIKE 와일드카드가 섞일 수 없다.
@@ -140,8 +142,20 @@ export async function hasReferences(mediaId: string): Promise<boolean> {
       .from(siteSettings)
       .where(sql`${siteSettings.value} ilike ${`%${mediaId}%`}`)
       .limit(1),
+    // 3D 모델은 GLB 와 포스터 두 컬럼으로 미디어를 가리킨다. 여기가 빠져 있으면
+    // 살아 있는 모델의 GLB 를 정리 대상으로 잡는다 (I14).
+    db
+      .select({ id: rocketModels.id })
+      .from(rocketModels)
+      .where(or(eq(rocketModels.glbMediaId, mediaId), eq(rocketModels.posterMediaId, mediaId)))
+      .limit(1),
   ])
-  return rocketRefs.length > 0 || memberRefs.length > 0 || landingRefs.length > 0
+  return (
+    rocketRefs.length > 0 ||
+    memberRefs.length > 0 ||
+    landingRefs.length > 0 ||
+    modelRefs.length > 0
+  )
 }
 
 export interface CleanupRunResult {
@@ -234,6 +248,59 @@ export interface SweepResult {
   orphansFound: number
   /** 그중 지우지 못해 `pending` 으로 남긴 건수. cleanup 큐에 잡이 있다. */
   orphansPending: number
+  /** 확정은 됐으나 어디에도 붙지 못한 채 방치된 업로드. 회수했다. */
+  unattachedReclaimed: number
+}
+
+/**
+ * 확정됐지만 어디에도 붙지 못한 업로드를 회수한다.
+ *
+ * 업로드는 폼 제출 **전에** `status='ready'` 로 확정되고 `entity_id` 는 null 이다.
+ * 관리자가 폼을 취소하거나 저장이 거부되면(slug 중복·버전 충돌·미디어 거부) 그 행과 S3 객체를
+ * 회수하는 주체가 없다. `sweepStalePendingUploads` 는 `pending` 만 보므로 여기서 걸리지 않는다.
+ *
+ * 판정 기준을 `entity_id is null` **하나로 두지 않는다** — 업로드 직후 폼을 아직 저장하지 않은
+ * 정상 상태와 구별되지 않기 때문이다. 충분히 오래된 것만 본다.
+ * 그리고 지우기 전에 `hasReferences()` 로 한 번 더 확인한다 — 랜딩 카피 본문에 손으로 붙여 넣은
+ * `/api/media/{id}` 는 `entity_id` 를 남기지 않는다.
+ */
+async function reclaimUnattachedUploads(limit: number): Promise<number> {
+  const cutoff = new Date(Date.now() - UNATTACHED_READY_MS)
+
+  const rows = await db
+    .select({ id: media.id, bucket: media.bucket, key: media.key })
+    .from(media)
+    .where(
+      and(
+        eq(media.status, 'ready'),
+        isNull(media.deletedAt),
+        isNull(media.entityId),
+        lt(media.createdAt, cutoff)
+      )
+    )
+    .orderBy(asc(media.createdAt))
+    .limit(limit)
+
+  let reclaimed = 0
+  for (const row of rows) {
+    if (await hasReferences(row.id)) continue
+
+    try {
+      await deleteObject(row.bucket, row.key)
+    } catch (err) {
+      // pending 스윕과 같은 이유로 행을 지우지 않는다 — 큐에만 넣고 다음 주기가 다시 본다.
+      await enqueueCleanup(row.bucket, row.key, describeError(err))
+      continue
+    }
+
+    await db
+      .update(media)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(media.id, row.id), isNull(media.deletedAt)))
+    reclaimed += 1
+  }
+
+  return reclaimed
 }
 
 /**
@@ -285,5 +352,6 @@ export async function sweepStalePendingUploads(limit = 50): Promise<SweepResult>
       .where(and(eq(media.id, row.id), eq(media.status, 'pending')))
   }
 
-  return { scanned: stale.length, orphansFound, orphansPending }
+  const unattachedReclaimed = await reclaimUnattachedUploads(limit)
+  return { scanned: stale.length, orphansFound, orphansPending, unattachedReclaimed }
 }

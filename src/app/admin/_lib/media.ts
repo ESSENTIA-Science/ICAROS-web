@@ -5,7 +5,7 @@ import { z } from 'zod'
 
 import { db, schema } from '@/lib/db'
 import type { MediaEntityType } from '@/lib/image/policy'
-import { StorageError, deleteMedia, describeError, enqueueCleanup, isUuid } from '@/lib/s3'
+import { StorageError, deleteMedia, describeError, enqueueCleanup, isUuid, hasReferences } from '@/lib/s3'
 
 /**
  * 어드민 폼 ↔ `icaros.media` 를 잇는 계층.
@@ -233,8 +233,16 @@ export async function retireMedia(ids: readonly string[]): Promise<void> {
       await deleteMedia(id)
     } catch (err) {
       if (err instanceof StorageError && (err.code === 'in_use' || err.code === 'not_found')) {
-        // in_use: 아직 누군가 참조 중이다. not_found: 이미 정리됐다. 둘 다 건드리면 안 되는 상태다.
-        console.warn(`[admin] 미디어 정리 보류 (${err.code})`)
+        // in_use: 아직 누군가 참조 중이다. not_found: 이미 정리됐다. 객체는 건드리지 않는다.
+        //
+        // 다만 **소속은 반드시 끊는다.** 갤러리 목록은 `entity_type + entity_id` 로만 뽑고
+        // 순서 행은 정렬 힌트일 뿐이라, entity_id 를 남겨 두면 관리자가 방금 뺀 사진이
+        // 저장 직후 목록 맨 뒤에 아무 안내 없이 되살아난다.
+        await db
+          .update(schema.media)
+          .set({ entityId: null })
+          .where(eq(schema.media.id, id))
+        console.warn(`[admin] 미디어 객체 정리 보류 (${err.code}) — 소속만 해제: ${id}`)
         continue
       }
       await queueForCleanup(id, err)
@@ -249,10 +257,9 @@ export async function retireMedia(ids: readonly string[]): Promise<void> {
  * 행을 `ready` 로 남겨 두면 아무도 참조하지 않는데 살아 있는 것처럼 보이므로 soft delete 하고,
  * S3 객체는 큐에 넣어 나중에 회수한다. `completed_at` 이 채워지기 전까지 잡은 계속 보인다.
  *
- * ⚠ 이 경로에서는 `deleteMedia` 안의 참조 재확인(`hasReferences`)이 실행되지 않는다.
- * 그 함수는 `lib/s3/cleanup.ts` 의 비공개 함수라 여기서 부를 수 없다(이 트랙 소유 밖).
- * 호출부가 항상 "참조를 커밋으로 끊은 뒤"에만 부르므로 남는 노출은 랜딩 카피 본문에 같은
- * `/api/media/{id}` 를 손으로 붙여 넣은 경우 하나다. `hasReferences` 가 export 되면 닫힌다.
+ * `hasReferences()` 로 참조를 **직접 재확인한다.** 예전에는 그 함수가 비공개라 이 경로에서
+ * 검사를 건너뛰었고, `S3_BUCKET` 미설정 상태(= 지금 로컬)에서는 모든 호출이 여기로 떨어져
+ * 살아 있는 참조를 soft delete 하는 구멍이 있었다. 참조 검사는 DB 만 보므로 S3 설정과 무관하다.
  */
 async function queueForCleanup(mediaId: string, cause: unknown): Promise<void> {
   try {
@@ -264,6 +271,13 @@ async function queueForCleanup(mediaId: string, cause: unknown): Promise<void> {
 
     const row = rows[0]
     if (!row) return
+
+    // 살아 있는 참조를 지우지 않는다. 이 경로는 deleteMedia 가 상태를 바꾸기 전에 던진 경우라
+    // 그 안의 검사가 돌지 않았다.
+    if (await hasReferences(mediaId)) {
+      console.warn(`[admin] 참조가 남아 있어 정리하지 않음: ${mediaId}`)
+      return
+    }
 
     await db
       .update(schema.media)

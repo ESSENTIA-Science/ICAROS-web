@@ -59,6 +59,14 @@ async function main() {
       ['contact.email', 'air091226@naver.com'],
       ['contact.instagram', 'icaros_aerospace'],
       ['footer.copyright', '© 2026 ICAROS. All Rights Reserved.'],
+      // 헤더 메뉴명·SEO — Header.tsx / layout.tsx 에 하드코딩돼 있던 값 그대로 (A2·F10)
+      ['nav.about', 'About Us'],
+      ['nav.rocket', 'Rockets'],
+      ['nav.posts', 'Posts'],
+      ['nav.member', 'Members'],
+      ['seo.title', 'ICAROS'],
+      ['seo.description', 'ICAROS는 학생 주도 항공우주·로켓 연구팀으로 무인기 설계, 비행 제어, 고체연료 로켓 개발과 발사를 수행합니다.'],
+      ['og.image_media_id', ''],
     ]
     for (const [key, value] of PROMOTED) {
       // 이미 DB 에 있으면 덮어쓰지 않는다 — 운영자가 고친 값을 되돌리면 안 된다.
