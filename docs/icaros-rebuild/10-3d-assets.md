@@ -1,5 +1,22 @@
 # 10 — 3D Assets: `icx-2.fbx` 실측 · 변환 판정
 
+> ## ✅ 실행 완료 (2026-08-24) — 아래 "독립 검토 정정" 중 **1·3·4·5 가 갱신됐다**
+>
+> D19 로 도구 설치가 승인돼 **변환을 실제로 수행했다.** 산출물과 런타임이 모두 레포에 있다.
+> 상세는 §11~§15. 여기서는 이전 판정이 뒤집힌 것만 먼저 적는다.
+>
+> | 이전 판정 | 실행 결과 |
+> |---|---|
+> | "변환 도구가 하나도 없다. Blender 설치가 필요하다" | **필요 없었다.** `three` 가 `examples/jsm/loaders/FBXLoader.js` 로 완전한 FBX 리더를 배포한다. 런타임용으로 어차피 설치하는 패키지라 **FBX→glTF 에 추가 도구가 0개**다 (§11) |
+> | 🔴 "§3(크기)과 §2.2(draw call)는 **동시에 성립하지 않는다.** `join` 이 인스턴싱을 파괴해 양자화 BIN 이 8.95 → **27.34 MiB**" | **틀렸다. 둘 다 성립한다.** 그 27.34 MiB 는 *양자화만 한 BIN* 이고, 같은 문서 §3.2 가 "meshopt 는 선택이 아니라 필수"라고 이미 결론지었다. **meshopt 를 걸면 flatten+join 한 GLB 가 3.77 MiB** 다(실측). 부품 필터를 먼저 걸면 **1.94 MiB · draw call 31** (§12) |
+> | 🔴 "T5: X·Y 0.73~0.77 m 의 정체 불명 — 발사대가 섞였을 수 있다" | **해소.** 회전을 반영한 실제 AABB 는 **0.464 × 1.660 × 0.464 m**. 넓은 X·Y 는 발사대가 아니라 **기체의 착륙 레그 4개**다. 소프트웨어 렌더로 육안 확인했다 (§13) |
+> | "모바일 fallback 은 스키마 기본값만으로 충족되지 않는다" | 맞다. **런타임 사다리를 구현했다** — `src/components/three/HeroStage.tsx` (§14) |
+> | "G2(포스터)는 GLB 변환에 종속된 미충족 항목" | **충족.** 3D 와 **같은 카메라 파라미터**로 구운 900×1600 투명 PNG(38 KB). `icx2.webp` 임시 포스터는 쓰지 않는다 (§13) |
+>
+> 여전히 미해결: **G11(부품 강조)** — `join` 이 부품 노드를 없애므로 §6 의 선택지 "가"(CAD 개명)가
+> 유일한 경로라는 판단은 그대로다. D19 로 홈 히어로만 쓰기로 했으므로 지금은 필요하지 않다.
+> 그리고 **실제 GPU 렌더는 이 머신에서 확인하지 못했다** — 무엇을 검증했고 무엇을 못 했는지는 §15.
+
 > ## ⚠️ 독립 검토 정정 (2026-08-23)
 >
 > **1. 이 문서는 P7-26 의 전반부만 다룬다.** 09-implementation-plan.md P7-26 은
@@ -446,3 +463,274 @@ npx tsx scripts/model/inspect-fbx.ts path/to/other.fbx        # 다른 파일
 | **T6** | 투명 머티리얼(`Acrylic (Clear)` 등) 을 불투명으로 통일할지 | §4 |
 | **T7** | `04-architecture.md` 의 "meshopt > 2 MB 면 Draco" 임계 완화 여부 | §3.3 |
 | **T8** | GLB 를 `Content-Encoding: br` 로 미리 압축해 저장할지 | §3.2. D15 스트리밍과 맞물림 |
+
+
+---
+---
+
+# 실행 기록 (2026-08-24)
+
+## 11. 변환 경로 — Blender 없이 끝났다
+
+§2 는 "FBX 를 읽을 수 있는 유일한 무료 도구는 Blender" 라고 적었다. **그 조사에 빠진 것이 하나 있었다.**
+
+`three` 는 `examples/jsm/loaders/FBXLoader.js` 로 **완전한 FBX 바이너리 리더**를 배포한다.
+그리고 `examples/jsm/exporters/GLTFExporter.js` 로 GLB 를 쓴다. 우리는 런타임(P7-27)용으로
+`three` 를 어차피 설치하므로, **FBX→glTF 단계의 추가 도구는 0개**다.
+Blender 1GB 다운로드도, FBX2glTF 의 유지보수 중단 문제도 사라진다.
+
+두 모듈은 브라우저를 전제하므로 Node 에서 shim 두 개가 필요하다 (`scripts/model/fbx-to-glb.ts`):
+
+| 무엇 | 왜 | 우리에게 실제로 걸리나 |
+|---|---|---|
+| `FileReader` | GLTFExporter 가 GLB 를 만들 때 `Blob` → `FileReader` 를 쓴다. Node 26 에 `Blob` 은 있고 `FileReader` 는 없다 | **걸린다.** `readAsArrayBuffer`·`readAsDataURL` 두 메서드만 구현했다 |
+| `window` | FBXLoader 가 임베드 텍스처에서 `window.URL.createObjectURL`, 카메라 파싱에서 `window.innerWidth` 를 읽는다 | 텍스처 0·카메라 0 이라 닿지 않는다. 조용히 죽지 않도록 깔아만 둔다 |
+
+### 파이프라인
+
+```bash
+# ① FBX → 무손실 GLB (중간 산출물은 $TMPDIR, 레포에 남기지 않는다)
+npx tsx scripts/model/fbx-to-glb.ts
+
+# ② 감량 → public/assets/models/icx-2.glb
+NODE_OPTIONS=--max-old-space-size=8192 npx tsx scripts/model/optimize-glb.ts \
+  "$TMPDIR/icaros-model/icx-2.raw.glb" --out public/assets/models/icx-2.glb \
+  --min-part 20 --mode join --up z --scale 0.001 --center
+
+# ③ 포스터 (3D 와 같은 궤도각·화각)
+npx tsx scripts/model/render-poster.ts public/assets/models/icx-2.glb \
+  --out public/assets/models/icx-2-poster.png --width 900 --height 1600 --ss 3
+
+# ④ 검증
+npx tsx scripts/model/inspect-glb.ts public/assets/models/icx-2.glb --mm-per-unit 1000
+npx tsx scripts/model/verify-runtime-load.ts
+```
+
+**`public/assets/icx-2.fbx` 원본은 읽기만 했다.** 수정·삭제 없음 (`16,920,592 bytes` 그대로).
+
+### 1단계에서 관찰된 것
+
+- FBXLoader 가 만든 Mesh 노드는 **717개**다. §1.4 의 "Geometry→Model 연결 866" 은 멀티머티리얼
+  메시의 머티리얼 슬롯까지 센 값이고, three 는 그것을 **하나의 Mesh + geometry group** 으로 만든다.
+  즉 "866" 은 draw call 로는 맞고 **객체 수로는 717** 이다. 두 수는 다른 것을 센다.
+- FBXLoader 는 **비인덱스 지오메트리**를 뱉는다. 그래서 1단계 GLB 가 **54.74 MiB** 다
+  (1,695,948 corner × 32 B). 이건 문제가 아니라 예상된 중간 상태이고, 2단계 `weld()` 가 되돌린다.
+- 경고 1건: `THREE.FBXLoader: The FBX file contains invalid (negative) material indices.`
+  §1.4 의 `ByPolygon` 61개 메시에서 나온다. 렌더 결과에 이상은 보이지 않았다(§13).
+
+## 12. 🔴 정정 — "예산과 draw call 은 동시에 만족할 수 없다"는 틀렸다
+
+정정 배너 3번의 표는 **양자화만 한 BIN** 을 비교했다. 그런데 같은 문서 §3.2 가 이미
+*"파일 내 압축(meshopt)은 선택이 아니라 필수"* 라고 결론지었다. 그러면 비교 대상은 meshopt 를
+**건 뒤의** 크기여야 한다. 6가지 조합을 전부 만들어 재 봤다.
+
+| # | 옵션 | GLB | draw call | 렌더 삼각형 |
+|---|---|---:|---:|---:|
+| A | 아무것도 안 함 (weld·dedup·prune·meshopt 만) | 2.86 MiB | 1,311 | 1,163,444 |
+| B | `--mode instance` (EXT_mesh_gpu_instancing) | **2.33 MiB** | 470 | 1,163,444 |
+| C | `--mode join` (= flatten + join, 필터 없음) | 3.77 MiB | **56** | 1,163,444 |
+| D | `--min-part 5 --mode join` | 2.81 MiB | 41 | 818,512 |
+| **E** | **`--min-part 20 --mode join`** ← 채택 | **1.94 MiB** | **31** | **511,500** |
+| F | `--min-part 20 --simplify 0.35 --mode join` | 0.89 MiB | 31 | 184,898 |
+
+**C 를 보라.** 정정 배너가 27.34 MiB 를 예고했던 바로 그 조합이 **3.77 MiB** 다. 8 MB 예산의 47% 다.
+배너의 산술 자체는 맞았다 — 양자화 BIN 은 정말로 커진다. 다만 그 BIN 을 meshopt 가 다시 접는다.
+`flatten` 이 복제하는 것은 **인덱스와 정점**인데, 복제본은 정의상 서로 비슷해서 압축이 아주 잘 든다.
+
+### 왜 E 를 골랐나 — 예산이 우선이라는 지시에 대한 답
+
+지시는 "예산(8MB)이 우선"이었다. 실측 결과 **그 선택을 할 필요가 없었다.** E 는
+
+- **1.94 MiB** — 예산 8 MB 의 24%, 문서 §8 권고치 4 MB 의 49%
+- **draw call 31** — 목표 ≤100 의 31%
+- 렌더 삼각형 **511,500** — 문서 권고치 150k 는 넘는다 (아래)
+
+세 지표 중 둘이 목표를 크게 밑돌고, 남는 하나는 **의도적으로 포기했다.**
+
+### 왜 데시메이션(F)을 하지 않았나 — 숫자로 결정했다
+
+F 는 삼각형을 184,898 로 줄이고 크기도 0.89 MiB 다. 숫자만 보면 F 가 낫다.
+그런데 **렌더해서 픽셀로 비교했다** (§13 의 소프트웨어 래스터라이저, 500×900 · 기체 픽셀 20,967개):
+
+| 비교 대상 | 원본 대비 다른 픽셀 (>2/255) | 평균 차이 |
+|---|---:|---:|
+| E (`--min-part 20`, 데시메이션 없음) | 기체 픽셀의 **4.08%** | 8.0 |
+| `--simplify 0.5` | 6.73% | 6.6 |
+| F (`--simplify 0.35`) | **12.24%** | 6.8 |
+
+그리고 F 의 렌더를 눈으로 보면 **노즈콘에 각이 진다.** 실루엣에서 가장 눈에 띄는 곳이다.
+1.94 MiB 는 이미 예산의 24% 인데, 그 여유를 노즈콘 페이싱과 바꾸는 것은 남는 장사가 아니다.
+→ **데시메이션 없음.** 필요해지면 `--simplify` 플래그가 그대로 있다.
+
+### `--min-part 20` 이 안전한 이유
+
+583개 부품(SMD 0403 커패시터·DIP 소켓 핀·M3 너트)을 버리고 134개를 남긴다. 렌더 삼각형의 56% 다.
+§1.5 의 픽셀 산술("20 mm 부품은 히어로에서 6.9 px")이 예측한 대로, **렌더 차이는 기체 픽셀의 4%**
+이고 육안으로 두 그림을 구별할 수 없다. 추정이 아니라 두 PNG 를 픽셀 단위로 비교한 값이다.
+
+### `join` 의 대가 — 기록해 둔다
+
+`join` 은 머티리얼 단위로 병합하므로 **부품 노드 이름이 전부 사라진다** (mesh 21개, 이름 `Body1` 계열).
+즉 **G11(`highlight_node` 기반 부품 강조)의 문은 이 산출물에서 닫힌다.** §6 의 결론과 같고,
+D19 가 홈 히어로만 쓰기로 정했으므로 지금은 대가가 없다.
+로켓 상세 페이지에서 핫스팟이 필요해지면 **`--mode instance`(B)** 로 다시 구우면 된다 —
+2.33 MiB · draw call 470 으로, 부품 노드가 그대로 남는다. 그래서 두 모드를 다 남겨 두었다.
+
+### 좌표계 정규화
+
+원본은 **Z 가 장축, 1 unit = 1 mm** 였다. glTF 규약(Y-up)과 다르고, DB 의 `camera_z` 기본값 5 가
+5 mm 를 뜻하게 되어 아무것도 보이지 않는다. 자산 쪽에서 한 번에 바로잡았다:
+
+`--up z` (X축 −90° 회전) · `--scale 0.001` (mm→m) · `--center` (AABB 중심을 원점으로)
+→ 최종 AABB **0.464 × 1.660 × 0.464 m**, 중심 (0, 0, 0).
+
+## 13. 소프트웨어 렌더러 — 검증과 포스터를 한 번에
+
+이 머신에 WebGL 도 Blender 도 없다. 그런데 "20 mm 미만 583개를 버려도 되는가"는 **숫자로 답할 수 없는
+질문**이다. 그래서 `scripts/model/render-poster.ts` 에 의존성 0의 z-buffer 래스터라이저를 짰다
+(PNG 인코더 포함 — `node:zlib` 만 쓴다).
+
+얻은 것 셋:
+
+1. **T5 해소.** 기체를 실제로 보니 X·Y 464 mm 는 발사대가 아니라 **착륙 레그 4개**다.
+   중동체에 그리드핀 링, 하단에 4개의 소형 추력기가 보인다 — VTVL 호퍼 형상이다.
+2. **감량 판정** (§12 의 픽셀 비교표).
+3. **G2 포스터.** `900×1600 · 38,831 bytes · 투명 PNG`. `--yaw -28 --pitch 8 --fov 28 --fit 0.86` 으로
+   구웠고, **런타임 `DEFAULT_STAGE` 가 같은 값을 쓴다.** §5.3 이 요구한 "3D 씬의 카메라와 일치하는
+   포스터"가 정의상 만족된다. 임시 포스터(`icx2.webp` 512×1024)는 쓰지 않는다.
+
+`next/image` 최적화도 확인했다 (`formats: ['image/webp']`): w=384 → 7,534 B · w=640 → 14,002 B,
+전부 `image/webp` 200. 알파가 유지된다.
+
+## 14. 런타임 — 홈 고정 캔버스 (P7-27 · P7-28)
+
+`src/components/three/` 6파일. 계약은 레퍼런스 두 곳이 독립적으로 도달한 것 그대로다
+(03 §1 Vast `.webgl-home-space-station` / 03 Part 3 Hanwha `.mesh-area`).
+
+| 파일 | 역할 | 초기 번들 |
+|---|---|---|
+| `HeroStage.tsx` | 진입점. 타깃 박스 탐색 · 폴백 사다리 · 포스터 | **포함** (3.0 KB gz) |
+| `capabilities.ts` | WebGL2 프로브 · 모바일 · saveData · deviceMemory | 포함 |
+| `config.ts` | `StageConfig` + `DEFAULT_STAGE` | 포함 |
+| `rect.ts` | 타깃 박스 rect 추적 (rAF 합침 · ResizeObserver) | 포함 |
+| `HeroStage.module.css` | 고정 레이어 · 포스터 배치 | 포함 |
+| `Scene.tsx` | R3F Canvas · GLTFLoader · 조명 · 에러 경계 | **지연** |
+| `framing.ts` | 카메라 수학 (`three` import) | **지연** |
+
+### 계약
+
+```
+히어로가 선언:   <div data-webgl-target="home-hero"> …빈 상자… </div>
+캔버스가 소비:   getBoundingClientRect() → applyStageCamera()
+```
+
+핵심은 `camera.setViewOffset(rectW, rectH, -rectX, -rectY, canvasW, canvasH)` 다.
+캔버스는 뷰포트 전체인데 모델은 박스 안에 있어야 한다. 이 호출은 "가상의 rectW×rectH 이미지"
+기준으로 프러스텀 스케일을 잡고, 실제 캔버스를 그 이미지의 `(-rectX, -rectY)` 에 놓인 더 큰 창으로
+취급한다. 최종 프러스텀 종횡비가 `canvasW/canvasH` 로 떨어져 **왜곡이 없다.**
+브레이크포인트마다 좌표를 손으로 넣을 필요가 사라진다.
+
+거리는 바운딩 **구**가 아니라 **AABB 8꼭짓점**으로 푼다. 0.46 × 1.66 × 0.46 처럼 길쭉한 물체에서
+구 반경은 높이에 지배되므로, 좁은 가로 화각으로 그 구를 담으려다 카메라가 필요한 거리의 두 배까지
+물러난다. 포스터 첫 렌더에서 실제로 그렇게 나왔고, 그래서 고쳤다.
+
+### 폴백 사다리 (G12 · C12)
+
+| 단 | 조건 | 결과 |
+|---|---|---|
+| ① 3D | WebGL2 컨텍스트 생성 성공 · 뷰포트별 DB 플래그 허용 · `saveData` 아님 · `deviceMemory ≥ 4`(없으면 통과) | `Scene` 지연 로드 |
+| ② 포스터 | 위 중 하나라도 실패, 또는 GLB 로드 실패(에러 경계) | 정적 이미지 |
+| ③ 히어로 그대로 | 타깃 박스가 없거나 `poster: null` | 아무것도 안 그림 |
+
+- **모바일 기본 off.** `enabledMobile: false` — `rocket_models.enabled_mobile` 스키마 기본값과 같다.
+  판정 기준은 `(max-width: 767px)` 로, 히어로 CSS 의 모바일 브레이크포인트와 **같은 값**이다.
+- `deviceMemory` 는 **없으면 통과**로 설계했다 (Safari 미구현). §5.2 의 경고를 그대로 따랐다.
+- `prefers-reduced-motion` 은 3D 를 끄지 **않는다.** 자동 회전과 스크롤 카메라 연출만 멈춘다
+  (박스 추적은 유지 — 그건 연출이 아니라 위치다). §5 의 표는 이걸 3단 트리거로 적었는데,
+  **의도적으로 다르게 구현했다**: 정지한 3D 는 포스터보다 나쁘지 않고, 모션만 끄면 요구를 만족한다.
+- 히어로가 화면 밖으로 나가면 `frameloop='never'` 로 **렌더 루프를 완전히 멈춘다.**
+
+### drei 를 쓰지 않은 이유
+
+§7.2 는 `@react-three/drei` 를 필수로 적었다. 실제로 필요한 것은 `useGLTF` 와 bounds 둘뿐인데,
+drei 는 `three-stdlib` · `troika-three-text` · `@mediapipe/tasks-vision` · `camera-controls` ·
+`detect-gpu` 등 20여 개를 끌고 온다. `GLTFLoader` + `Box3` 로 직접 쓰면 그 그래프가 통째로 사라진다.
+핫스팟 라벨(G11)이 실제로 필요해지는 날 다시 판단한다.
+
+### 환경맵
+
+`RoomEnvironment` + `PMREMGenerator` 로 **런타임 생성**한다. HDR 파일 배포가 0바이트이고,
+텍스처가 0개인 회색 Fusion 머티리얼(§1.6)에 반사 그라디언트를 주는 유일한 수단이다.
+§8 의 "그대로 올리면 회색 CAD 뷰어" 지적에 대한 대응이 이것과 3점 조명이다.
+
+### 설치한 의존성
+
+| 패키지 | 종류 | 왜 |
+|---|---|---|
+| `three@^0.185.1` | dependency | 렌더러 + **FBX 리더** + meshopt 디코더 |
+| `@react-three/fiber@^9.7.0` | dependency | React 19 바인딩. peer `>=19 <19.3` — `react@19.2.8` 핀과 `overrides` 그대로 유지했다(설치 후 재확인: 19.2.8) |
+| `@types/three` · `@gltf-transform/{core,extensions,functions}` · `meshoptimizer` | devDependency | 변환 파이프라인. **런타임 번들에 들어가지 않는다** |
+
+`@gltf-transform/cli` 대신 프로그래밍 API(core/extensions/functions)를 썼다 — CLI 를 셸로 호출하는
+대신 한 스크립트 안에서 부품 필터링 같은 커스텀 단계를 섞을 수 있어서다.
+`EXT_meshopt_compression` 은 `io.registerDependencies({'meshopt.encoder': …, 'meshopt.decoder': …})`
+가 **필수**다. 없으면 변환은 통과하고 **직렬화 순간**에 `encodeFilterOct is undefined` 로 죽는다.
+
+## 15. 검증한 것과 검증하지 못한 것
+
+### 실측으로 확인한 것
+
+| 항목 | 방법 | 결과 |
+|---|---|---|
+| GLB 가 **브라우저 런타임 코드로** 열리는가 | `verify-runtime-load.ts` — three `GLTFLoader` + `MeshoptDecoder` (파이프라인이 쓴 gltf-transform 과 **다른 구현**) | ✅ 9 ms · Mesh 31 · 삼각형 511,500 · AABB 0.464×1.660×0.464 · **NaN 지오메트리 0** |
+| 카메라 프레이밍이 정말 박스 안에 들어가는가 | 같은 스크립트가 `framing.ts` 의 `applyStageCamera()` 를 그대로 호출 → AABB 8꼭짓점 투영 | ✅ 5개 뷰포트 전부 박스 내부, 세로 채움 83.8~84.0% (`fit` 0.86) |
+| 초기 JS 에 three 가 섞이지 않는가 | 프로덕션 빌드 → 서버 HTML 의 `<script>` 전부 수집 → 문자열 검사 | ✅ **없음** |
+| 초기 JS 증가량 | 같은 트리에서 `<HeroStage/>` 유무로 두 번 빌드 후 실측 | **183.7 → 186.3 KB gzip (+2.6 KB)** / raw 590.5 → 597.7 KB |
+| 3D 청크가 정말 분리됐는가 | `.next/static/chunks` 실측 | `1m6rp4icyu2-o.js` **937.6 KB raw / 247.7 KB gzip / 203.5 KB brotli** — 초기 HTML 에 없음 |
+| 404 회귀 | 프로덕션 서버(5403) | `/rocket/nope` 404 · `/nope` 404 |
+| 포스터가 서버 HTML 에 들어가는가 | 프로덕션 HTML grep | ✅ `next/image` srcset 포함 |
+| GLB 정적 서빙 | curl | 200 · `model/gltf-binary` · 2,034,016 B |
+| 원본 FBX 무변경 | `statSync` | 16,920,592 B 그대로 |
+| DB 무변경 | `psql` count | site_settings 33 · rockets 4 · members 27 · engines 6 (**행을 만들지도 지우지도 않았다**) |
+
+> 초기 JS 측정 기준: 브랜치 HEAD 트리를 별도 디렉터리로 복사해 `<HeroStage/>` 마운트 유무만 바꿔
+> 두 번 빌드했다. 소유 경로 밖(`page.tsx`)을 수정하지 않기 위해서다. 150 KB 예산은 **3D 를 뺀
+> 애플리케이션 기준**이고, 위 183.7 KB 는 3D 이전의 기존 수치다 — 이 트랙이 더한 것은 **2.6 KB** 뿐이다.
+
+### 확인하지 못한 것 — 정직하게
+
+1. 🔴 **실제 GPU 렌더를 보지 못했다.** 이 Node 환경에 WebGL 컨텍스트가 없다. 검증한 것은
+   "GLB 가 three 로 파싱된다" 와 "카메라 행렬이 올바른 화면 좌표를 낸다" 까지다.
+   **셰이딩·톤매핑·환경맵 결과가 어떻게 보이는지는 브라우저에서 봐야 한다.** §13 의 소프트웨어
+   렌더는 형상 확인용이지 R3F 파이프라인의 대역이 아니다.
+2. **프로브 분기를 실행해 보지 못했다.** `hasWebGL2()` · `saveData` · `deviceMemory` 는 브라우저
+   API 라 Node 에서 돌릴 수 없다. 코드 경로는 단순하지만 **동작 확인은 안 됐다.**
+3. **60 fps 여부는 미확인.** draw call 31 · 삼각형 511,500 은 데스크톱에서 여유 있는 수치지만,
+   실기 프레임을 잰 것이 아니다.
+4. **포스터 → 3D 크로스페이드의 실제 모양.** 두 프레임 뒤 전환하도록 짰지만 눈으로 못 봤다.
+5. **아직 아무 페이지도 `<HeroStage/>` 를 마운트하지 않았다.** 히어로의 `data-webgl-target="home-hero"`
+   는 디자인 트랙이 이미 붙였고, 캔버스 마운트는 소유 경로 밖이라 이 트랙에서 넣지 않았다.
+   붙이는 쪽은 한 줄이면 된다:
+   ```tsx
+   import HeroStage from '@/components/three/HeroStage'
+   // …페이지 최상단 어디든 (스스로 fixed 레이어를 만든다)
+   <HeroStage />
+   ```
+6. **넓은 히어로 박스에서 기체가 가늘게 보인다.** 프레이밍 검증 실측: 1440×900 데스크톱에서
+   박스가 1312×420 이면 기체의 투영 폭이 **129 px**(박스 폭의 9.8%)다. 세로로 꽉 차고(84%)
+   가로로는 가느다란 띠가 된다. 계산은 정확하지만 **조판 판단은 디자인 트랙 몫**이다 —
+   박스를 좁히거나(예: 우측 40% 컬럼), `fit` 을 낮추거나, 궤도각을 바꾸면 달라진다.
+
+## 16. 남은 사용자 조치 (§10 갱신)
+
+| # | 항목 | 상태 |
+|---|---|---|
+| T1 | Blender · `@gltf-transform/cli` 설치 승인 | ✅ **불필요해짐** — Blender 는 안 썼고, gltf-transform 은 프로그래밍 API 를 devDependency 로 설치 |
+| T2 | `three` · R3F · drei 설치 승인 | ✅ 완료 (drei 는 **채택하지 않음**) |
+| T3 | G11 강조 대상 부품 목록 + CAD 개명 | 🟡 그대로 보류. D19 범위 밖 |
+| T4 | 포스터 원본 | ✅ 해소 — 파이프라인이 생성 |
+| T5 | X·Y 0.73~0.77 m 의 정체 | ✅ 해소 — 착륙 레그. 실제 폭 0.464 m |
+| T6 | 투명 머티리얼을 불투명으로 통일할지 | ✅ 해소 — 변환 후 three 기준 **투명 머티리얼 0개**. `--opaque` 플래그는 남겨 두었으나 쓸 일이 없었다 |
+| T7 | "meshopt > 2 MB 면 Draco" 임계 완화 | ✅ 무의미해짐 — meshopt 결과가 **1.94 MiB** 라 임계에 걸리지 않는다. Draco 는 도입하지 않는다 |
+| T8 | GLB 를 `Content-Encoding: br` 로 미리 압축할지 | ✅ **불필요.** 1.94 MiB 는 예산 8 MB 의 24%. D15 스트리밍과 얽힌 복잡도를 살 이유가 없다 |
+| **T9** | **브라우저 실기 확인** (§15 의 1~4) | 🔴 **새로 생긴 항목.** U5(Chrome 확장 연결)가 해소되면 바로 할 수 있다 |

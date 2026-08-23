@@ -89,3 +89,15 @@
   color: var(--fg-muted);
   font-size: var(--fs-body-s);
 }
+
+/**
+ * 375 실측: 본문 폭이 328px 인데 표는 360px 을 원해 32px 짜리 가로 스크롤이 생겼다.
+ * 32px 만 미끄러지는 스크롤 영역은 고장난 것처럼 보인다 — 차라리 셀을 줄바꿈시킨다.
+ * `overflow-x: auto` 는 남겨 둔다. CMS 가 아주 긴 엔진 이름을 넣으면 그때는 스크롤이 옳다.
+ */
+@media (max-width: 599px) {
+  .table { min-width: 0; }
+  .table th,
+  .table td { padding: var(--sp-3) var(--sp-2) var(--sp-3) 0; }
+  .num { min-width: 3ch; }
+}

@@ -9,7 +9,6 @@ import {
   MathUtils,
   PerspectiveCamera,
   PMREMGenerator,
-  Vector3,
   type WebGLRenderTarget,
 } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -17,6 +16,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 
 import type { StageConfig } from './config'
+import { applyStageCamera } from './framing'
 
 /**
  * 3D 씬 — **이 파일이 무거운 청크다.** `HeroStage` 가 `next/dynamic(..., { ssr: false })` 로만
@@ -37,55 +37,8 @@ export interface SceneProps {
 }
 
 // ─────────────────────────────────────────────────────────────
-// 카메라 프레이밍 — 이 파일에서 가장 중요한 30줄
+// 카메라 리그 — 수학은 framing.ts 에 있다 (브라우저 없이 검증하려고 갈라 두었다)
 // ─────────────────────────────────────────────────────────────
-
-/**
- * 타깃 박스 안에 모델을 담는 카메라 거리.
- *
- * 바운딩 **구**로 잡으면 안 된다. 이 기체는 0.46 × 1.66 × 0.46 m 로 극단적으로 길쭉해서
- * 구 반경(0.89)이 세로 높이에 지배되는데, 좁은 가로 화각으로 그 구를 담으려다 카메라가
- * 필요한 거리의 두 배까지 물러난다. AABB 8꼭짓점을 카메라 축으로 투영해 가로·세로를 따로 푼다.
- *
- * `scripts/model/render-poster.ts` 가 **같은 식**을 쓴다. 두 곳이 어긋나면 사다리 2→1 승격에서
- * 그림이 튄다 — 고칠 때 반드시 같이 고쳐야 한다.
- */
-function fitDistance(
-  box: Box3,
-  center: Vector3,
-  dir: Vector3,
-  rectW: number,
-  rectH: number,
-  fovDeg: number,
-  fit: number
-): number {
-  const fovY = MathUtils.degToRad(fovDeg)
-  const fovX = 2 * Math.atan(Math.tan(fovY / 2) * (rectW / rectH))
-  const tanX = Math.tan(fovX / 2) * fit
-  const tanY = Math.tan(fovY / 2) * fit
-
-  const forward = dir.clone().negate()
-  const right = new Vector3().crossVectors(forward, new Vector3(0, 1, 0)).normalize()
-  const up = new Vector3().crossVectors(right, forward)
-
-  const corner = new Vector3()
-  const d = new Vector3()
-  let distance = 0
-  for (let i = 0; i < 8; i += 1) {
-    corner.set(
-      i & 1 ? box.max.x : box.min.x,
-      i & 2 ? box.max.y : box.min.y,
-      i & 4 ? box.max.z : box.min.z
-    )
-    d.subVectors(corner, center)
-    const u = Math.abs(d.dot(right))
-    const v = Math.abs(d.dot(up))
-    // 전방 성분만큼 카메라가 더 물러나야 한다
-    const w = d.dot(forward)
-    distance = Math.max(distance, u / tanX + w, v / tanY + w)
-  }
-  return distance
-}
 
 interface RigProps {
   target: HTMLElement
@@ -122,40 +75,12 @@ function CameraRig({ target, config, reducedMotion, boxRef }: RigProps) {
     const rect = target.getBoundingClientRect()
     if (rect.width < 1 || rect.height < 1) return
 
-    const center = box.getCenter(new Vector3())
-
     // 스크롤 진행도. 박스가 위로 빠져나간 만큼 0→1. 모션을 끄면 항상 0 이다.
     const progress = reducedMotion
       ? 0
       : MathUtils.clamp(-rect.top / Math.max(rect.height, 1), 0, 1)
 
-    const yaw = MathUtils.degToRad(config.yaw + progress * 18)
-    const pitch = MathUtils.degToRad(config.pitch + progress * 4)
-    const dir = new Vector3(
-      Math.cos(pitch) * Math.sin(yaw),
-      Math.sin(pitch),
-      Math.cos(pitch) * Math.cos(yaw)
-    )
-
-    const distance = fitDistance(box, center, dir, rect.width, rect.height, config.fov, config.fit)
-
-    camera.position.copy(center).addScaledVector(dir, distance)
-    camera.up.set(0, 1, 0)
-    camera.lookAt(center)
-
-    camera.fov = config.fov
-    camera.aspect = rect.width / rect.height
-    camera.near = Math.max(0.01, distance - box.getSize(new Vector3()).length())
-    camera.far = distance + box.getSize(new Vector3()).length() * 2
-    camera.setViewOffset(
-      rect.width,
-      rect.height,
-      -rect.left,
-      -rect.top,
-      state.size.width,
-      state.size.height
-    )
-    camera.updateProjectionMatrix()
+    applyStageCamera(camera, box, rect, state.size, config, progress)
   })
 
   return null

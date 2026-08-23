@@ -42,7 +42,11 @@ export default function InView({
     const io = new IntersectionObserver(
       (entries) => {
         // 일회성 — 한 번 보이면 관찰을 끊는다. 되감기는 없다.
-        if (entries.some((e) => e.isIntersecting)) {
+        // `top < 0` 을 함께 보는 이유: 새로고침·뒤로가기로 스크롤이 복원되면 뷰포트 **위쪽**
+        // 섹션은 교차 이벤트를 한 번도 못 받아 영구히 opacity 0 으로 남는다.
+        // 실측: 하단에서 새로고침 시 부원 27명 중 19명이 빈 면이 됐다.
+        // (landing/Reveal.tsx 가 같은 회귀를 먼저 고쳤고 이 파일은 그 수정 전 복사본이었다.)
+        if (entries.some((e) => e.isIntersecting || e.boundingClientRect.top < 0)) {
           show()
           io.disconnect()
         }

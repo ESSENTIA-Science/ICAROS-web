@@ -1,0 +1,14 @@
+.section { padding-block: var(--section-pad-xxl); min-height: 60vh; display: grid; place-items: center; }
+.inner { display: grid; justify-items: start; gap: var(--sp-5); max-width: var(--measure); }
+.title { font-size: var(--fs-h2); line-height: var(--lh-h2); }
+.body { color: var(--fg-muted); white-space: pre-line; }
+.link {
+  font-family: var(--ff-mono); font-size: var(--fs-mono); letter-spacing: var(--tr-mono);
+  text-transform: uppercase; color: var(--sig-ink);
+  border-bottom: 1px solid var(--rule-strong); padding-bottom: var(--sp-1);
+  transition: var(--t-color);
+}
+.link:hover { border-bottom-color: var(--sig); }
+.link:lang(ko) { font-family: var(--ff-body); letter-spacing: 0; text-transform: none; }
+.back { font-size: var(--fs-body-s); color: var(--fg-faint); }
+.back:hover { color: var(--fg); }

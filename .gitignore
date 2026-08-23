@@ -12,3 +12,6 @@ next-env.d.ts
 !.env.example
 
 CLAUDE.md
+
+# Supabase CLI 로컬 상태 — 프로젝트 ref·org id·pooler URL 이 들어 있다
+supabase/.temp/

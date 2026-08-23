@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import logo from '@/assets/logo_white.svg'
+import HeroStage from '@/components/three/HeroStage'
 import Crosshairs from './Crosshairs'
 import Initials from './Initials'
 import { textLang } from './text-lang'
@@ -29,15 +30,20 @@ export default function Hero({
       aria-labelledby="hero-title"
     >
       {/*
-        3D 트랙이 얹는 고정 캔버스(`position: fixed; inset: 0; pointer-events: none`)가
-        이 박스의 rect 를 읽어 모델을 그 안에 프레이밍한다. **캔버스는 여기서 만들지 않는다** —
-        레퍼런스 두 곳(Vast `.webgl-home-space-station`, Hanwha `.mesh-area`)이 독립적으로
-        같은 계약에 도달했고, 우리도 그대로 따른다: HTML/CSS 가 레이아웃을 소유하고 캔버스는 읽기만 한다.
+        고정 캔버스(`position: fixed; inset: 0; pointer-events: none`)가 이 박스의 rect 를 읽어
+        모델을 그 안에 프레이밍한다. 레퍼런스 두 곳(Vast `.webgl-home-space-station`,
+        Hanwha `.mesh-area`)이 독립적으로 같은 계약에 도달했다: HTML/CSS 가 레이아웃을 소유하고
+        캔버스는 읽기만 한다.
+
+        `<HeroStage/>` 는 `next/dynamic` + `ssr:false` 라 three 가 초기 번들에 들어가지 않는다
+        (실측: 초기 JS +2.5KB gz, 3D 청크 247.7KB gz 는 지연 로드).
+        WebGL 이 없거나 모바일이면 스스로 포스터 단계로 떨어진다.
       */}
       <div className={`container ${styles.stageRow}`}>
         <div className={styles.stage} data-webgl-target="home-hero" aria-hidden="true">
           <Crosshairs />
         </div>
+        <HeroStage />
       </div>
 
       <div className={`container ${styles.copy}`}>

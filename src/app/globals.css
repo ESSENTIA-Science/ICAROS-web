@@ -71,9 +71,20 @@ h4 { font-size: var(--fs-h4); line-height: var(--lh-h4); font-weight: var(--fw-m
 
 ::selection { background: var(--sig); color: var(--n-900); }
 
+/**
+ * 포커스 링은 **모든 섹션 테마에서** 3:1 을 넘겨야 한다 (WCAG 2.1 SC 1.4.11).
+ * `--sig`(#ff7a00) 단독은 graphite 섹션에서 1.09:1 로 사실상 사라진다 —
+ * 그리고 페이지의 유일한 주요 액션(후원 CTA)이 정확히 그 섹션에 있었다.
+ *
+ * 그래서 색 하나에 기대지 않는다: 바깥은 밝은 링, 안쪽은 어두운 링.
+ * 어떤 배경이든 두 링 중 하나가 반드시 대비를 확보한다.
+ */
 :focus-visible {
   outline: 2px solid var(--sig);
   outline-offset: 2px;
+  box-shadow:
+    0 0 0 2px var(--n-0),
+    0 0 0 5px var(--n-900);
 }
 
 .sr-only {

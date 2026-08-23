@@ -9,7 +9,7 @@ import RocketDescription from '@/components/rocket/RocketDescription'
 import SpecList from '@/components/rocket/SpecList'
 import { seriesLabel } from '@/components/rocket/series'
 import { textLang } from '@/components/landing/text-lang'
-import { getRocket, listPublishedRocketSlugs } from '../_data'
+import { getRocket } from '../_data'
 import styles from './page.module.css'
 
 type Params = { slug: string }
@@ -21,11 +21,13 @@ type Params = { slug: string }
  */
 export const dynamic = 'force-dynamic'
 
-/** 공개 기체만 프리렌더한다. 목록에 없는 slug 도 요청은 오므로 아래에서 다시 막는다 (C8). */
-export async function generateStaticParams(): Promise<Params[]> {
-  const slugs = await listPublishedRocketSlugs()
-  return slugs.map((slug) => ({ slug }))
-}
+/*
+ * `generateStaticParams` 를 두지 않는다.
+ * 이 라우트는 `force-dynamic` 이라 프리렌더되는 페이지가 0개인데, 그 함수는 빌드 시점에
+ * 그대로 실행되어 DB 를 친다 — 결과는 버려진다. 실측: DATABASE_URL 을 죽은 포트로 두면
+ * `next build` 가 ECONNREFUSED 로 실패한다. 배포 빌드가 아무 이득 없이
+ * DB 네트워크 도달성을 필수로 요구하게 되는데, RDS 는 VPC 안이라 그게 곧 빌드 실패다.
+ */
 
 export async function generateMetadata({
   params,

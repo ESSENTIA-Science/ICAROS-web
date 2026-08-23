@@ -8,8 +8,9 @@
   inset: 0;
   z-index: var(--z-canvas);
   pointer-events: none;
-  /* 레이어를 합성 계층으로 올려 스크롤 중 리페인트를 막는다 */
-  contain: strict;
+  /* 스크롤 중 리페인트를 가둔다. `size` 는 일부러 뺐다 — 이 레이어의 크기는 inset 으로
+     정해지므로 필요가 없고, 잘못 걸리면 레이어가 통째로 접혀 아무것도 안 보인다. */
+  contain: layout paint style;
 }
 
 /*

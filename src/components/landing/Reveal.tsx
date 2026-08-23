@@ -52,7 +52,11 @@ export default function Reveal({
     const io = new IntersectionObserver(
       (entries) => {
         // 일회성 — 한 번 보이면 관찰을 끊는다. 되감기 애니메이션은 없다.
-        if (entries.some((e) => e.isIntersecting)) {
+        //
+        // `top < 0` 을 함께 보는 이유: 앵커 점프(`/#contact`)나 새로고침 시 스크롤 복원으로
+        // **건너뛴** 섹션은 교차한 적이 없어 영원히 opacity 0 으로 남는다. 이미 지나친
+        // 요소는 리빌할 것도 없으니 그 자리에서 켠다. (헤드리스로 하단 점프해 실측한 회귀)
+        if (entries.some((e) => e.isIntersecting || e.boundingClientRect.top < 0)) {
           show()
           io.disconnect()
         }

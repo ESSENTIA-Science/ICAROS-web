@@ -141,7 +141,13 @@ export default function HeroStage(props: HeroStageProps) {
             src={poster}
             alt=""
             fill
-            sizes="(max-width: 767px) 90vw, 50vw"
+            /*
+              `fill` 은 박스 전체 폭을 레이아웃 폭으로 알린다. 그런데 포스터는 `object-fit: contain`
+              이라 실제로 그려지는 폭은 **높이에 종속**된다 — 실측(framing 검증)으로 데스크톱
+              히어로 박스 1312px 안에서 기체가 차지하는 폭이 129px 였다. 박스 폭을 그대로 알리면
+              쓸데없이 큰 후보를 받는다. 높이 기준으로 알린다.
+            */
+            sizes="(max-width: 767px) 50vw, 30vh"
             // 히어로 안에 있어 거의 항상 첫 화면이다. lazy 로 두면 하이드레이션 뒤에야 요청이 나간다.
             loading="eager"
             draggable={false}
