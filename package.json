@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",
+    "@aws-sdk/rds-signer": "^3.1116.0",
     "@aws-sdk/s3-request-presigner": "^3.1116.0",
     "@node-rs/argon2": "^2.1.0",
     "@react-three/fiber": "^9.7.0",

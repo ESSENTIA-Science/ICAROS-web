@@ -407,3 +407,36 @@ raw TCP(Postgres)를 터널로 쓰려면 클라이언트에서 `cloudflared acce
 선택의 여지가 없다. 서비스 토큰이 브라우저에 노출되면 안 된다.
 → Next.js route handler / Server Action 에서만 호출한다. 클라이언트 컴포넌트에서 직접 호출 금지.
 → 따라서 **`essentia.cors.allowed-origins` 에 Vercel 오리진을 추가할 필요가 없다.**
+
+
+### D20 실행 결과 (2026-08-24) + 🔴 `rds_iam` 상속 사고
+
+`essentia_infra` 가 3·4·5 완료. **1·2(퍼블릭 전환 + SG 개방)는 세션 권한에 막혀 미실행** — 그때까지 Vercel 에서 못 닿는다.
+
+| 항목 | 값 |
+|---|---|
+| host | `<rds-host>` |
+| port / dbname / schema | `5432` / `essentia` / `icaros` |
+| 런타임 role | `icaros_app` (DDL 권한 없음, `public` 직접권한 0건) |
+| 마이그레이션 role | `icaros_migrator` (스키마 소유자) |
+| 기본권한 | `FOR ROLE icaros_migrator` 기준 TABLES·SEQUENCES 둘 다 등록 |
+| CA | `rds-ca-rsa2048-g1` · `sslmode=verify-full` |
+| 인증 | **비밀번호 없음.** IAM 토큰 15분 |
+
+Vercel OIDC 역할에 `rds-db:connect` 필요:
+```
+arn:aws:rds-db:ap-northeast-2:<account>:dbuser:<rds-resource-id>/icaros_app
+```
+마지막 세그먼트가 role 이름이다. `icaros_app` 과 `icaros_migrator` 를 **각각 따로** 허용하고,
+마이그레이션 role 은 배포 파이프라인 역할에만 준다. 런타임 역할에 주지 않는다.
+
+#### 🔴 사고 — `rds_iam` 을 상속시키면 그 계정은 비밀번호로 못 붙는다
+
+스키마 생성 SQL 이 `ALTER DEFAULT PRIVILEGES FOR ROLE` 을 쓰려고 `GRANT icaros_migrator TO CURRENT_USER` 를 했는데,
+`icaros_migrator` 가 `rds_iam` 을 갖고 있어 **마스터가 그걸 상속받았고 그 순간 마스터의 비밀번호 인증이 차단**됐다
+(`FATAL: PAM authentication failed`). **ESSENTIA API 가 약 10분간 죽었다.**
+
+복구: EC2 역할에 `rds-db:connect` 임시 부여 → IAM 토큰으로 접속 → `REVOKE icaros_migrator FROM essentia` → 임시 권한 회수.
+
+**우리에게도 그대로 적용된다.** `rds_iam` 을 가진 role 을 사람·앱 계정에 상속시키지 않는다.
+불가피하면 **부여 → 설정 → 같은 트랜잭션에서 즉시 회수**한다.
