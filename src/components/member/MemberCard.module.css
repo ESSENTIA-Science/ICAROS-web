@@ -1,0 +1,32 @@
+.card { display: grid; gap: var(--sp-4); align-content: start; }
+
+.figure {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  background: var(--bg-sunken);
+  border: 1px solid var(--rule);
+  overflow: hidden;
+}
+
+.img { object-fit: cover; }
+
+.body { display: grid; gap: var(--sp-1); }
+
+.name {
+  font-size: var(--fs-body-l);
+  font-weight: var(--fw-medium);
+  line-height: 1.3;
+  color: var(--fg);
+}
+
+.role {
+  font-size: var(--fs-body-s);
+  line-height: var(--lh-body-s);
+  color: var(--fg-muted);
+}
+
+.school {
+  font-size: var(--fs-caption);
+  line-height: var(--lh-body-s);
+  color: var(--fg-muted);
+}

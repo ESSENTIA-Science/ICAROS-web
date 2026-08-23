@@ -1,0 +1,64 @@
+.card { display: block; }
+
+.link {
+  display: grid;
+  gap: var(--sp-4);
+  height: 100%;
+  transition: var(--t-move);
+}
+.link:hover { transform: translateY(-0.4rem); }
+
+.figure {
+  position: relative;
+  display: block;
+  /* 원본은 1:2 컷아웃이라 그대로 두면 카드가 지나치게 길어진다.
+     3:5 프레임 + contain 으로 실루엣을 잃지 않고 높이만 줄인다. */
+  aspect-ratio: 3 / 5;
+  background: var(--bg-sunken);
+  border: 1px solid var(--rule);
+  overflow: hidden;
+}
+
+.img {
+  object-fit: contain;
+  padding: var(--sp-5);
+  transition: var(--t-move);
+}
+.link:hover .img { transform: scale(1.03); }
+
+.noImage {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 8px,
+    var(--rule) 8px 9px
+  );
+}
+
+.body {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.name {
+  font-family: var(--ff-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-h5);
+  line-height: var(--lh-h4);
+  letter-spacing: var(--tr-h5);
+  color: var(--fg);
+}
+
+.meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+
+.metaValue {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--tr-mono);
+  color: var(--fg-muted);
+}

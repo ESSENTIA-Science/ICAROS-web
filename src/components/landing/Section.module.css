@@ -1,0 +1,64 @@
+.section {
+  padding-block: var(--section-pad-xl);
+  /* 스티키 헤더가 앵커 대상 제목을 가리지 않게 한다 */
+  scroll-margin-top: var(--nav-h);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+}
+
+/* h2 지만 디스플레이 타입이 아니라 아이브로로 조판한다 — 큰 글씨 자리는 카피가 갖는다 */
+.title {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-4);
+  margin: 0;
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  font-weight: 400;
+  line-height: var(--lh-mono);
+  letter-spacing: var(--tr-mono);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.index {
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* 끝단에 눈금이 선 제도 치수선. 1px 괘선 + 24px 세로 눈금 2개 */
+.rule {
+  flex: 1 1 auto;
+  position: relative;
+  height: 1px;
+  color: var(--rule-strong);
+  background: currentColor;
+}
+.rule::before,
+.rule::after {
+  content: '';
+  position: absolute;
+  top: -1.15rem;
+  width: 1px;
+  height: 2.4rem;
+  background: currentColor;
+}
+.rule::before { left: 1.2rem; }
+.rule::after { right: 1.2rem; }
+
+.content {
+  margin-top: var(--sp-9);
+}
+
+/* Vast 와 동일하게 모바일에서는 L/XL/XXL 구분을 버리고 한 값으로 접는다 (03 §7) */
+@media (max-width: 767px) {
+  .section { padding-block: var(--section-pad); }
+  .content { margin-top: var(--sp-7); }
+  .rule::before { left: 0.8rem; }
+  .rule::after { right: 0.8rem; }
+}

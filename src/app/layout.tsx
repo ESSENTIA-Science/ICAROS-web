@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { body, mono } from '@/lib/fonts'
+import { body, display, mono } from '@/lib/fonts'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -26,7 +26,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ko" className={`${body.variable} ${mono.variable}`}>
+    <html lang="ko" className={`${body.variable} ${display.variable} ${mono.variable}`}>
       <body>{children}</body>
     </html>
   )

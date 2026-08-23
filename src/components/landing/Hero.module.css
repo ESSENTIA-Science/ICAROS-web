@@ -1,0 +1,89 @@
+.hero {
+  /* 헤더가 sticky 라 그 높이만큼 뺀다. svh 를 쓰면 모바일 URL 바 개폐로 리플로우가 나지 않는다 */
+  min-height: calc(100svh - var(--nav-h));
+  display: flex;
+  flex-direction: column;
+  /* Vast 히어로와 동일하게 콘텐츠를 하단에 붙인다 */
+  justify-content: flex-end;
+  gap: var(--sp-9);
+  padding-block: var(--sp-11) var(--sp-7);
+  scroll-margin-top: var(--nav-h);
+  overflow: clip;
+}
+
+.inner {
+  display: grid;
+  justify-items: start;
+  gap: var(--sp-6);
+}
+
+.brand {
+  margin: 0;
+  line-height: 0;
+}
+
+.logo {
+  width: min(64rem, 78vw);
+  height: auto;
+}
+
+.tagline {
+  max-width: 62rem;
+  font-family: var(--ff-mono);
+  font-size: var(--fs-body-s);
+  font-weight: 400;
+  line-height: 1.7;
+  letter-spacing: var(--tr-mono);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.scroll {
+  display: inline-grid;
+  justify-items: start;
+  gap: var(--sp-3);
+  color: var(--fg-faint);
+  transition: var(--t-color);
+}
+.scroll:hover { color: var(--fg); }
+
+.scrollLabel {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono-s);
+  line-height: var(--lh-mono);
+  letter-spacing: var(--tr-mono);
+  text-transform: uppercase;
+}
+
+.scrollTrack {
+  display: block;
+  width: 1.2rem;
+}
+
+.chevron {
+  width: 1.2rem;
+  height: 2.4rem;
+  /* 4분의 3은 정지, 나머지에서만 한 번 밀린다 — 레퍼런스의 chevron 루프와 같은 비율.
+     --motion 이 0 이면 지속시간이 0 이 되어 애니메이션 자체가 사라진다. */
+  animation: nudge calc(2400ms * var(--motion)) var(--ease-out) infinite;
+}
+
+@keyframes nudge {
+  0%, 75%, 100% { transform: none; }
+  87% { transform: translateY(0.4rem); }
+}
+
+@media (max-width: 767px) {
+  .hero {
+    gap: var(--sp-7);
+    padding-block: var(--sp-9) var(--sp-6);
+  }
+  .logo { width: min(38rem, 82vw); }
+  .tagline { font-size: var(--fs-mono); line-height: 1.8; }
+}

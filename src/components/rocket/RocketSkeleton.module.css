@@ -1,0 +1,66 @@
+/* dark 섹션 배경은 body(:root light)가 아니라 여기서 직접 칠해야 한다 */
+.shell {
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 70vh;
+}
+
+.wrap {
+  padding-block: var(--section-pad-xl);
+  max-width: var(--container);
+  margin-inline: auto;
+  padding-inline: var(--page-pad);
+}
+
+/* 스켈레톤은 형태만 알려 준다 — 색은 rule 한 단계, 명멸은 opacity 만 */
+.bar {
+  display: block;
+  background: var(--bg-sunken);
+  border: 1px solid var(--rule);
+  animation: skeletonPulse 1.4s var(--ease-out) infinite;
+}
+
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.head { display: grid; gap: var(--sp-4); margin-bottom: var(--sp-8); }
+.eyebrow { width: 8rem; height: 1.2rem; }
+.title { width: min(32rem, 70%); height: 5.2rem; }
+.lede { width: min(52rem, 90%); height: 1.8rem; }
+
+.tabs { display: flex; gap: var(--sp-6); padding-bottom: var(--sp-4); border-bottom: 1px solid var(--rule); }
+.tab { width: 14rem; height: 1.4rem; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+  gap: var(--grid-gap-y) var(--grid-gap-x);
+  margin-top: var(--sp-8);
+  max-width: 112rem;
+}
+
+.card { display: grid; gap: var(--sp-4); }
+.figure { aspect-ratio: 3 / 5; }
+.name { width: 60%; height: 2rem; }
+
+.detail {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: var(--sp-9);
+  align-items: center;
+}
+.detailBody { display: grid; gap: var(--sp-5); }
+.specs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-4); }
+.spec { height: 6rem; }
+
+@media (max-width: 899px) {
+  .detail { grid-template-columns: 1fr; }
+  .figure { max-width: 32rem; }
+}
+
+@media (max-width: 599px) {
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .specs { grid-template-columns: 1fr; }
+}

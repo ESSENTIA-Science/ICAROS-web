@@ -1,11 +1,12 @@
+import { getSiteContent } from '@/lib/content'
 import styles from './Footer.module.css'
 
-/** 저작권 문구는 Gate 5 에서 CMS(site_settings)로 옮긴다. */
-export default function Footer() {
+export default async function Footer() {
+  const c = await getSiteContent()
   return (
     <footer className={styles.footer} data-theme="dark">
       <div className="container">
-        <p className={styles.copy}>© 2026 ICAROS. All Rights Reserved.</p>
+        <p className={styles.copy}>{c['footer.copyright']}</p>
       </div>
     </footer>
   )

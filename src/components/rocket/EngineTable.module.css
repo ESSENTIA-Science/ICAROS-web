@@ -1,0 +1,49 @@
+/* 좁은 화면에서 표만 가로로 흐르게 하고 페이지 본문은 넘치지 않게 한다 */
+.scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table {
+  width: 100%;
+  min-width: 48rem;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.table th,
+.table td {
+  padding: var(--sp-4) var(--sp-4) var(--sp-4) 0;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: baseline;
+}
+
+.table thead th {
+  font-family: var(--ff-body);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
+  color: var(--fg-muted);
+  padding-bottom: var(--sp-3);
+  border-bottom-color: var(--rule-strong);
+}
+
+.table tbody tr:last-child th,
+.table tbody tr:last-child td { border-bottom: 0; }
+
+.type {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-body-s);
+  letter-spacing: var(--tr-mono);
+  font-weight: var(--fw-medium);
+  color: var(--fg);
+}
+
+.numCol {
+  font-size: var(--fs-body-s);
+  color: var(--fg-muted);
+}
+
+.empty {
+  color: var(--fg-muted);
+  font-size: var(--fs-body-s);
+}

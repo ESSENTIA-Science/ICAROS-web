@@ -1,0 +1,20 @@
+.reveal {
+  opacity: 0;
+  transform: translateY(1.6rem);
+  transition: var(--t-reveal);
+}
+
+.reveal[data-shown] {
+  opacity: 1;
+  transform: none;
+}
+
+/* 감속 선호 시에는 초기 상태를 두지 않는다 —
+   --motion: 0 은 지속시간만 0 으로 만들 뿐, 관찰이 실패하면 계속 숨어 있게 된다. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

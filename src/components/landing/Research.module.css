@@ -1,0 +1,44 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-8);
+}
+
+/* 제원표와 같은 문법: 각 블록을 1px 괘선으로 열어 준다 */
+.block {
+  display: grid;
+  align-content: start;
+  gap: var(--sp-4);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--rule);
+}
+
+.no {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono-s);
+  line-height: var(--lh-mono);
+  letter-spacing: var(--tr-mono);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.title {
+  font-size: var(--fs-h4);
+  line-height: var(--lh-h4);
+  font-weight: var(--fw-medium);
+  text-wrap: balance;
+}
+
+.body {
+  white-space: pre-line;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--fg-muted);
+}
+
+@media (max-width: 991px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-7);
+  }
+}

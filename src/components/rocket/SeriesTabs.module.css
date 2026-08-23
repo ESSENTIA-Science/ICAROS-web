@@ -1,0 +1,42 @@
+.tabs {
+  border-bottom: 1px solid var(--rule);
+}
+
+.list {
+  display: flex;
+  gap: var(--sp-6);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.list::-webkit-scrollbar { display: none; }
+
+.tab {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding-block: var(--sp-4);
+  white-space: nowrap;
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--tr-mono);
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  /* 활성 표시선을 여기에 겹쳐 두면 탭 사이 간격이 흔들리지 않는다 */
+  border-bottom: 1px solid transparent;
+  margin-bottom: -1px;
+  transition: var(--t-color);
+}
+
+.tab:hover { color: var(--fg); }
+
+.tab[data-active] {
+  color: var(--fg);
+  /* 시그널 컬러는 1px 마크로만 쓴다 — 텍스트에는 올리지 않는다 */
+  border-bottom-color: var(--sig);
+}
+
+.count {
+  font-size: var(--fs-mono-s);
+  color: var(--fg-faint);
+}
+.tab[data-active] .count { color: var(--sig-ink); }

@@ -1,0 +1,53 @@
+.page {
+  padding-block: var(--section-pad-xl) var(--section-pad-xxl);
+  min-height: 70vh;
+}
+
+.head {
+  display: grid;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-10);
+}
+
+.lede {
+  max-width: var(--measure);
+  color: var(--fg-muted);
+  font-size: var(--fs-body-l);
+}
+
+.squad + .squad { margin-top: var(--sp-10); }
+
+.squadTitle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-family: var(--ff-body);
+  font-size: var(--fs-h5);
+  font-weight: var(--fw-strong);
+  line-height: 1.3;
+  color: var(--fg);
+  padding-bottom: var(--sp-4);
+  margin-bottom: var(--sp-7);
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.squadCount {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono-s);
+  letter-spacing: var(--tr-mono);
+  color: var(--sig-ink);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: var(--sp-8) var(--grid-gap-x);
+}
+
+.empty { color: var(--fg-muted); }
+
+@media (max-width: 599px) {
+  .page { padding-block: var(--section-pad) var(--section-pad-l); }
+  .head { margin-bottom: var(--sp-8); }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-7) var(--sp-4); }
+}

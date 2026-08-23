@@ -1,0 +1,41 @@
+.wrap {
+  min-height: 70vh;
+  padding-block: var(--section-pad-xl);
+  max-width: var(--container);
+  margin-inline: auto;
+  padding-inline: var(--page-pad);
+}
+
+.bar {
+  display: block;
+  background: var(--bg-sunken);
+  border: 1px solid var(--rule);
+  animation: memberSkeletonPulse 1.4s var(--ease-out) infinite;
+}
+
+@keyframes memberSkeletonPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.head { display: grid; gap: var(--sp-4); margin-bottom: var(--sp-9); }
+.eyebrow { width: 8rem; height: 1.2rem; }
+.title { width: min(32rem, 70%); height: 5.2rem; }
+.lede { width: min(52rem, 90%); height: 1.8rem; }
+
+.squadTitle { width: 16rem; height: 2.2rem; margin-bottom: var(--sp-7); }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: var(--sp-8) var(--grid-gap-x);
+}
+
+.card { display: grid; gap: var(--sp-3); align-content: start; }
+.figure { aspect-ratio: 3 / 4; }
+.name { width: 50%; height: 1.8rem; }
+.role { width: 75%; height: 1.4rem; }
+
+@media (max-width: 599px) {
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
