@@ -26,6 +26,16 @@ export interface CanvasSize {
 }
 
 /** 궤도각(도) → 중심에서 카메라로 향하는 단위 벡터. Y-up. */
+/**
+ * 롤이 적용된 up 벡터. `forward` 축을 중심으로 월드 up 을 회전시킨다.
+ * `fitDistance` 와 `applyStageCamera` 가 **같은 함수**를 써야 fit 과 렌더가 어긋나지 않는다.
+ */
+export function rollUp(rollDeg: number, forward: Vector3): Vector3 {
+  const up = new Vector3(0, 1, 0)
+  if (rollDeg === 0) return up
+  return up.applyAxisAngle(forward.clone().normalize(), MathUtils.degToRad(rollDeg))
+}
+
 export function orbitDirection(yawDeg: number, pitchDeg: number): Vector3 {
   const yaw = MathUtils.degToRad(yawDeg)
   const pitch = MathUtils.degToRad(pitchDeg)
@@ -54,7 +64,19 @@ export function fitDistance(
   rectW: number,
   rectH: number,
   fovDeg: number,
-  fit: number
+  fit: number,
+  /**
+   * 화면 롤(도). 카메라의 up 을 돌린다 — 모델은 그대로 두고 **화면에서만** 눕힌다.
+   *
+   * 이게 필요한 이유: 이 기체는 0.46 × 1.66 × 0.46 으로 길쭉한데 히어로 타깃 박스는
+   * 1360 × 239(5.7:1)로 넓고 납작하다. 세로가 구속조건이 되어 가로를 7.8% 만 채웠다
+   * (실측: 1440×900 에서 기체가 약 200 × 60 px).
+   * 90도 눕히면 긴 축이 박스의 긴 축과 맞아 같은 거리에서 훨씬 크게 잡힌다.
+   *
+   * 모델 자체를 돌리지 않는 이유: `Box3.setFromObject` 가 회전 전 박스를 주므로
+   * fit 계산과 실제 렌더가 어긋난다. 기저를 돌리면 두 곳이 자동으로 일치한다.
+   */
+  rollDeg: number
 ): number {
   const fovY = MathUtils.degToRad(fovDeg)
   const fovX = 2 * Math.atan(Math.tan(fovY / 2) * (rectW / rectH))
@@ -62,7 +84,8 @@ export function fitDistance(
   const tanY = Math.tan(fovY / 2) * fit
 
   const forward = dir.clone().negate()
-  const right = new Vector3().crossVectors(forward, new Vector3(0, 1, 0)).normalize()
+  const worldUp = rollUp(rollDeg, forward)
+  const right = new Vector3().crossVectors(forward, worldUp).normalize()
   const up = new Vector3().crossVectors(right, forward)
 
   const corner = new Vector3()
@@ -105,11 +128,12 @@ export function applyStageCamera(
 ): void {
   const center = box.getCenter(new Vector3())
   const dir = orbitDirection(config.yaw + progress * 18, config.pitch + progress * 4)
-  const distance = fitDistance(box, center, dir, rect.width, rect.height, config.fov, config.fit)
+  const distance = fitDistance(box, center, dir, rect.width, rect.height, config.fov, config.fit, config.roll)
   const span = box.getSize(new Vector3()).length()
 
   camera.position.copy(center).addScaledVector(dir, distance)
-  camera.up.set(0, 1, 0)
+  // fitDistance 와 **같은 up** 을 써야 계산과 렌더가 일치한다.
+  camera.up.copy(rollUp(config.roll, dir.clone().negate()))
   camera.lookAt(center)
 
   camera.fov = config.fov

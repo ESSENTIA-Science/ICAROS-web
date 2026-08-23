@@ -17,6 +17,7 @@
  *     --width N --height N     출력 크기 (기본 900×1600)
  *     --ss N                   슈퍼샘플 배수 (기본 2)
  *     --yaw deg --pitch deg    카메라 궤도각 (기본 -28 / 8)
+ *     --roll deg               화면 롤 (기본 90 — 길쭉한 기체를 가로로 눕힌다)
  *     --fov deg                (기본 28)
  *     --fit N                  화면 채움 비율 0..1 (기본 0.86)
  *     --bg r,g,b[,a]           배경. 기본은 투명 (0,0,0,0)
@@ -41,6 +42,7 @@ interface Args {
   ss: number
   yaw: number
   pitch: number
+  roll: number
   fov: number
   fit: number
   bg: [number, number, number, number]
@@ -62,6 +64,9 @@ function parseArgs(argv: readonly string[]): Args {
   let ss = 2
   let yaw = -28
   let pitch = 8
+  // src/components/three/config.ts 의 DEFAULT_STAGE.roll 과 **같은 수**여야 한다.
+  // 어긋나면 폴백 2단(포스터)→1단(3D) 승격에서 그림이 튄다.
+  let roll = 90
   let fov = 28
   let fit = 0.86
   let bg: [number, number, number, number] = [0, 0, 0, 0]
@@ -82,6 +87,7 @@ function parseArgs(argv: readonly string[]): Args {
       case '--ss': ss = num(argv, i + 1, '--ss'); i += 1; break
       case '--yaw': yaw = num(argv, i + 1, '--yaw'); i += 1; break
       case '--pitch': pitch = num(argv, i + 1, '--pitch'); i += 1; break
+      case '--roll': roll = num(argv, i + 1, '--roll'); i += 1; break
       case '--fov': fov = num(argv, i + 1, '--fov'); i += 1; break
       case '--fit': fit = num(argv, i + 1, '--fit'); i += 1; break
       case '--bg': {
@@ -100,7 +106,7 @@ function parseArgs(argv: readonly string[]): Args {
 
   if (input === '') throw new Error('입력 GLB 경로가 필요하다')
   if (output === '') throw new Error('--out 이 필요하다')
-  return { input: resolve(input), output: resolve(output), width, height, ss, yaw, pitch, fov, fit, bg }
+  return { input: resolve(input), output: resolve(output), width, height, ss, yaw, pitch, roll, fov, fit, bg }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -275,8 +281,28 @@ function dot(a: Vec3, b: Vec3): number {
  * 필요한 거리의 두 배까지 물러난다(첫 렌더에서 실제로 그랬다).
  * AABB 8꼭짓점을 카메라 축으로 투영해 가로·세로 각각의 구속을 따로 푼다.
  */
+/** 로드리게스 회전: `v` 를 단위축 `axis` 둘레로 `rad` 만큼 돌린다. */
+function rotateAboutAxis(v: Vec3, axis: Vec3, rad: number): Vec3 {
+  if (rad === 0) return v
+  const k = normalize(axis)
+  const c = Math.cos(rad)
+  const s2 = Math.sin(rad)
+  const kv = cross(k, v)
+  const kd = dot(k, v) * (1 - c)
+  return [
+    (v[0] ?? 0) * c + (kv[0] ?? 0) * s2 + (k[0] ?? 0) * kd,
+    (v[1] ?? 0) * c + (kv[1] ?? 0) * s2 + (k[1] ?? 0) * kd,
+    (v[2] ?? 0) * c + (kv[2] ?? 0) * s2 + (k[2] ?? 0) * kd,
+  ]
+}
+
 const forward = normalize([-dir[0], -dir[1], -dir[2]])
-const right = normalize(cross(forward, [0, 1, 0]))
+/**
+ * 롤이 적용된 월드 up. `src/components/three/framing.ts` 의 `rollUp()` 과 **같은 식**이다
+ * (전방축 기준 로드리게스 회전). 두 구현이 어긋나면 폴백 승격에서 그림이 튄다.
+ */
+const worldUp = rotateAboutAxis([0, 1, 0], forward, (args.roll * Math.PI) / 180)
+const right = normalize(cross(forward, worldUp))
 const upv = cross(right, forward)
 
 const tanX = Math.tan(fovX / 2) * args.fit

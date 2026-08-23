@@ -69,7 +69,22 @@ export async function generateMetadata(): Promise<Metadata> {
   const description = toDescription(c['about.body'])
   return {
     alternates: { canonical: '/' },
-    ...(description ? { description, openGraph: { description } } : {}),
+    // Next 는 `openGraph` 를 **최상위 키 단위로 치환**한다 — 여기서 `{ description }` 만 주면
+    // 루트 레이아웃의 og:image·og:url·og:site_name·og:type 이 **홈에서만** 사라진다.
+    // 실측으로 홈에 og:image 태그가 없었다. 그래서 나머지 필드를 명시적으로 다시 얹는다.
+    ...(description
+      ? {
+          description,
+          openGraph: {
+            type: 'website',
+            url: 'https://icaros.kr',
+            siteName: 'ICAROS',
+            title: 'ICAROS',
+            description,
+            images: ['/og.png'],
+          },
+        }
+      : {}),
   }
 }
 

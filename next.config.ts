@@ -24,6 +24,12 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // GLB·포스터는 파일명이 고정이라 기본값(`max-age=0`)이면 2MB 를 매 방문 재검증한다.
+        // 내용이 바뀌면 파일명을 바꾸는 규약으로 두고 길게 캐시한다.
+        source: '/assets/models/:path*',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+      },
+      {
         source: '/:path*',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
