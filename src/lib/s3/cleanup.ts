@@ -83,12 +83,16 @@ export async function deleteMedia(mediaId: string): Promise<DeleteMediaResult> {
   const row = rows[0]
   if (!row) throw new StorageError('not_found', '삭제할 미디어를 찾을 수 없습니다.')
 
-  // ICAROS 프리픽스 밖이면 여기서 끝난다. `forum/` 도 포함해 우리 것이 아니면 지우지 않는다.
-  assertKeyWritable(row.key)
-
+  // 참조 검사를 프리픽스 검사보다 **먼저** 한다.
+  // 순서가 반대면 S3 설정이 없을 때(`assertKeyWritable` → `getS3Config()` 가 던짐)
+  // 참조 검사에 도달하지 못하고, 그 예외를 잡아 폴백하는 호출부가 살아 있는 참조를 지워 버린다.
+  // 참조 검사는 DB 만 보므로 S3 설정과 무관하게 항상 돌 수 있다.
   if (await hasReferences(mediaId)) {
     throw new StorageError('in_use', '아직 사용 중인 이미지입니다. 먼저 연결을 해제해 주세요.')
   }
+
+  // ICAROS 프리픽스 밖이면 여기서 끝난다. `forum/` 도 포함해 우리 것이 아니면 지우지 않는다.
+  assertKeyWritable(row.key)
 
   // 삭제 표시는 `deleted_at` 하나뿐이다. status 는 pending/ready/failed 라는 업로드 이력이라
   // 여기서 건드리면 "확정됐던 미디어"와 "확정에 실패한 미디어"를 나중에 구분할 수 없다.
@@ -117,7 +121,15 @@ export async function deleteMedia(mediaId: string): Promise<DeleteMediaResult> {
  * 랜딩 이미지에는 전용 FK 컬럼이 없다. `site_settings.value` 가 자유 문자열이고 거기에
  * `/api/media/{id}` 형태로 박히므로, 그 문자열 안에 id 가 있는지까지 봐야 참조 검사가 닫힌다.
  */
-async function hasReferences(mediaId: string): Promise<boolean> {
+/**
+ * 이 미디어를 아직 가리키는 곳이 있는가.
+ *
+ * export 하는 이유: 호출부가 `deleteMedia()` 를 부르기 전에 스스로 확인해야 하는 경우가 있다.
+ * `deleteMedia` 는 `assertKeyWritable()`(→ `getS3Config()`)를 먼저 부르므로 `S3_BUCKET` 이
+ * 비어 있으면 참조 검사에 도달하기 전에 던진다. 그 예외를 잡아 폴백하는 호출부가
+ * 참조 확인 없이 soft delete 하는 경로가 실제로 있었다.
+ */
+export async function hasReferences(mediaId: string): Promise<boolean> {
   const [rocketRefs, memberRefs, landingRefs] = await Promise.all([
     db.select({ id: rockets.id }).from(rockets).where(eq(rockets.coverMediaId, mediaId)).limit(1),
     db.select({ id: members.id }).from(members).where(eq(members.imageMediaId, mediaId)).limit(1),

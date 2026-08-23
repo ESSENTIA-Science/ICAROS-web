@@ -1,0 +1,170 @@
+/* ============================================================
+   3D Scene 설정 패널 전용 스타일.
+   값은 전부 tokens.css 커스텀 프로퍼티 — 하드코딩 색·크기 없음.
+   여기에 캔버스는 없다 (F13). 밀도 높은 숫자 표를 읽기 쉽게 만드는 것이 전부다.
+   ============================================================ */
+
+/* ── 반복 행 (프리셋 · 핫스팟 · 확장 값) ─────────────────── */
+
+.row {
+  border: 1px solid var(--rule);
+  background: var(--bg-sunken);
+  padding: var(--sp-3);
+}
+.row + .row { margin-top: var(--sp-3); }
+
+.rowHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.rowIndex {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono-s);
+  letter-spacing: var(--tr-mono);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.rowTools {
+  display: flex;
+  gap: var(--sp-1);
+  flex-wrap: wrap;
+}
+
+/* 좌표 3칸은 한 줄에 붙여 둔다 — x·y·z 를 세로로 흩어 놓으면 벡터로 안 읽힌다 */
+.vecGrid {
+  display: grid;
+  gap: var(--sp-2);
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+}
+
+.rowGrid {
+  display: grid;
+  gap: var(--sp-3);
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+
+.vecLegend {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono-s);
+  letter-spacing: var(--tr-mono);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: var(--sp-1);
+}
+
+.vecBlock + .vecBlock { margin-top: var(--sp-3); }
+
+/* ── 프리셋 타임라인 (3D 뷰어 대신 숫자를 읽게 하는 자리) ── */
+
+.timeline {
+  border: 1px solid var(--rule);
+  background: var(--bg-raised);
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+
+.timelineTitle {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono-s);
+  letter-spacing: var(--tr-mono);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: var(--sp-2);
+}
+
+.timelineList {
+  display: grid;
+  gap: var(--sp-1);
+}
+
+.timelineItem {
+  display: grid;
+  grid-template-columns: 5rem 1fr;
+  gap: var(--sp-3);
+  align-items: baseline;
+  padding: var(--sp-1) 0;
+  border-top: 1px solid var(--rule);
+}
+.timelineItem:first-child { border-top: 0; }
+
+.timelineAt {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono-s);
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--fg);
+}
+
+.timelineVals {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono-s);
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+
+.timelineWarn {
+  color: var(--err);
+}
+
+@media (max-width: 599px) {
+  .timelineItem { grid-template-columns: 1fr; gap: var(--sp-1); }
+}
+
+/* ── 미디어 참조 요약 ────────────────────────────────────── */
+
+.mediaMeta {
+  display: grid;
+  gap: var(--sp-1);
+  font-size: var(--fs-body-s);
+  color: var(--fg-muted);
+  margin-top: var(--sp-2);
+}
+
+.mediaKey {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono-s);
+  letter-spacing: var(--tr-mono);
+  overflow-wrap: anywhere;
+}
+
+/* 깨진 jsonb 원문. 고칠 수 있으려면 무엇이 들었는지 보여야 한다 */
+.rawJson {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono-s);
+  background: var(--bg-sunken);
+  border: 1px solid var(--rule);
+  padding: var(--sp-2);
+  margin-top: var(--sp-2);
+  max-height: 12rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.counter {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono-s);
+  letter-spacing: var(--tr-mono);
+  color: var(--fg-muted);
+  margin: var(--sp-3) 0;
+}
+
+.badgeOn,
+.badgeOff3d {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono-s);
+  letter-spacing: var(--tr-mono);
+  text-transform: uppercase;
+  padding: 0 var(--sp-1);
+  border: 1px solid var(--rule-strong);
+  margin-left: var(--sp-2);
+}
+
+.badgeOn { color: var(--sig-ink); border-color: var(--sig-ink); }
+.badgeOff3d { color: var(--fg-faint); }

@@ -1,7 +1,8 @@
 import 'server-only'
 
-import { asc, eq } from 'drizzle-orm'
+import { and, asc, eq, isNull } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
+import { mediaUrl } from '@/lib/image/contract'
 
 /** 사진이 없는 부원 23/27 명이 이 이미지를 쓴다 (E6). */
 export const MEMBER_PLACEHOLDER = '/assets/img/member/profile.webp'
@@ -39,9 +40,21 @@ export async function listMembers(): Promise<MemberDto[]> {
       role: schema.members.role,
       squad: schema.members.squad,
       school: schema.members.school,
-      imageSrc: schema.members.legacyImagePath,
+      // 신규(S3) 와 레거시(레포 public/) 두 세대가 공존한다. P9 가 레거시를 옮기면 뒤엣것을 뺀다.
+      // media 를 left join 해 ready + 미삭제일 때만 신규 경로를 쓴다 — 조인 없이 컬럼만 읽으면
+      // 미디어가 정리된 뒤에도 죽은 URL 을 계속 내보낸다.
+      mediaId: schema.media.id,
+      legacyImagePath: schema.members.legacyImagePath,
     })
     .from(schema.members)
+    .leftJoin(
+      schema.media,
+      and(
+        eq(schema.media.id, schema.members.imageMediaId),
+        eq(schema.media.status, 'ready'),
+        isNull(schema.media.deletedAt)
+      )
+    )
     .where(eq(schema.members.published, true))
     .orderBy(asc(schema.members.sortOrder), asc(schema.members.createdAt), asc(schema.members.id))
 
@@ -51,11 +64,18 @@ export async function listMembers(): Promise<MemberDto[]> {
     role: blankToNull(r.role),
     squad: blankToNull(r.squad),
     school: blankToNull(r.school),
-    imageSrc: r.imageSrc && r.imageSrc.trim() !== '' ? r.imageSrc : MEMBER_PLACEHOLDER,
+    imageSrc: resolveMemberImage(r.mediaId, r.legacyImagePath),
   }))
 }
 
 const blankToNull = (v: string | null): string | null => (v && v.trim() !== '' ? v.trim() : null)
+
+/** 신규(S3) → 레거시 레포 경로 → 플레이스홀더 순 (E6). */
+function resolveMemberImage(mediaId: string | null, legacyPath: string | null): string {
+  if (mediaId) return mediaUrl(mediaId)
+  const v = legacyPath?.trim()
+  return v ? v : MEMBER_PLACEHOLDER
+}
 
 /**
  * 부서별 그룹 (E4). 그룹 순서는 정렬된 명단에서 그 부서가 **처음 등장한 위치**를 따른다 —

@@ -1,8 +1,9 @@
 import 'server-only'
 
 import { cache } from 'react'
-import { and, asc, eq } from 'drizzle-orm'
+import { and, asc, eq, isNull } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
+import { mediaUrl } from '@/lib/image/contract'
 import type { RocketSeries } from '@/components/rocket/series'
 
 /**
@@ -49,16 +50,33 @@ function trimNumeric(raw: string | null): string | null {
   return v.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '')
 }
 
+/** 신규(S3) 경로를 우선하고, 없으면 레거시 레포 경로로 떨어진다. 둘 다 없으면 null. */
+function resolveImageSrc(coverMediaId: string | null, legacyPath: string | null): string | null {
+  if (coverMediaId) return mediaUrl(coverMediaId)
+  const v = legacyPath?.trim()
+  return v ? v : null
+}
+
 /** `series` 는 text + CHECK 라 드라이버 타입이 string 이다. 유니온으로 좁혀서 내보낸다. */
 function narrowSeries(raw: string): RocketSeries {
   return raw === 'B' ? 'B' : 'A'
 }
 
+/**
+ * 이미지 소스는 두 세대가 공존한다.
+ *   신규: `cover_media_id` → `/api/media/{id}` (S3, 스트리밍 프록시)
+ *   레거시: `legacy_image_path` → `/assets/img/...` (레포의 public/)
+ * P9 가 레거시를 전부 S3 로 옮기면 뒤엣것을 제거한다.
+ *
+ * media 를 **left join** 해서 `status='ready'` 이고 삭제되지 않은 행일 때만 신규 경로를 쓴다.
+ * 조인 없이 컬럼만 읽으면 미디어가 정리된 뒤에도 죽은 URL 을 계속 내보낸다.
+ */
 const listColumns = {
   slug: schema.rockets.id,
   name: schema.rockets.name,
   series: schema.rockets.series,
-  imageSrc: schema.rockets.legacyImagePath,
+  coverMediaId: schema.media.id,
+  legacyImagePath: schema.rockets.legacyImagePath,
   maxAltitudeM: schema.rockets.maxAltitudeM,
   sizeM: schema.rockets.sizeM,
   payloadKg: schema.rockets.payloadKg,
@@ -68,7 +86,8 @@ type RawListRow = {
   slug: string
   name: string
   series: string
-  imageSrc: string | null
+  coverMediaId: string | null
+  legacyImagePath: string | null
   maxAltitudeM: string | null
   sizeM: string | null
   payloadKg: string | null
@@ -79,7 +98,7 @@ function toListItem(row: RawListRow): RocketListItem {
     slug: row.slug,
     name: row.name,
     series: narrowSeries(row.series),
-    imageSrc: row.imageSrc,
+    imageSrc: resolveImageSrc(row.coverMediaId, row.legacyImagePath),
     maxAltitudeM: trimNumeric(row.maxAltitudeM),
     sizeM: trimNumeric(row.sizeM),
     payloadKg: trimNumeric(row.payloadKg),
@@ -95,6 +114,14 @@ export async function listRocketsBySeries(series: RocketSeries): Promise<RocketL
   const rows = await db
     .select(listColumns)
     .from(schema.rockets)
+    .leftJoin(
+      schema.media,
+      and(
+        eq(schema.media.id, schema.rockets.coverMediaId),
+        eq(schema.media.status, 'ready'),
+        isNull(schema.media.deletedAt)
+      )
+    )
     .where(and(isPublic, eq(schema.rockets.series, series)))
     .orderBy(asc(schema.rockets.sortOrder), asc(schema.rockets.id))
 
@@ -123,6 +150,14 @@ export const getRocket = cache(async (slug: string): Promise<RocketDetail | null
   const rows = await db
     .select({ ...listColumns, descriptionMd: schema.rockets.descriptionMd })
     .from(schema.rockets)
+    .leftJoin(
+      schema.media,
+      and(
+        eq(schema.media.id, schema.rockets.coverMediaId),
+        eq(schema.media.status, 'ready'),
+        isNull(schema.media.deletedAt)
+      )
+    )
     .where(and(isPublic, eq(schema.rockets.id, slug)))
     .limit(1)
 

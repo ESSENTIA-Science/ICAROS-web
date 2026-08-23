@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { createMemberAction, updateMemberAction } from '@/app/admin/_actions/members'
 import type { FormState } from '@/app/admin/_actions/result'
 import { TextField, ToggleField } from './Fields'
+import MediaField from './MediaField'
+import type { MediaPreview } from './media-upload'
 import { ActionNotice } from './Notice'
 import SubmitButton from './SubmitButton'
 import ui from './ui.module.css'
@@ -17,6 +19,9 @@ export type MemberFormValues = {
   school: string
   sortOrder: number
   published: boolean
+  /** 프로필 사진. 없으면 legacyImagePath, 그것도 없으면 공개 페이지가 플레이스홀더를 쓴다 (E6). */
+  image: MediaPreview | null
+  legacyImagePath: string | null
 }
 
 const NO_ERRORS: Readonly<Record<string, string>> = {}
@@ -27,6 +32,7 @@ export default function MemberForm({
   values,
   version,
   squads,
+  storageReady,
   cancelHref,
 }: {
   mode: 'create' | 'edit'
@@ -34,6 +40,8 @@ export default function MemberForm({
   version?: string
   /** 이미 쓰이는 부서 이름. 자유 입력이지만 표기 흔들림을 줄인다 (E4). */
   squads: readonly string[]
+  /** `S3_BUCKET` 설정 여부. 업로드 필드가 미리 안내하는 데만 쓴다. */
+  storageReady: boolean
   cancelHref: string
 }) {
   const action = mode === 'create' ? createMemberAction : updateMemberAction
@@ -103,6 +111,18 @@ export default function MemberForm({
           error={fieldErrors['sortOrder']}
         />
       </div>
+
+      <MediaField
+        name="imageMediaId"
+        label="프로필 사진"
+        hint="긴 변 512px · 1MB 이하 WebP 로 자동 변환됩니다. 비워 두면 기본 이미지가 표시됩니다."
+        kind="media"
+        entityType="member"
+        initial={values.image}
+        legacyPath={values.legacyImagePath}
+        storageReady={storageReady}
+        error={fieldErrors['imageMediaId']}
+      />
 
       <ToggleField
         name="published"

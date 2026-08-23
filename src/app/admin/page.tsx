@@ -5,6 +5,8 @@ import LandingPanel from './_panels/LandingPanel'
 import MembersPanel from './_panels/MembersPanel'
 import PostsPanel from './_panels/PostsPanel'
 import RocketsPanel from './_panels/RocketsPanel'
+import ScenePanel from './_panels/ScenePanel'
+import { SCENE_TAB, sceneHref } from '@/components/admin/scene/href'
 import { ADMIN_TABS, adminHref, firstParam, parseTab } from './_tabs'
 
 export const runtime = 'nodejs'
@@ -32,6 +34,12 @@ export default async function AdminPage({
   if (!session) return null
 
   const sp = await searchParams
+  /**
+   * Scene 탭은 `_tabs.ts` 의 `ADMIN_TABS` 밖에 있다 — 그 파일은 다른 트랙 소유라 건드리지 않는다.
+   * `parseTab` 은 모르는 값을 기본 탭으로 접어 버리므로, scene 여부를 **먼저** 판정해
+   * 아래 패널 분기가 Rockets 로 흘러 들어가지 않게 한다.
+   */
+  const scene = firstParam(sp['tab']) === SCENE_TAB
   const tab = parseTab(sp['tab'])
   const create = firstParam(sp['new']) === '1'
   const editId = firstParam(sp['edit'])
@@ -47,24 +55,38 @@ export default async function AdminPage({
               key={t.id}
               className={ui.tab}
               href={adminHref({ tab: t.id })}
-              aria-current={t.id === tab ? 'page' : undefined}
+              aria-current={!scene && t.id === tab ? 'page' : undefined}
               lang="en"
             >
               {t.label}
             </Link>
           ))}
+          <Link
+            className={ui.tab}
+            href={sceneHref()}
+            aria-current={scene ? 'page' : undefined}
+            lang="en"
+          >
+            3D Scene
+          </Link>
         </div>
       </nav>
 
       <main className={ui.main} id="admin-main">
-        {tab === 'posts' ? <PostsPanel /> : null}
-        {tab === 'rockets' ? (
-          <RocketsPanel create={create} editId={editId} deleteId={deleteId} saved={saved} />
-        ) : null}
-        {tab === 'members' ? (
-          <MembersPanel create={create} editId={editId} deleteId={deleteId} saved={saved} />
-        ) : null}
-        {tab === 'landing' ? <LandingPanel saved={saved} /> : null}
+        {scene ? (
+          <ScenePanel create={create} editId={editId} deleteId={deleteId} saved={saved} />
+        ) : (
+          <>
+            {tab === 'posts' ? <PostsPanel /> : null}
+            {tab === 'rockets' ? (
+              <RocketsPanel create={create} editId={editId} deleteId={deleteId} saved={saved} />
+            ) : null}
+            {tab === 'members' ? (
+              <MembersPanel create={create} editId={editId} deleteId={deleteId} saved={saved} />
+            ) : null}
+            {tab === 'landing' ? <LandingPanel saved={saved} /> : null}
+          </>
+        )}
       </main>
     </>
   )

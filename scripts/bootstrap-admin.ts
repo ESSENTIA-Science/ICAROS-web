@@ -96,7 +96,8 @@ if (values.generate && !needsPassword) {
 
 const actions = recovery
   ? [
-      reactivate ? '비활성 해제 (is_active = true)' : null,
+      // 이 시점엔 아직 현재 상태를 모른다. 단정하지 않고 조건부로 적는다.
+      reactivate ? '비활성 상태면 해제 (is_active = true)' : null,
       resetPassword ? '비밀번호 재설정 + 전체 세션 폐기' : null,
     ]
       .filter((v): v is string => v !== null)
@@ -143,8 +144,18 @@ try {
         '콘솔에 들어갈 수 있다면 콘솔의 비밀번호 변경을 쓰는 편이 낫습니다.'
     )
   }
+  /**
+   * `--reactivate` 가 **실제로 상태를 바꾸는가**.
+   *
+   * 이미 활성인 계정에 조건 없이 UPDATE 를 걸면 세 가지가 동시에 틀어진다:
+   * ① 안내 문구와 실제 동작이 어긋나고 ② 권한 변경이 없었던 건이 `auth_events` 감사 집계에 섞이며
+   * ③ `updated_at` 은 낙관적 잠금 후보 컬럼인데 의미 없이 bump 되어 남의 편집을 충돌로 만든다.
+   * 그래서 상태가 바뀌는 경우에만 쓴다.
+   */
+  const willReactivate = reactivate && found?.is_active === false
+
   if (reactivate && found?.is_active) {
-    console.log(`  (안내) ${email} 은 이미 활성 상태입니다. is_active 는 그대로 둡니다.`)
+    console.log(`  (안내) ${email} 은 이미 활성 상태입니다. 아무것도 변경하지 않습니다.`)
   }
 
   let password = ''
@@ -190,7 +201,7 @@ try {
       )
     }
 
-    if (reactivate) {
+    if (willReactivate) {
       await client.query(
         'update icaros.admin_users set is_active = true, updated_at = now() where id = $1',
         [userId]
@@ -220,8 +231,19 @@ try {
 
   await client.query('commit')
 
+  // 실제로 쓴 것만 결과로 말한다. `--reactivate` 가 no-op 이었다면 "복구 완료" 는 거짓말이다.
+  const performed = [willReactivate ? '비활성 해제' : null, resetPassword ? '비밀번호 재설정' : null]
+    .filter((v): v is string => v !== null)
+    .join(' · ')
+
   console.log('')
-  console.log(`  ${recovery ? '복구 완료' : '생성 완료'}  ${email}  (id ${userId})`)
+  if (!recovery) {
+    console.log(`  생성 완료  ${email}  (id ${userId})`)
+  } else if (performed === '') {
+    console.log(`  변경 없음  ${email}  (id ${userId}) — 이미 활성 상태라 손대지 않았습니다.`)
+  } else {
+    console.log(`  복구 완료  ${email}  (id ${userId})  ${performed}`)
+  }
   if (generated) {
     console.log('')
     console.log(`  비밀번호   ${password}`)

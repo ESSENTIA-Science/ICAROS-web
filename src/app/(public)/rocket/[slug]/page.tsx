@@ -118,7 +118,8 @@ export default async function RocketDetailPage({ params }: { params: Promise<Par
 
           <div className={styles.block}>
             <h2 className={styles.blockTitle} lang="en">Propulsion</h2>
-            <EngineTable engines={rocket.engines} />
+            {/* slug 는 PK 라 한 문서에 같은 값이 두 번 나올 수 없다 — 캡션 id 를 여기서 유일하게 만든다 */}
+            <EngineTable engines={rocket.engines} scopeId={rocket.slug} />
           </div>
         </div>
       </section>

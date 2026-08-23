@@ -22,6 +22,71 @@ export const getSiteContent = cache(async (): Promise<SiteContent> => {
   return out
 })
 
+/**
+ * 실패를 삼키는 변형. **루트 레이아웃 전용**이다.
+ *
+ * `app/layout.tsx` 는 `/admin` 로그인 화면을 포함한 모든 라우트를 감싼다. 거기서 던지면
+ * DB 장애가 곧 전체 500 이 되어 복구할 창구까지 사라진다. 메타데이터는 카피와 달리
+ * "값이 없으면 비워 둔다"가 성립하지 않으므로(빈 `<title>`·사라진 메뉴), 호출부가
+ * 코드 기본값으로 되돌린다.
+ */
+export const getSiteContentSafe = cache(async (): Promise<SiteContent> => {
+  try {
+    return await getSiteContent()
+  } catch {
+    console.error('[content] site_settings 조회 실패 — 기본값으로 렌더합니다')
+    return {}
+  }
+})
+
+/**
+ * 헤더 메뉴 (A2 · F10). 라벨만 CMS 가 정하고 **경로는 코드가 정한다** —
+ * 잘못된 href 는 운영자가 고칠 수 없는 종류의 사고이고, 여기 없는 경로를 CMS 에서
+ * 만들 수 있게 하면 라우트가 없는 링크가 생긴다.
+ */
+export const NAV_ITEMS = [
+  { href: '/#about', key: 'nav.about', fallback: 'About Us' },
+  { href: '/rocket', key: 'nav.rocket', fallback: 'Rockets' },
+  { href: '/posts', key: 'nav.posts', fallback: 'Posts' },
+  { href: '/member', key: 'nav.member', fallback: 'Members' },
+] as const
+
+export type NavItem = { readonly href: string; readonly label: string }
+
+/** 행이 없거나 비었으면 코드 기본값으로. 내비게이션은 비어 있어도 되는 자리가 아니다. */
+export const getNavItems = (c: SiteContent): readonly NavItem[] =>
+  NAV_ITEMS.map((item) => ({ href: item.href, label: c[item.key] ?? item.fallback }))
+
+/**
+ * SEO·OG (F10). 기본값은 **DB 행이 없을 때만** 쓰인다 — 관리자가 값을 비우는 경로는
+ * `_data/landing.ts` 에서 required 로 막아 두었다. 두 벌이 갈라져도 조용히 넘어가지 않게
+ * 여기 한 곳에만 둔다.
+ */
+export const SEO_FALLBACK = {
+  title: 'ICAROS',
+  description:
+    'ICAROS는 학생 주도 항공우주·로켓 연구팀으로 무인기 설계, 비행 제어, 고체연료 로켓 개발과 발사를 수행합니다.',
+  ogImage: '/og.png',
+} as const
+
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export type SeoContent = { readonly title: string; readonly description: string; readonly ogImage: string }
+
+/**
+ * OG 이미지는 media id 로 저장하고 여기서 프록시 URL 로 바꾼다 (D3/D15).
+ * id 가 UUID 형태가 아니면 존재하지 않는 URL 을 만드는 대신 정적 파일로 되돌린다 —
+ * 오타 하나가 모든 공유 링크의 썸네일을 깨뜨리는 일을 막는다.
+ */
+export const getSeo = (c: SiteContent): SeoContent => {
+  const mediaId = c['og.image_media_id']?.trim()
+  return {
+    title: c['seo.title'] ?? SEO_FALLBACK.title,
+    description: c['seo.description'] ?? SEO_FALLBACK.description,
+    ogImage: mediaId && UUID_SHAPE.test(mediaId) ? `/api/media/${mediaId}` : SEO_FALLBACK.ogImage,
+  }
+}
+
 /** `\n` 구분 리스트를 배열로. 빈 줄은 버린다. */
 export const toList = (v: string | undefined): string[] =>
   (v ?? '').split('\n').map((s) => s.trim()).filter(Boolean)

@@ -43,6 +43,10 @@ export type AdminRocketDetail = {
   maxAltitudeM: string
   sizeM: string
   payloadKg: string
+  /** 대표 이미지. 미디어 행이 사라졌으면 null 이고, 그때는 legacyImagePath 가 다시 쓰인다. */
+  coverMediaId: string | null
+  /** 아직 S3 로 옮기지 않은 레포 내 경로. 폼은 읽기만 하고 값을 바꾸지 않는다. */
+  legacyImagePath: string | null
   /** 낙관적 잠금 토큰 (F12). */
   version: string
   engines: readonly AdminEngineRow[]
@@ -107,6 +111,8 @@ export async function getRocketForAdmin(id: string): Promise<AdminRocketDetail |
       maxAltitudeM: schema.rockets.maxAltitudeM,
       sizeM: schema.rockets.sizeM,
       payloadKg: schema.rockets.payloadKg,
+      coverMediaId: schema.rockets.coverMediaId,
+      legacyImagePath: schema.rockets.legacyImagePath,
       version: versionExpr(schema.rockets.updatedAt),
     })
     .from(schema.rockets)
@@ -139,6 +145,8 @@ export async function getRocketForAdmin(id: string): Promise<AdminRocketDetail |
     maxAltitudeM: trimNumeric(row.maxAltitudeM),
     sizeM: trimNumeric(row.sizeM),
     payloadKg: trimNumeric(row.payloadKg),
+    coverMediaId: row.coverMediaId,
+    legacyImagePath: row.legacyImagePath,
     version: row.version,
     engines: engines.map((e) => ({
       id: e.id,

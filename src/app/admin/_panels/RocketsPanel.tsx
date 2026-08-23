@@ -4,7 +4,9 @@ import Notice from '@/components/admin/Notice'
 import RocketForm from '@/components/admin/RocketForm'
 import { seriesLabel, type RocketSeries } from '@/components/rocket/series'
 import ui from '@/components/admin/ui.module.css'
+import { isStorageConfigured } from '@/lib/s3/config'
 import { deleteRocketAction } from '../_actions/rockets'
+import { getMediaRef, listRocketGallery } from '../_data/media'
 import {
   getRocketForAdmin,
   listRocketsForAdmin,
@@ -44,6 +46,9 @@ export default async function RocketsPanel({
   deleteId: string | undefined
   saved: string | undefined
 }) {
+  // 설정 여부만 읽는다. 버킷 이름·리전은 화면에 절대 나가지 않는다.
+  const storageReady = isStorageConfigured()
+
   if (create) {
     const sortOrder = await nextRocketSortOrder('A')
     return (
@@ -55,6 +60,7 @@ export default async function RocketsPanel({
           <RocketForm
             mode="create"
             cancelHref={LIST_HREF}
+            storageReady={storageReady}
             values={{
               id: '',
               name: '',
@@ -65,6 +71,9 @@ export default async function RocketsPanel({
               maxAltitudeM: '',
               sizeM: '',
               payloadKg: '',
+              cover: null,
+              legacyImagePath: null,
+              gallery: [],
               engines: [],
             }}
           />
@@ -88,6 +97,12 @@ export default async function RocketsPanel({
       )
     }
 
+    // 대표 이미지와 갤러리는 로켓 행을 읽은 뒤에야 조회할 수 있다(둘 다 로켓 id 를 쓴다).
+    const [cover, gallery] = await Promise.all([
+      getMediaRef(rocket.coverMediaId),
+      listRocketGallery(rocket.id, rocket.coverMediaId),
+    ])
+
     return (
       <>
         <div className={ui.panelHead}>
@@ -103,6 +118,7 @@ export default async function RocketsPanel({
             mode="edit"
             cancelHref={LIST_HREF}
             version={rocket.version}
+            storageReady={storageReady}
             values={{
               id: rocket.id,
               name: rocket.name,
@@ -113,6 +129,9 @@ export default async function RocketsPanel({
               maxAltitudeM: rocket.maxAltitudeM,
               sizeM: rocket.sizeM,
               payloadKg: rocket.payloadKg,
+              cover,
+              legacyImagePath: rocket.legacyImagePath,
+              gallery,
               engines: rocket.engines.map((e) => ({
                 type: e.type,
                 thrustN: e.thrustN,
@@ -157,7 +176,7 @@ export default async function RocketsPanel({
           action={deleteRocketAction}
           id={target.id}
           title={target.name}
-          description="등록된 엔진 정보도 함께 삭제됩니다."
+          description="등록된 엔진 정보와 대표 이미지·갤러리도 함께 삭제됩니다."
           cancelHref={LIST_HREF}
         />
       ) : null}

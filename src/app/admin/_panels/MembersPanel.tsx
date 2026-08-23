@@ -3,7 +3,9 @@ import DeleteConfirm from '@/components/admin/DeleteConfirm'
 import MemberForm from '@/components/admin/MemberForm'
 import Notice from '@/components/admin/Notice'
 import ui from '@/components/admin/ui.module.css'
+import { isStorageConfigured } from '@/lib/s3/config'
 import { deleteMemberAction } from '../_actions/members'
+import { getMediaRef } from '../_data/media'
 import {
   getMemberForAdmin,
   listMembersForAdmin,
@@ -25,6 +27,9 @@ export default async function MembersPanel({
   deleteId: string | undefined
   saved: string | undefined
 }) {
+  // 설정 여부만 읽는다. 버킷 이름·리전은 화면에 절대 나가지 않는다.
+  const storageReady = isStorageConfigured()
+
   if (create) {
     const [sortOrder, squads] = await Promise.all([nextMemberSortOrder(), listSquads()])
     return (
@@ -37,6 +42,7 @@ export default async function MembersPanel({
             mode="create"
             cancelHref={LIST_HREF}
             squads={squads}
+            storageReady={storageReady}
             values={{
               id: null,
               name: '',
@@ -45,6 +51,8 @@ export default async function MembersPanel({
               school: '',
               sortOrder,
               published: true,
+              image: null,
+              legacyImagePath: null,
             }}
           />
         </div>
@@ -67,6 +75,8 @@ export default async function MembersPanel({
       )
     }
 
+    const image = await getMediaRef(member.imageMediaId)
+
     return (
       <>
         <div className={ui.panelHead}>
@@ -78,6 +88,7 @@ export default async function MembersPanel({
             cancelHref={LIST_HREF}
             version={member.version}
             squads={squads}
+            storageReady={storageReady}
             values={{
               id: member.id,
               name: member.name,
@@ -86,6 +97,8 @@ export default async function MembersPanel({
               school: member.school,
               sortOrder: member.sortOrder,
               published: member.published,
+              image,
+              legacyImagePath: member.legacyImagePath,
             }}
           />
         </div>
@@ -123,6 +136,7 @@ export default async function MembersPanel({
           action={deleteMemberAction}
           id={target.id}
           title={target.name}
+          description="등록된 프로필 사진도 함께 삭제됩니다."
           cancelHref={LIST_HREF}
         />
       ) : null}

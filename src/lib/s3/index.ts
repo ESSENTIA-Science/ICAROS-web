@@ -37,6 +37,7 @@ export {
   deleteMedia,
   enqueueCleanup,
   listAbandonedCleanupJobs,
+  hasReferences,
   runCleanupJobs,
   sweepStalePendingUploads,
   type AbandonedCleanupJob,
