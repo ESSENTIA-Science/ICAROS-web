@@ -1,0 +1,36 @@
+.section { padding-block: var(--section-pad-xl); min-height: 70vh; }
+.inner { display: grid; justify-items: start; gap: var(--sp-4); max-width: var(--measure); }
+.title { font-size: var(--fs-h2); line-height: var(--lh-h2); }
+.meta {
+  display: flex; gap: var(--sp-4);
+  font-family: var(--ff-mono); font-size: var(--fs-mono);
+  letter-spacing: var(--tr-mono); color: var(--fg-faint);
+}
+.meta:lang(ko) { font-family: var(--ff-body); letter-spacing: 0; }
+.notice { color: var(--fg-muted); }
+
+.prose {
+  margin-top: var(--sp-6);
+  width: 100%;
+  color: var(--fg-muted);
+  line-height: var(--lh-body);
+  display: grid;
+  gap: var(--sp-5);
+}
+.prose :global(h1), .prose :global(h2), .prose :global(h3) { color: var(--fg); }
+.prose :global(a) { color: var(--sig-ink); border-bottom: 1px solid var(--rule-strong); }
+.prose :global(img) { width: 100%; height: auto; border: 1px solid var(--rule); }
+.prose :global(ul), .prose :global(ol) { display: grid; gap: var(--sp-2); padding-left: var(--sp-5); list-style: disc; }
+.prose :global(code) { font-family: var(--ff-mono); font-size: var(--fs-body-s); }
+.prose :global(blockquote) { border-left: 2px solid var(--sig); padding-left: var(--sp-4); }
+/* 넓은 표는 페이지가 아니라 자기 안에서 스크롤한다 */
+.prose :global(table) { display: block; overflow-x: auto; width: 100%; }
+
+.footer { margin-top: var(--sp-9); display: flex; gap: var(--sp-6); flex-wrap: wrap; }
+.back { font-size: var(--fs-body-s); color: var(--fg-faint); }
+.back:hover { color: var(--fg); }
+.link {
+  font-size: var(--fs-body-s); color: var(--sig-ink);
+  border-bottom: 1px solid var(--rule-strong); padding-bottom: var(--sp-1);
+}
+.link:hover { border-bottom-color: var(--sig); }

@@ -1,14 +1,69 @@
-.section { padding-block: var(--section-pad-xxl); min-height: 60vh; display: grid; place-items: center; }
-.inner { display: grid; justify-items: start; gap: var(--sp-5); max-width: var(--measure); }
-.title { font-size: var(--fs-h2); line-height: var(--lh-h2); }
-.body { color: var(--fg-muted); white-space: pre-line; }
+.section { padding-block: var(--section-pad-xl); min-height: 70vh; }
+.inner { display: grid; justify-items: start; gap: var(--sp-5); }
+.title { font-size: var(--fs-h2); line-height: var(--lh-h2); margin-bottom: var(--sp-4); }
+.notice { color: var(--fg-muted); display: grid; gap: var(--sp-4); justify-items: start; }
+
+.list { width: 100%; display: grid; gap: 0; border-top: 1px solid var(--rule); }
+.item { border-bottom: 1px solid var(--rule); }
+
+.card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-5);
+  padding-block: var(--sp-5);
+  transition: var(--t-color);
+}
+.card:hover { background: var(--glass); }
+
+/* 목록 번호는 제원표 문법. 본문이 아니라 좌표로 읽히게 모노로 둔다. */
+.index {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  line-height: var(--lh-body);
+  letter-spacing: var(--tr-mono);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.cardBody { display: grid; gap: var(--sp-2); min-width: 0; }
+.cardTitle { font-size: var(--fs-h4); line-height: var(--lh-h4); font-weight: var(--fw-medium); }
+
+/* 발췌는 상류가 이미 잘라 보낸다. 두 줄까지만 보이고 나머지는 접는다. */
+.excerpt {
+  color: var(--fg-muted);
+  font-size: var(--fs-body-s);
+  line-height: var(--lh-body-s);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--tr-mono);
+  color: var(--fg-faint);
+}
+.meta:lang(ko) { font-family: var(--ff-body); letter-spacing: 0; }
+
+.pager { display: flex; align-items: center; gap: var(--sp-5); margin-top: var(--sp-6); }
+.pageNum { font-family: var(--ff-mono); font-size: var(--fs-mono); color: var(--fg-muted); }
+
 .link {
-  font-family: var(--ff-mono); font-size: var(--fs-mono); letter-spacing: var(--tr-mono);
-  text-transform: uppercase; color: var(--sig-ink);
-  border-bottom: 1px solid var(--rule-strong); padding-bottom: var(--sp-1);
+  font-size: var(--fs-body-s);
+  color: var(--sig-ink);
+  border-bottom: 1px solid var(--rule-strong);
+  padding-bottom: var(--sp-1);
   transition: var(--t-color);
 }
 .link:hover { border-bottom-color: var(--sig); }
-.link:lang(ko) { font-family: var(--ff-body); letter-spacing: 0; text-transform: none; }
-.back { font-size: var(--fs-body-s); color: var(--fg-faint); }
-.back:hover { color: var(--fg); }
+
+.source { margin-top: var(--sp-8); font-size: var(--fs-caption); color: var(--fg-faint); }
+
+@media (max-width: 479px) {
+  .card { grid-template-columns: 1fr; gap: var(--sp-2); }
+}

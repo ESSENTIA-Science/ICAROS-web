@@ -440,3 +440,40 @@ arn:aws:rds-db:ap-northeast-2:<account>:dbuser:<rds-resource-id>/icaros_app
 
 **우리에게도 그대로 적용된다.** `rds_iam` 을 가진 role 을 사람·앱 계정에 상속시키지 않는다.
 불가피하면 **부여 → 설정 → 같은 트랜잭션에서 즉시 회수**한다.
+
+
+---
+
+## D23 — `/posts` 는 ESSENTIA Community 를 **읽기로 즉시 연동**했다 (2026-08-24)
+
+D1(서비스 토큰) 대기 중이라 `/posts` 를 준비중 페이지로 두고 있었는데, **읽기에는 토큰이 필요 없다.**
+`essentia_infra` 가 ICAROS 카테고리를 확인할 때 쓴 것이 인증 불필요한 공개 엔드포인트였다.
+
+| | |
+|---|---|
+| API base | `https://api.essentia-sci.org` (`ESSENTIA_API_BASE`) |
+| 목록 | `GET /api/forum/posts?category=ICAROS&page=N&size=M` → `data.posts.{items,page,size,total,totalPages}` |
+| 상세 | `GET /api/forum/posts/{id}` → **`data.post`** (한 겹 더 감싸임. `data` 에는 comments·canComment·signedIn 도 있다) |
+| 본문 | plain Markdown. 이미지는 `/api/forum/image/{name}` **상대 경로** — API 호스트 기준이라 절대 URL 로 치환해야 한다 |
+| 현재 | ICAROS 4건 |
+
+### 설계
+- **복제하지 않는다.** 우리 DB 에 저장하지 않으므로 양쪽이 갈라질 수 없다. 동기화 코드가 없으니 동기화 버그도 없다.
+- `force-dynamic` + `cache: 'no-store'` — "ESSENTIA 에서 쓰면 여기 즉시 보인다"가 요구사항이다.
+- **`projectId` 로 한 번 더 거른다.** 카테고리 이름으로 물었지만 그건 텍스트라 겹치거나 바뀔 수 있다.
+  목록·상세 양쪽에서 `2cb1ee87-…` 를 대조한다.
+- 호출은 **서버 사이드에서만** (D22). 지금은 토큰이 없지만 붙을 자리를 미리 그렇게 잡아 둔다.
+- `skipHtml` — 상류 본문은 우리가 통제하지 않는다. 원시 HTML 을 렌더하지 않는다.
+
+### 상류 실패를 세 갈래로 나눈다
+| 상황 | 우리 응답 | 이유 |
+|---|---|---|
+| 상류 404 | **404** | 그 글은 없다 |
+| 타임아웃·5xx | **200 + "지금 불러올 수 없습니다"** | 글은 있을 수 있다. 404 로 만들면 색인에서 사라진다 |
+| 200 인데 모양이 다름 | **404** | 상류 계약이 바뀐 것 |
+
+첫 구현에서 이 셋을 뭉뚱그려 **실제 글이 404, 없는 id 가 200** 으로 뒤집혀 있었다.
+
+### 남은 것 — 쓰기
+CMS 에서 글을 쓰는 것은 여전히 **D1 서비스 토큰**이 필요하다.
+지금은 상세 하단에서 ESSENTIA 커뮤니티로 링크한다.
