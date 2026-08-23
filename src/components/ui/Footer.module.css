@@ -1,0 +1,12 @@
+.footer {
+  background: var(--bg);
+  color: var(--fg-muted);
+  padding-block: var(--sp-8);
+  border-top: 1px solid var(--rule);
+}
+.copy {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--tr-mono);
+  text-transform: uppercase;
+}

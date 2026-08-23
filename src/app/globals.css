@@ -1,0 +1,88 @@
+@import "./tokens.css";
+
+*, *::before, *::after { box-sizing: border-box; }
+* { margin: 0; }
+
+body {
+  background-color: var(--bg);
+  color: var(--fg);
+  font-family: var(--ff-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: var(--fw-body);
+  -webkit-text-size-adjust: 100%;
+}
+
+img, picture, video, canvas, svg { display: block; max-width: 100%; }
+input, button, textarea, select { font: inherit; color: inherit; }
+p, h1, h2, h3, h4, h5, h6 { overflow-wrap: break-word; }
+a { color: inherit; text-decoration: none; }
+ul, ol { list-style: none; padding: 0; }
+
+/* 한글 가드 — 한글은 자간 0.02em 을 넘으면 깨지고 uppercase 는 무의미하다 */
+:lang(ko) { letter-spacing: 0; text-transform: none; }
+
+h1 { font-family: var(--ff-display); font-weight: var(--fw-display); font-size: var(--fs-h1); line-height: var(--lh-h1); letter-spacing: var(--tr-h1); }
+h2 { font-family: var(--ff-display); font-weight: var(--fw-display); font-size: var(--fs-h2); line-height: var(--lh-h2); letter-spacing: var(--tr-h2); }
+h3 { font-size: var(--fs-h3); line-height: var(--lh-h3); font-weight: var(--fw-medium); }
+h4 { font-size: var(--fs-h4); line-height: var(--lh-h4); font-weight: var(--fw-medium); }
+
+/* 기술 레지스터 — eyebrow / 제원 라벨 / 캡션 */
+.eyebrow {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  font-weight: 400;
+  line-height: var(--lh-mono);
+  letter-spacing: var(--tr-mono);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.eyebrow:lang(ko) {
+  font-family: var(--ff-body);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.num, .spec-value, time { font-variant-numeric: tabular-nums lining-nums; }
+
+.container {
+  width: 100%;
+  max-width: var(--container);
+  margin-inline: auto;
+  padding-inline: var(--page-pad);
+}
+.measure { max-width: var(--measure); }
+
+section { background-color: var(--bg); color: var(--fg); }
+
+::selection { background: var(--sig); color: var(--n-900); }
+
+:focus-visible {
+  outline: 2px solid var(--sig);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: var(--sp-4);
+  top: calc(var(--sp-4) * -10);
+  z-index: var(--z-loader);
+  background: var(--n-0);
+  color: var(--n-900);
+  padding: var(--sp-3) var(--sp-5);
+  border: 1px solid var(--rule-strong);
+  transition: top var(--dur-1) var(--ease-out);
+}
+.skip-link:focus { top: var(--sp-4); }
+
+@keyframes icaros-rail {
+  0%   { transform: scaleX(0); }
+  100% { transform: scaleX(1); }
+}

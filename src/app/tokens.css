@@ -1,0 +1,187 @@
+/* ============================================================
+   ICAROS Design Tokens
+   근거: docs/icaros-rebuild/03-reference-research.md
+   원칙: 시그널 컬러는 마크(1px 선·작은 사각형·진행률 채움)에만.
+         면이나 밝은 배경의 텍스트로 절대 쓰지 않는다.
+   ============================================================ */
+
+html {
+  /* 1rem === 10px 이되 사용자 폰트 크기 설정은 그대로 따라간다 */
+  font-size: 62.5%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+:root {
+  /* ---- Neutrals: cool graphite ---- */
+  --n-0:   #ffffff;
+  --n-25:  #f7f8f9;
+  --n-50:  #eef0f2;
+  --n-100: #e1e4e8;
+  --n-200: #c7cbd1;
+  --n-300: #a2a8b0;
+  --n-400: #79808a;
+  --n-500: #565d67;
+  --n-600: #3a4049;
+  --n-700: #272c33;
+  --n-800: #191d22;
+  --n-900: #0e1114;
+  --n-950: #07090b;
+
+  /* ---- Signal: Flare — 유일한 액센트 ---- */
+  --sig: #ff7a00;                   /* 마크 전용. 밝은 배경 텍스트로 쓰면 2.46:1 로 실패 */
+  --sig-ink: #b04600;               /* 밝은 배경의 액센트 텍스트 — 5.31:1 */
+  --sig-soft: rgb(255 122 0 / 0.14);
+
+  /* ---- Status: 폼 전용. 장식으로 쓰지 않는다 ---- */
+  --ok: #1f8a4c;
+  --warn: #b26a00;
+  --err: #c6303a;
+
+  /* ---- Semantic: LIGHT (기본) ---- */
+  --bg: var(--n-25);
+  --bg-raised: var(--n-0);
+  --bg-sunken: var(--n-50);
+  --fg: var(--n-800);               /* 15.92:1 */
+  --fg-muted: var(--n-500);         /*  6.26:1 */
+  --fg-faint: var(--n-400);         /*  3.75:1 — 큰 글자·UI 마크 전용, 본문 금지 */
+  --rule: rgb(14 17 20 / 0.12);
+  --rule-strong: rgb(14 17 20 / 0.24);
+  --scrim: rgb(7 9 11 / 0.2);
+  --glass: rgb(14 17 20 / 0.28);
+
+  /* ---- Type ---- */
+  --ff-display: var(--font-display), "Pretendard", system-ui, sans-serif;
+  --ff-body: var(--font-body), "Pretendard", system-ui, -apple-system, sans-serif;
+  --ff-mono: var(--font-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --fw-display: 500;                /* 디스플레이는 단일 웨이트. bold 를 추가하지 않는다 */
+  --fw-body: 400;
+  --fw-medium: 500;
+  --fw-strong: 600;
+
+  --fs-display: clamp(5.6rem, 10.5vw, 14rem);
+  --fs-h1: clamp(3.6rem, 6vw, 7.2rem);
+  --fs-h2: clamp(2.8rem, 4.4vw, 5.2rem);
+  --fs-h3: clamp(2.4rem, 3vw, 3.6rem);
+  --fs-h4: clamp(2rem, 2.2vw, 2.6rem);
+  --fs-h5: 1.8rem;
+  --fs-body-l: 1.8rem;
+  --fs-body: 1.6rem;
+  --fs-body-s: 1.4rem;
+  --fs-caption: 1.3rem;
+  --fs-mono: 1.2rem;
+  --fs-mono-s: 1.1rem;
+  --fs-stat: clamp(7.2rem, 16vw, 22rem);
+
+  --lh-display: 0.86;
+  --lh-h1: 0.92;
+  --lh-h2: 0.98;
+  --lh-h3: 1.06;
+  --lh-h4: 1.12;
+  --lh-body: 1.62;                  /* 한글은 라틴보다 조밀해서 Vast 의 1.36 보다 넉넉해야 한다 */
+  --lh-body-s: 1.55;
+  --lh-mono: 1;
+
+  /* 자간은 라틴 전용. 한글은 0 (아래 :lang(ko) 가드) */
+  --tr-display: -0.022em;
+  --tr-h1: -0.014em;
+  --tr-h2: -0.008em;
+  --tr-h3: 0em;
+  --tr-h4: 0.008em;
+  --tr-h5: 0.016em;
+  --tr-body: 0em;
+  --tr-mono: 0.06em;
+  --tr-stat: -0.05em;
+
+  /* ---- Spacing (4px base) ---- */
+  --sp-1: 0.4rem;   --sp-2: 0.8rem;   --sp-3: 1.2rem;   --sp-4: 1.6rem;
+  --sp-5: 2.4rem;   --sp-6: 3.2rem;   --sp-7: 4rem;     --sp-8: 4.8rem;
+  --sp-9: 6.4rem;   --sp-10: 9.6rem;  --sp-11: 12.8rem; --sp-12: 19.2rem;
+
+  --section-pad: 6.4rem;
+  --section-pad-l: var(--section-pad);
+  --section-pad-xl: calc(var(--section-pad) * 2);
+  --section-pad-xxl: calc(var(--section-pad) * 3);
+  --grid-gap-x: var(--sp-4);
+  --grid-gap-y: var(--sp-10);
+
+  /* ---- Layout ---- */
+  --page-pad: var(--sp-7);
+  --nav-h: 7.2rem;
+  --measure: 68rem;
+  --container: 150rem;
+
+  /* ---- Elevation: 디자인은 평면이다. 그림자는 오버레이 2개뿐 ---- */
+  --shadow-pop: 0 1px 2px rgb(7 9 11 / 0.06), 0 8px 24px rgb(7 9 11 / 0.1);
+  --shadow-modal: 0 2px 4px rgb(7 9 11 / 0.08), 0 24px 64px rgb(7 9 11 / 0.24);
+  --blur-glass: blur(24px);
+  --blur-veil: blur(3px);
+
+  /* ---- Motion: --motion 스칼라를 모든 duration 에 곱한다 ---- */
+  --motion: 1;
+  --dur-1: calc(150ms * var(--motion));
+  --dur-2: calc(300ms * var(--motion));
+  --dur-3: calc(500ms * var(--motion));
+  --dur-4: calc(650ms * var(--motion));
+  --dur-5: calc(900ms * var(--motion));
+  --delay-nudge: 80ms;
+  --stagger: 60ms;
+
+  --ease-primary: cubic-bezier(0.62, 0.05, 0.01, 0.99);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.64, 0, 0.78, 0);
+  --ease-quint: cubic-bezier(0.83, 0, 0.17, 1);
+  --ease-back: cubic-bezier(0.34, 1.4, 0.64, 1);
+
+  --t-color: color var(--dur-1) var(--ease-out),
+    background-color var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out);
+  --t-move: transform var(--dur-2) var(--ease-primary);
+  --t-reveal: opacity var(--dur-4) var(--ease-out),
+    transform var(--dur-4) var(--ease-out);
+
+  /* ---- Z ---- */
+  --z-base: 0;
+  --z-raised: 10;
+  --z-sticky: 100;
+  --z-canvas: 500;
+  --z-rail: 800;
+  --z-nav: 1000;
+  --z-overlay: 2000;
+  --z-loader: 9000;
+}
+
+/* ---- DARK 섹션 ---- */
+[data-theme="dark"] {
+  --bg: var(--n-900);
+  --bg-raised: var(--n-800);
+  --bg-sunken: var(--n-950);
+  --fg: var(--n-0);
+  --fg-muted: var(--n-300);
+  --fg-faint: var(--n-400);
+  --rule: rgb(255 255 255 / 0.14);
+  --rule-strong: rgb(255 255 255 / 0.28);
+  --scrim: rgb(7 9 11 / 0.45);
+  --glass: rgb(255 255 255 / 0.08);
+  --sig-ink: var(--sig);            /* 어두운 배경에서는 액센트가 텍스트로도 7.25:1 */
+  color-scheme: dark;
+}
+
+/* ---- TINT 섹션 (조용한 제3 상태) ---- */
+[data-theme="tint"] {
+  --bg: var(--n-100);
+  --bg-raised: var(--n-50);
+  --bg-sunken: var(--n-200);
+}
+
+@media (max-width: 991px) { :root { --page-pad: var(--sp-5); } }
+@media (max-width: 479px) { :root { --page-pad: var(--sp-4); } }
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --motion: 0; --stagger: 0ms; }
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

@@ -1,0 +1,80 @@
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-nav);
+  background: color-mix(in srgb, var(--n-950) 82%, transparent);
+  backdrop-filter: var(--blur-glass);
+  border-bottom: 1px solid var(--rule);
+  color: var(--fg);
+}
+
+.inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-5);
+  height: var(--nav-h);
+  max-width: var(--container);
+  margin-inline: auto;
+  padding-inline: var(--page-pad);
+}
+
+.brand { display: flex; align-items: center; }
+.wordmark { height: 2.4rem; width: auto; }
+
+.list { display: flex; align-items: center; gap: var(--sp-6); }
+
+.link {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--tr-mono);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  transition: var(--t-color);
+  padding-block: var(--sp-2);
+}
+.link:hover { color: var(--fg); }
+
+.toggle { display: none; }
+
+@media (max-width: 767px) {
+  .toggle {
+    display: grid;
+    gap: 0.5rem;
+    padding: var(--sp-2);
+    margin-right: calc(var(--sp-2) * -1);
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+  .bar {
+    display: block;
+    width: 2.2rem;
+    height: 1px;
+    background: var(--fg);
+  }
+
+  .menu {
+    position: fixed;
+    inset: var(--nav-h) 0 auto 0;
+    z-index: var(--z-overlay);
+    background: var(--n-950);
+    border-bottom: 1px solid var(--rule);
+    /* 닫힘 상태를 display:none 이 아니라 가시성으로 다뤄 포커스가 새지 않게 한다 */
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(-0.8rem);
+    transition: opacity var(--dur-2) var(--ease-out),
+      transform var(--dur-2) var(--ease-out), visibility var(--dur-2);
+  }
+  .menuOpen { visibility: visible; opacity: 1; transform: none; }
+
+  .list {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: var(--sp-4) var(--page-pad) var(--sp-7);
+  }
+  .list li + li { border-top: 1px solid var(--rule); }
+  .link { display: block; padding-block: var(--sp-5); font-size: var(--fs-body); }
+}
