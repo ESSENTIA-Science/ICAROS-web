@@ -1,44 +1,81 @@
-import { PRESIGN_TTL_SECONDS } from '@/lib/image/policy'
-import { getServableMedia } from '@/lib/s3/media'
-import { presignGet } from '@/lib/s3/presign'
 import { contentDisposition, toErrorResponse } from '@/lib/s3/http'
+import { getServableMedia } from '@/lib/s3/media'
+import { getObjectStream } from '@/lib/s3/objects'
+import { etagMatches, quoteEtag } from '@/lib/s3/predicates'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /**
- * 302 로 presigned GET 에 넘긴다 (D3). 공개 클래스를 만들지 않는다 —
- * 버킷의 모든 객체는 private 이고, 접근 통제 지점은 이 핸들러 하나로 모인다.
+ * S3 에서 받은 **바이트를 그대로 스트리밍**한다 (DECISIONS D15).
  *
- * **이 URL 이 고정이라는 점이 핵심이다.** presigned URL 을 `next/image` 의 `src` 로 직접 쓰면
- * 10분마다 URL 이 바뀌어 최적화 캐시가 매번 miss 나고 서명 쿼리스트링이 캐시 키를 오염시킨다.
- * 프록시를 한 겹 두면 캐시 키가 고정된다.
+ * 이전 구현은 presigned GET 으로 302 를 줬는데 그건 동작하지 않는다. Next 16.3.2 의 이미지
+ * 최적화기는 `src` 가 `/` 로 시작하면 `fetchInternalImage` 경로를 타고, 거기에는 `Location` 을
+ * 따라가는 코드가 없다. body 가 0바이트라 `ImageError(400)` 로 끝난다. 리다이렉트를 추적하는
+ * `fetchExternalImage` 는 절대 URL 을 요구하는데 `next.config.ts` 의 `remotePatterns: []` 가 그걸 막는다.
+ *
+ * 스트리밍은 presigned URL 이 클라이언트로 새는 경로도 함께 닫는다 — 서명 URL 은 유효기간 동안
+ * 그 자체로 자격증명이고, 한 번 새면 회수할 방법이 없다.
  */
+
+/** 키가 랜덤 UUID 라 같은 URL 의 내용은 절대 바뀌지 않는다. 바뀌면 새 id 가 발급된다. */
+const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable'
+
+/** 접근 통제가 필요한 미디어. 중간 캐시·CDN 에 사본을 남기지 않는다. */
+const RESTRICTED_CACHE = 'private, no-store'
+
+/**
+ * 공유 캐시에 올려도 되는 entity 종류 — **허용 목록**이다.
+ *
+ * 차단 목록으로 두면 나중에 추가되는 종류가 기본적으로 공개 캐시에 올라간다.
+ * `member` 가 여기 없는 이유는 멤버 사진이 미성년자 얼굴이기 때문이고(요구사항 I17),
+ * `entity_type` 이 null 인 행은 용도를 모르므로 같은 쪽으로 닫는다.
+ */
+const CACHEABLE_ENTITY_TYPES: ReadonlySet<string> = new Set(['rocket', 'landing', 'model', 'poster'])
+
+function cacheControlFor(entityType: string | null): string {
+  return entityType !== null && CACHEABLE_ENTITY_TYPES.has(entityType) ? IMMUTABLE_CACHE : RESTRICTED_CACHE
+}
+
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
   try {
     const { id } = await ctx.params
 
     const item = await getServableMedia(id)
-    // 존재하지 않는 id 와 아직 확정되지 않은 업로드를 구분하지 않는다.
+    // 존재하지 않는 id, 아직 확정되지 않은 업로드, 삭제된 미디어를 구분하지 않는다.
     if (!item) return new Response(null, { status: 404 })
 
+    const cacheControl = cacheControlFor(item.entityType)
+
+    // ETag 는 `/confirm` 때 DB 에 넣어 뒀다. 조건부 요청은 S3 를 부르기 전에 끝난다.
+    if (item.etag && etagMatches(req.headers.get('if-none-match'), item.etag)) {
+      return new Response(null, {
+        status: 304,
+        headers: { ETag: quoteEtag(item.etag), 'Cache-Control': cacheControl },
+      })
+    }
+
+    // Range 는 해석하지 않고 S3 에 그대로 넘긴다 (GLB 부분 로딩).
+    const object = await getObjectStream(item.bucket, item.key, req.headers.get('range'))
+    if (!object) return new Response(null, { status: 404 })
+
     const download = new URL(req.url).searchParams.get('download') === '1'
-
-    const signed = await presignGet(item.key, {
-      // 저장된 값 대신 우리 DB 의 mime 을 강제한다. S3 메타데이터는 업로더가 정한 값이다.
-      contentType: item.mime,
-      contentDisposition: contentDisposition(item.originalFilename, download),
+    const headers = new Headers({
+      // **DB 의 mime 을 강제한다.** S3 에 저장된 Content-Type 은 업로더가 서명 요청에 넣은 값이라
+      // 신뢰할 근거가 없다. 우리 값은 `/confirm` 이 매직 넘버로 확인한 것이다.
+      'Content-Type': item.mime,
+      'Content-Disposition': contentDisposition(item.originalFilename, download),
+      'Cache-Control': cacheControl,
+      'Accept-Ranges': 'bytes',
+      'X-Content-Type-Options': 'nosniff',
     })
 
-    return new Response(null, {
-      status: 302,
-      headers: {
-        Location: signed,
-        // 리다이렉트 캐시는 서명 만료보다 반드시 짧아야 한다. 길면 죽은 URL 을 나눠주게 된다.
-        // private 인 이유: 공유 캐시가 서명 URL 로 가는 302 를 들고 있을 이유가 없다.
-        'Cache-Control': `private, max-age=${Math.floor(PRESIGN_TTL_SECONDS * 0.4)}`,
-      },
-    })
+    const etag = item.etag ?? object.etag
+    if (etag) headers.set('ETag', quoteEtag(etag))
+    if (object.contentLength !== null) headers.set('Content-Length', String(object.contentLength))
+    if (object.contentRange) headers.set('Content-Range', object.contentRange)
+
+    return new Response(object.body, { status: object.partial ? 206 : 200, headers })
   } catch (err) {
     return toErrorResponse(err)
   }

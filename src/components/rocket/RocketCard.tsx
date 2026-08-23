@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import type { RocketListItem } from '@/app/(public)/rocket/_data'
+import { textLang } from '@/components/landing/text-lang'
 import styles from './RocketCard.module.css'
 
 /**
@@ -26,7 +27,7 @@ export default function RocketCard({ rocket }: { rocket: RocketListItem }) {
         </span>
 
         <span className={styles.body}>
-          <span className={styles.name} lang="en">{rocket.name}</span>
+          <span className={styles.name} lang={textLang(rocket.name)}>{rocket.name}</span>
           {rocket.maxAltitudeM ? (
             <span className={styles.meta}>
               <span className="eyebrow">최대 고도</span>

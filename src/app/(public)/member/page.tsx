@@ -3,11 +3,17 @@ import MemberCard from '@/components/member/MemberCard'
 import { groupBySquad, listMembers } from './_data'
 import styles from './page.module.css'
 
-/** 정적 프리렌더 + 5분 상한. 근거는 rocket/[slug]/page.tsx 의 같은 상수 주석 참조. */
-// ISR 을 쓰지 않는다. published=false 전환이 최대 5분(+stale-while-revalidate) 동안
-// 상세/명단에 그대로 노출돼 C8·E5 를 깬다. 어드민이 revalidatePath 를 붙이기 전까지는
-// 요청 시각 렌더가 유일하게 올바른 동작이다 (04-architecture.md §Caching posture).
+/**
+ * ISR 을 쓰지 않는다. published=false 전환이 revalidate 주기 동안(+stale-while-revalidate)
+ * 명단에 그대로 노출돼 E5 를 깬다 (rocket/[slug]/page.tsx 와 같은 근거).
+ */
 export const dynamic = 'force-dynamic'
+
+/**
+ * 소속이 비어 있는 그룹의 표시 라벨. DAL 은 센티널을 null 로만 내보내고 이름은 여기서 붙인다 —
+ * 운영자가 실제 부서명을 '기타'로 넣어도 두 그룹이 합쳐지거나 key 가 겹치지 않는다.
+ */
+const UNASSIGNED_SQUAD_LABEL = '기타'
 
 export const metadata: Metadata = {
   title: 'Members',
@@ -33,9 +39,9 @@ export default async function MemberPage() {
           <p className={styles.empty}>공개된 부원이 아직 없습니다.</p>
         ) : (
           squads.map((squad) => (
-            <section key={squad.label} className={styles.squad}>
+            <section key={squad.key} className={styles.squad}>
               <h2 className={styles.squadTitle}>
-                {squad.label}
+                {squad.squad ?? UNASSIGNED_SQUAD_LABEL}
                 <span className={`${styles.squadCount} num`} aria-hidden="true">
                   {squad.members.length}
                 </span>

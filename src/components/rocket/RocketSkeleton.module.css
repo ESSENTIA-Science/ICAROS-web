@@ -1,18 +1,5 @@
-/* dark 섹션 배경은 body(:root light)가 아니라 여기서 직접 칠해야 한다 */
-.shell {
-  background: var(--bg);
-  color: var(--fg);
-  min-height: 70vh;
-}
-
-.wrap {
-  padding-block: var(--section-pad-xl);
-  max-width: var(--container);
-  margin-inline: auto;
-  padding-inline: var(--page-pad);
-}
-
-/* 스켈레톤은 형태만 알려 준다 — 색은 rule 한 단계, 명멸은 opacity 만 */
+/* 스켈레톤은 형태만 알려 준다 — 색은 rule 한 단계, 명멸은 opacity 만.
+   배경은 칠하지 않는다: 이 조각은 목록 페이지의 dark 섹션 안에서만 쓰이므로 테마를 물려받는다. */
 .bar {
   display: block;
   background: var(--bg-sunken);
@@ -25,13 +12,14 @@
   50% { opacity: 0.55; }
 }
 
-.head { display: grid; gap: var(--sp-4); margin-bottom: var(--sp-8); }
-.eyebrow { width: 8rem; height: 1.2rem; }
-.title { width: min(32rem, 70%); height: 5.2rem; }
-.lede { width: min(52rem, 90%); height: 1.8rem; }
-
-.tabs { display: flex; gap: var(--sp-6); padding-bottom: var(--sp-4); border-bottom: 1px solid var(--rule); }
-.tab { width: 14rem; height: 1.4rem; }
+/* 실제 SeriesTabs 와 같은 높이(패딩 sp-4 두 겹 + 텍스트 한 줄)라 교체 시 격자가 밀리지 않는다 */
+.tabs {
+  display: flex;
+  gap: var(--sp-6);
+  padding-block: var(--sp-4);
+  border-bottom: 1px solid var(--rule);
+}
+.tab { width: 14rem; height: 1.8rem; }
 
 .grid {
   display: grid;
@@ -45,22 +33,6 @@
 .figure { aspect-ratio: 3 / 5; }
 .name { width: 60%; height: 2rem; }
 
-.detail {
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  gap: var(--sp-9);
-  align-items: center;
-}
-.detailBody { display: grid; gap: var(--sp-5); }
-.specs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-4); }
-.spec { height: 6rem; }
-
-@media (max-width: 899px) {
-  .detail { grid-template-columns: 1fr; }
-  .figure { max-width: 32rem; }
-}
-
 @media (max-width: 599px) {
-  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .specs { grid-template-columns: 1fr; }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-7) var(--sp-4); }
 }

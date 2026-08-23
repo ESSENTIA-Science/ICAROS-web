@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import logo from '@/assets/logo_white.svg'
 import Initials from './Initials'
+import { textLang } from './text-lang'
 import styles from './Hero.module.css'
 
 /**
@@ -22,7 +23,7 @@ export default function Hero({
         </h1>
 
         {tagline ? (
-          <p className={styles.tagline} lang="en">
+          <p className={styles.tagline} lang={textLang(tagline)}>
             <Initials text={tagline} />
           </p>
         ) : null}

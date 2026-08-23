@@ -1,7 +1,11 @@
 import 'server-only'
 
 import { headers } from 'next/headers'
+import { firstHeaderValue } from './request'
 import { resolveSession, type AdminSession } from './session'
+
+// 호출부 호환을 위해 그대로 재노출한다. 구현은 순환 import 회피 목적으로 `request.ts` 에 있다.
+export { getRequestMeta, type RequestMeta } from './request'
 
 export type AuthErrorCode = 'bad_origin' | 'unauthenticated'
 
@@ -29,39 +33,108 @@ function normalizeOrigin(value: string): string | null {
   }
 }
 
-/** 프록시 헤더는 콤마로 여러 값이 올 수 있다. 가장 앞(= 가장 바깥 프록시)만 쓴다. */
-function firstHeaderValue(raw: string | null): string | null {
-  if (!raw) return null
-  const first = raw.split(',')[0]?.trim()
-  return first && first.length > 0 ? first : null
+/**
+ * 허용목록 항목을 오리진으로 정규화한다.
+ *
+ * `ADMIN_ALLOWED_ORIGINS` 는 두 곳이 읽는다 — 여기, 그리고 `next.config.ts` 의
+ * `serverActions.allowedOrigins`. 그런데 Next 는 **호스트 목록**을 요구해서 config 쪽이
+ * 스킴을 떼어내고 기본값도 스킴 없는 `icaros.kr,www.icaros.kr` 이다.
+ * 여기서 `new URL()` 만 쓰면 그 형식이 전부 파싱 실패해 **관리 콘솔이 전면 잠긴다**
+ * (fail-closed 라 조용히 403 만 난다). 운영자가 config 기본값을 env 로 복사하는 것은
+ * 가장 자연스러운 행동이므로, 스킴이 없으면 붙여서 받아 준다.
+ *
+ * localhost / 127.0.0.1 만 http 를 허용한다 — 그 외에 http 를 허용하면
+ * 평문 오리진이 관리자 mutation 을 부를 수 있게 된다.
+ */
+function parseAllowlistEntry(raw: string): string | null {
+  const v = raw.trim()
+  if (!v) return null
+  if (/^https?:\/\//i.test(v)) return normalizeOrigin(v)
+
+  const isLoopback = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(v)
+  return normalizeOrigin(`${isLoopback ? 'http' : 'https'}://${v}`)
+}
+
+/** 폴백·설정오류 경고는 프로세스당 한 번만. 요청마다 찍으면 로그에서 의미를 잃는다. */
+let warnedNoAllowlist = false
+let warnedBadAllowlist = false
+let warnedDroppedAllowlist = false
+
+/**
+ * `ADMIN_ALLOWED_ORIGINS` 파싱. 반환값은 "선언 여부"와 "파싱 결과"를 분리한다 —
+ * 선언은 했는데 하나도 파싱되지 않은 경우를 미설정과 같이 취급하면 안 되기 때문이다.
+ */
+function configuredOrigins(): { declared: boolean; origins: Set<string>; dropped: string[] } {
+  const origins = new Set<string>()
+  const dropped: string[] = []
+  let declared = false
+
+  for (const raw of (process.env.ADMIN_ALLOWED_ORIGINS ?? '').split(',')) {
+    const trimmed = raw.trim()
+    if (!trimmed) continue
+    declared = true
+    const normalized = parseAllowlistEntry(trimmed)
+    if (normalized) origins.add(normalized)
+    else dropped.push(trimmed)
+  }
+
+  return { declared, origins, dropped }
 }
 
 /**
  * 허용 Origin 집합 (06 §5).
  *
- * 1. `ADMIN_ALLOWED_ORIGINS` — 콤마 구분. 커스텀 프록시·고정 프리뷰 별칭용 (DECISIONS D6).
- * 2. 요청 자신의 Origin — `x-forwarded-host` 기반. Vercel 이 이 헤더를 직접 세팅하므로
- *    사실상 "Origin === Host" 검사이고, Next 의 Server Actions 내장 방어와 같은 판정을
- *    **Route Handler 에도** 적용하기 위한 것이다. 내장 방어는 Route Handler 에 걸리지 않는다.
+ * `ADMIN_ALLOWED_ORIGINS` 가 설정돼 있으면 **그 목록만** 쓴다.
+ * 예전에는 여기에 self-origin(`x-forwarded-host`+`x-forwarded-proto` 로 조립)을 항상 합집합으로
+ * 더했는데, 그러면 검증의 의미가 "Origin === 요청이 스스로 주장한 Host" 로 축소된다.
+ * 실제로 `Origin: https://evil.com` + `x-forwarded-host: evil.com` 조합이 그대로 통과했다.
+ * 그 상태의 안전은 코드가 아니라 "앞단 프록시가 이 헤더를 덮어쓴다"는 배포 토폴로지에 있다 —
+ * 화이트리스트가 있으면 화이트리스트가 이긴다.
+ *
+ * 미설정일 때만 self-origin 폴백을 쓴다. 이건 로컬·초기 프리뷰 편의일 뿐 방어가 아니므로 경고를 남긴다.
+ * 선언은 됐는데 전부 파싱 실패면 **빈 집합을 돌려 전부 거부한다** — 조용히 폴백으로 내려가면
+ * 설정 오타가 곧 방어 해제가 된다.
  */
-async function allowedOrigins(h: Headers): Promise<ReadonlySet<string>> {
-  const set = new Set<string>()
+function allowedOrigins(h: Headers): ReadonlySet<string> {
+  const { declared, origins, dropped } = configuredOrigins()
 
-  for (const raw of (process.env.ADMIN_ALLOWED_ORIGINS ?? '').split(',')) {
-    const trimmed = raw.trim()
-    if (!trimmed) continue
-    const normalized = normalizeOrigin(trimmed)
-    if (normalized) set.add(normalized)
+  // 부분 실패는 전부 실패보다 위험하다 — 유효 항목이 남아 있으면 앱은 정상으로 보이는데
+  // 드롭된 도메인만 전건 403 이 되고 로그에 단서가 없다.
+  // 현실적인 오타가 `https://icaros.kr,www.icaros.kr` 처럼 한 항목만 스킴을 빠뜨리는 것이다.
+  if (dropped.length > 0 && !warnedDroppedAllowlist) {
+    warnedDroppedAllowlist = true
+    console.warn(
+      `[auth] ADMIN_ALLOWED_ORIGINS 중 ${dropped.length}개 항목을 해석하지 못해 무시합니다: ${dropped.join(', ')}`
+    )
   }
 
+  if (declared) {
+    if (origins.size === 0 && !warnedBadAllowlist) {
+      warnedBadAllowlist = true
+      console.error(
+        '[auth] ADMIN_ALLOWED_ORIGINS 를 하나도 해석하지 못했습니다 — 모든 mutation 이 거부됩니다. ' +
+          '형식: 콤마 구분, 스킴 포함 절대 URL (예: https://icaros.kr,https://www.icaros.kr)'
+      )
+    }
+    return origins
+  }
+
+  if (!warnedNoAllowlist) {
+    warnedNoAllowlist = true
+    console.warn(
+      '[auth] ADMIN_ALLOWED_ORIGINS 미설정 — Origin 검증이 요청이 주장한 Host 와의 대조로 축소됩니다. ' +
+        '배포 환경에서는 반드시 설정하십시오.'
+    )
+  }
+
+  const fallback = new Set<string>()
   const host = firstHeaderValue(h.get('x-forwarded-host')) ?? firstHeaderValue(h.get('host'))
   if (host) {
     const proto = firstHeaderValue(h.get('x-forwarded-proto')) ?? 'https'
     const self = normalizeOrigin(`${proto}://${host}`)
-    if (self) set.add(self)
+    if (self) fallback.add(self)
   }
-
-  return set
+  return fallback
 }
 
 /**
@@ -72,7 +145,7 @@ export async function assertTrustedOrigin(): Promise<void> {
   const h = await headers()
   const origin = normalizeOrigin(h.get('origin') ?? '')
   if (!origin) throw new AuthError('bad_origin')
-  if (!(await allowedOrigins(h)).has(origin)) throw new AuthError('bad_origin')
+  if (!allowedOrigins(h).has(origin)) throw new AuthError('bad_origin')
 }
 
 /**
@@ -92,22 +165,4 @@ export async function requireAdmin(): Promise<AdminSession> {
  */
 export async function getAdminSession(): Promise<AdminSession | null> {
   return resolveSession()
-}
-
-export type RequestMeta = { ip: string | null; userAgent: string | null }
-
-/** IP 는 rate limit 키가 되므로 형태를 검사하고 길이를 자른다 — 임의 문자열이 키 공간을 오염시키지 않게. */
-const IP_SHAPE = /^[0-9a-fA-F.:]{3,45}$/
-
-/**
- * 감사 로그·rate limit 용 요청 메타데이터.
- * Vercel 은 `x-forwarded-for` 를 플랫폼이 덮어쓰므로 클라이언트가 위조할 수 없다.
- * 그 앞단에 다른 프록시를 두게 되면 이 가정을 다시 확인해야 한다.
- */
-export async function getRequestMeta(): Promise<RequestMeta> {
-  const h = await headers()
-  const candidate = firstHeaderValue(h.get('x-forwarded-for')) ?? firstHeaderValue(h.get('x-real-ip'))
-  const ip = candidate && IP_SHAPE.test(candidate) ? candidate : null
-  const userAgent = h.get('user-agent')?.slice(0, 512) ?? null
-  return { ip, userAgent }
 }

@@ -6,9 +6,6 @@ import { db, schema } from '@/lib/db'
 /** 사진이 없는 부원 23/27 명이 이 이미지를 쓴다 (E6). */
 export const MEMBER_PLACEHOLDER = '/assets/img/member/profile.webp'
 
-/** squad 가 비어 있는 부원을 모을 그룹. 마지막에 온다. */
-export const UNASSIGNED_SQUAD = '기타'
-
 export type MemberDto = {
   id: string
   name: string
@@ -19,8 +16,14 @@ export type MemberDto = {
 }
 
 export type MemberSquad = {
-  /** 화면에 찍히는 이름. squad 가 null 인 그룹은 UNASSIGNED_SQUAD. */
-  label: string
+  /**
+   * 부서명 원본. 소속이 없는 그룹은 **null 센티널**이다 — 표시 라벨은 렌더 시점에 붙인다.
+   * 문자열 '기타' 를 센티널로 쓰면 운영자가 실제 부서명을 '기타'로 넣는 순간 같은 이름의
+   * 그룹이 둘 생기고 key 까지 겹친다. 자유 텍스트와 센티널은 네임스페이스를 나눈다.
+   */
+  squad: string | null
+  /** React key. 자유 텍스트와 센티널이 절대 충돌하지 않도록 접두사를 붙인다. */
+  key: string
   members: MemberDto[]
 }
 
@@ -73,7 +76,11 @@ export function groupBySquad(members: readonly MemberDto[]): MemberSquad[] {
     else groups.set(m.squad, [m])
   }
 
-  const out: MemberSquad[] = [...groups].map(([label, list]) => ({ label, members: list }))
-  if (unassigned.length > 0) out.push({ label: UNASSIGNED_SQUAD, members: unassigned })
+  const out: MemberSquad[] = [...groups].map(([squad, list]) => ({
+    squad,
+    key: `squad:${squad}`,
+    members: list,
+  }))
+  if (unassigned.length > 0) out.push({ squad: null, key: 'unassigned', members: unassigned })
   return out
 }

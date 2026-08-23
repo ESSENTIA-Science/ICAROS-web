@@ -13,15 +13,12 @@ import {
 import { getS3Config } from './config'
 import { StorageError, describeError } from './errors'
 import { assertKeyWritable, buildObjectKey, folderOfKey } from './keys'
-import { deleteObject, headObject } from './objects'
+import { deleteObject, getObjectPrefix, headObject } from './objects'
+import { SNIFF_BYTES, isUuid, sniffMime } from './predicates'
 import { presignPut } from './presign'
 import { enqueueCleanup } from './cleanup'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-export function isUuid(value: string): boolean {
-  return UUID_RE.test(value)
-}
+export { isUuid }
 
 export interface CreateUploadInput {
   kind: UploadKind
@@ -104,9 +101,11 @@ export async function confirmUpload(
   if (row.status === 'ready') throw new StorageError('conflict', '이미 확정된 업로드입니다.')
   if (row.status !== 'pending') throw new StorageError('conflict', '확정할 수 없는 상태의 업로드입니다.')
 
+  // 여기서만 미리 본다: 아래 S3 호출들은 읽기 범위(`forum/` 포함)만 요구하는데,
+  // 확정은 우리가 쓰고 지울 수 있는 키에만 해야 한다. 버킷 대조는 각 S3 호출이 한다.
   assertKeyWritable(row.key)
 
-  const head = await headObject(row.key)
+  const head = await headObject(row.bucket, row.key)
   if (!head) {
     await markFailed(mediaId)
     throw new StorageError('object_missing', '업로드된 파일을 찾을 수 없습니다. 다시 시도해 주세요.')
@@ -125,11 +124,18 @@ export async function confirmUpload(
     throw new StorageError('too_large', `${formatBytes(limit)} 이하만 업로드할 수 있습니다.`)
   }
 
-  // content-type 은 서명에 포함돼 있어 S3 가 이미 강제하지만, 실제 저장된 값으로 한 번 더 확인한다.
-  const storedType = head.contentType?.split(';')[0]?.trim().toLowerCase() ?? ''
-  if (storedType !== row.mime) {
+  // **선언값이 아니라 내용을 본다** (요구사항 I5).
+  // S3 에 저장된 Content-Type 은 업로더가 서명 요청에 넣은 값 그대로라, 그것과 `row.mime` 을
+  // 비교하면 같은 값끼리 비교하는 셈이라 아무것도 걸러 내지 못한다.
+  // 객체가 ≤8MB 라 전체를 받아도 되지만 판정에 필요한 건 선두 몇 바이트뿐이다.
+  const prefix = await getObjectPrefix(row.bucket, row.key, SNIFF_BYTES)
+  if (prefix === null) {
+    await markFailed(mediaId)
+    throw new StorageError('object_missing', '업로드된 파일을 찾을 수 없습니다. 다시 시도해 주세요.')
+  }
+  if (sniffMime(prefix) !== row.mime) {
     await discardObject(row.bucket, row.key, mediaId)
-    throw new StorageError('wrong_type', '허용되지 않은 파일 형식입니다.')
+    throw new StorageError('wrong_type', '파일 내용이 허용된 형식이 아닙니다.')
   }
 
   // 폭·높이는 서버가 디코딩하지 않는다(이미지 라이브러리 미도입). 클라이언트 신고값을 그대로 받되
@@ -150,9 +156,15 @@ export async function confirmUpload(
 
 export interface ServableMedia {
   readonly id: string
+  readonly bucket: string
   readonly key: string
+  /** 서빙 Content-Type 의 authority. S3 메타데이터가 아니라 이 값을 내보낸다. */
   readonly mime: string
   readonly originalFilename: string | null
+  /** 조건부 요청(`If-None-Match`)을 S3 왕복 없이 끝내기 위해 함께 읽는다. */
+  readonly etag: string | null
+  /** 캐시 정책 분기용. 접근 통제가 필요한 종류인지 판정한다 (I17). */
+  readonly entityType: string | null
 }
 
 /** `/api/media/{id}` 가 서빙해도 되는 행인가. `ready` + 미삭제만 통과한다. */
@@ -162,9 +174,12 @@ export async function getServableMedia(mediaId: string): Promise<ServableMedia |
   const rows = await db
     .select({
       id: media.id,
+      bucket: media.bucket,
       key: media.key,
       mime: media.mime,
       originalFilename: media.originalFilename,
+      etag: media.etag,
+      entityType: media.entityType,
     })
     .from(media)
     .where(and(eq(media.id, mediaId), eq(media.status, 'ready'), isNull(media.deletedAt)))
@@ -184,7 +199,7 @@ async function markFailed(mediaId: string): Promise<void> {
  */
 async function discardObject(bucket: string, key: string, mediaId: string): Promise<void> {
   try {
-    await deleteObject(key)
+    await deleteObject(bucket, key)
   } catch (err) {
     await enqueueCleanup(bucket, key, describeError(err))
   }

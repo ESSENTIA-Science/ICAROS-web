@@ -26,7 +26,18 @@
   color: var(--fg-muted);
 }
 
+/* globals.css 의 `:lang(ko)` 가드(0,1,0)와 `.title`(0,1,0)이 동률이라 모듈이 뒤에 실려 이긴다.
+   한글 라벨이 들어오면 자간·uppercase 를 여기서 다시 되돌린다 (`.title:lang(ko)` = 0,2,0). */
+.title:lang(ko) {
+  font-family: var(--ff-body);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .index {
+  /* 라벨이 한글이라 본문 서체로 바뀌어도 번호는 계속 모노로 조판한다 */
+  font-family: var(--ff-mono);
   color: var(--fg-faint);
   font-variant-numeric: tabular-nums lining-nums;
 }

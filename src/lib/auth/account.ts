@@ -5,7 +5,7 @@ import { db } from '@/lib/db'
 import { adminUsers } from '@/lib/db/schema'
 import { EMAIL_MAX_LENGTH, looksLikeEmail, normalizeEmail } from './email'
 import { recordAuthEvent } from './events'
-import { assertTrustedOrigin, getRequestMeta, requireAdmin } from './guard'
+import { assertTrustedOrigin, requireAdmin } from './guard'
 import {
   MIN_PASSWORD_LENGTH,
   hashPassword,
@@ -14,6 +14,7 @@ import {
   verifyPassword,
 } from './password'
 import { checkLock, clearFailures, rateLimitKeys, registerFailure } from './ratelimit'
+import { getRequestMeta } from './request'
 import {
   clearSessionCookie,
   getSessionUserId,
@@ -218,6 +219,10 @@ export async function changePassword(input: {
   if (!user) return { ok: false, message: '계정을 찾을 수 없습니다.' }
 
   if (!(await verifyPassword(user.passwordHash, input.currentPassword))) {
+    // ⚠ kind 오버로딩: 이건 **이미 인증된 세션 안의** 재인증 실패지 미인증 로그인 실패가 아니다.
+    // `auth_events_kind_ck` 에 맞는 값이 없어 `login_fail` 을 빌려 쓴다.
+    // 침해 조사에서 `kind='login_fail'` 을 그대로 집계하면 두 부류가 섞이므로
+    // **`detail->>'reason' <> 'password_change_reauth'` 로 걸러야 한다** (06 §10).
     await recordAuthEvent({
       kind: 'login_fail',
       emailAttempted: session.email,
@@ -259,28 +264,102 @@ export async function changePassword(input: {
   return { ok: true }
 }
 
+export type AccountErrorCode = 'admin_not_found' | 'self_deactivate' | 'last_active_admin'
+
+/**
+ * 관리자 계정 조작 실패. 이미 인증된 콘솔 안에서만 발생하므로 계정 열거 우려가 없어
+ * 메시지를 그대로 보여줘도 된다. `code` 는 호출부가 분기용으로 쓴다.
+ */
+export class AccountError extends Error {
+  readonly code: AccountErrorCode
+
+  constructor(code: AccountErrorCode, message: string) {
+    super(message)
+    this.name = 'AccountError'
+    this.code = code
+  }
+}
+
+export function isAccountError(error: unknown): error is AccountError {
+  return error instanceof AccountError
+}
+
 /**
  * 관리자 활성/비활성 (H15).
  *
  * 비활성화는 revoke 를 돌리지만, 진짜 차단은 세션 판정 쿼리의 `u.is_active` 조건이 한다 —
  * revoke UPDATE 가 실패해도 다음 요청에서 거부된다.
  *
- * `auth_events.kind` CHECK 에 재활성화 값이 없어 비활성화만 기록한다.
+ * **잠금 방지 두 겹** — 비활성 관리자는 세션 판정에서 즉시 막히고, bootstrap CLI 없이는 되돌릴
+ * 방법이 콘솔 재진입뿐이라 한 번 0명이 되면 DB 직접 조작 말고는 복구 경로가 없다.
+ * 1. 자기 자신 비활성화 금지 — 마지막 한 명이 아니어도 막는다. 되돌릴 권한이 방금 사라진 상태가 되고,
+ *    관리자 목록에서 실수로 누르기 가장 쉬운 자리다.
+ * 2. 마지막 활성 관리자 비활성화 금지 — 트랜잭션 안에서 활성 관리자 행을 전부 잠그고 센다.
+ *
+ * ⚠ kind 오버로딩: `auth_events_kind_ck` 에 재활성화 값이 없어 **재활성화도 `admin_deactivated`**
+ * 로 남기고 `detail.action` 으로만 구분한다. 집계 시 `detail->>'action' = 'deactivated'` 를
+ * 반드시 걸어야 한다 (06 §10).
  */
 export async function setAdminActive(userId: string, isActive: boolean): Promise<void> {
   const actor = await requireAdmin()
   const { ip, userAgent } = await getRequestMeta()
 
-  const rows = await db
-    .update(adminUsers)
-    .set({ isActive, updatedAt: sql`now()` })
-    .where(eq(adminUsers.id, userId))
-    .returning({ email: adminUsers.email })
+  const target = await db.transaction(async (tx) => {
+    // 활성 관리자 전원을 id 순으로 잠근다.
+    // 카운트만 세면 마지막 두 명을 동시에 비활성화하는 두 트랜잭션이 **둘 다** 2를 보고 통과해 0명이 된다.
+    // READ COMMITTED 에서 `for update` 는 락을 얻은 뒤 조건을 재평가하므로, 먼저 커밋한 쪽이 반영된 수가 보인다.
+    // id 정렬은 락 획득 순서를 고정해 데드락을 막는다.
+    const activeAdmins = await tx
+      .select({ id: adminUsers.id })
+      .from(adminUsers)
+      .where(eq(adminUsers.isActive, true))
+      .orderBy(adminUsers.id)
+      .for('update')
 
-  const target = rows[0]
-  if (!target) throw new Error('대상 관리자를 찾을 수 없습니다')
+    const rows = await tx
+      .select({ email: adminUsers.email, isActive: adminUsers.isActive })
+      .from(adminUsers)
+      .where(eq(adminUsers.id, userId))
+      .limit(1)
 
-  if (isActive) return
+    const found = rows[0]
+    if (!found) throw new AccountError('admin_not_found', '대상 관리자를 찾을 수 없습니다.')
+
+    if (!isActive) {
+      if (userId === actor.userId) {
+        throw new AccountError('self_deactivate', '자기 계정은 비활성화할 수 없습니다.')
+      }
+      // 호출자의 세션이 살아 있으면 보통 활성 관리자가 2명 이상이지만,
+      // 다른 트랜잭션이 방금 호출자를 비활성화했다면 여기서 1명이 보인다. 그 경합이 이 검사의 존재 이유다.
+      if (found.isActive && activeAdmins.length <= 1) {
+        throw new AccountError('last_active_admin', '마지막 활성 관리자는 비활성화할 수 없습니다.')
+      }
+    }
+
+    // 이미 원하는 상태면 아무 것도 하지 않는다 — 같은 버튼을 두 번 눌러 감사 로그가 부풀지 않게.
+    if (found.isActive === isActive) return { email: found.email, changed: false }
+
+    await tx
+      .update(adminUsers)
+      .set({ isActive, updatedAt: sql`now()` })
+      .where(eq(adminUsers.id, userId))
+
+    return { email: found.email, changed: true }
+  })
+
+  if (!target.changed) return
+
+  if (isActive) {
+    await recordAuthEvent({
+      kind: 'admin_deactivated',
+      emailAttempted: target.email,
+      userId,
+      ip,
+      userAgent,
+      detail: { action: 'reactivated', actor_user_id: actor.userId },
+    })
+    return
+  }
 
   await revokeAllSessionsForUser(userId)
   await recordAuthEvent({
@@ -289,6 +368,6 @@ export async function setAdminActive(userId: string, isActive: boolean): Promise
     userId,
     ip,
     userAgent,
-    detail: { actor_user_id: actor.userId },
+    detail: { action: 'deactivated', actor_user_id: actor.userId },
   })
 }

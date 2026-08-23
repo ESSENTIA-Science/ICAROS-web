@@ -1,6 +1,17 @@
 import Highlight from '@/components/ui/Highlight'
 import Section, { type SectionTheme } from './Section'
+import { textLang } from './text-lang'
 import styles from './Statement.module.css'
+
+export type StatementContent = {
+  slogan: string | undefined
+  body: string | undefined
+}
+
+/** 빈 섹션 규칙: 내용이 하나도 없으면 섹션 자체를 그리지 않는다. page.tsx 의 번호 매기기도 이걸 본다. */
+export function hasStatementContent(c: StatementContent): boolean {
+  return Boolean(c.slogan || c.body)
+}
 
 /**
  * About / Vision — 구조가 같다(슬로건 1줄 + 본문 1덩어리). 정렬만 다르므로 한 컴포넌트로 둔다.
@@ -15,20 +26,20 @@ export default function Statement({
   variant,
   slogan,
   body,
-}: {
+}: StatementContent & {
   id: string
   label: string
   index: number
   theme?: SectionTheme
   variant: 'split' | 'center'
-  slogan: string | undefined
-  body: string | undefined
 }) {
+  if (!hasStatementContent({ slogan, body })) return null
+
   return (
     <Section id={id} label={label} index={index} theme={theme}>
       <div className={variant === 'center' ? styles.center : styles.split}>
         {slogan ? (
-          <p className={styles.slogan} lang="en">
+          <p className={styles.slogan} lang={textLang(slogan)}>
             <Highlight text={slogan} />
           </p>
         ) : null}

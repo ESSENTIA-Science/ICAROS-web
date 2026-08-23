@@ -1,5 +1,9 @@
 import type { RocketEngineDto } from '@/app/(public)/rocket/_data'
+import { textLang } from '@/components/landing/text-lang'
 import styles from './EngineTable.module.css'
+
+/** 스크롤 영역 이름을 표 캡션에서 빌려 온다 — 문구가 갈라지지 않게 id 하나로 묶는다. */
+const CAPTION_ID = 'engine-table-caption'
 
 /**
  * `mode` 는 현재 전 행이 비어 있다. 값이 하나도 없으면 열 자체를 빼서
@@ -13,9 +17,14 @@ export default function EngineTable({ engines }: { engines: readonly RocketEngin
   const hasMode = engines.some((e) => e.mode != null)
 
   return (
-    <div className={styles.scroll}>
+    // 표가 min-width 48rem 이라 375px 에서 가로로 잘린다. tabindex 로 스크롤 컨테이너 자체를
+    // 포커스 가능하게 만들지 않으면 키보드만 쓰는 사람이 잘린 열에 도달할 수 없다 (WCAG 2.1.1).
+    // role=region + 이름이 있어야 그 포커스 정지점이 무엇인지 스크린리더가 말해 준다.
+    <div className={styles.scroll} role="region" aria-labelledby={CAPTION_ID} tabIndex={0}>
       <table className={styles.table}>
-        <caption className="sr-only">엔진 구성</caption>
+        <caption id={CAPTION_ID} className="sr-only">
+          엔진 구성
+        </caption>
         <thead>
           <tr>
             <th scope="col">형식</th>
@@ -28,7 +37,8 @@ export default function EngineTable({ engines }: { engines: readonly RocketEngin
         <tbody>
           {engines.map((e) => (
             <tr key={e.id}>
-              <th scope="row" className={styles.type} lang="en">{e.type}</th>
+              {/* 엔진 형식은 CMS 자유 텍스트다 — 언어를 값에서 판별한다 */}
+              <th scope="row" className={styles.type} lang={textLang(e.type)}>{e.type}</th>
               <td className={styles.numCol}>
                 {e.thrustN ? <><span className="num">{e.thrustN}</span> N</> : <Dash />}
               </td>

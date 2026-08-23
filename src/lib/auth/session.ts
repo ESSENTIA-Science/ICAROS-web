@@ -2,10 +2,12 @@ import 'server-only'
 
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { cookies } from 'next/headers'
-import { and, eq, gt, gte, isNull, lt, sql } from 'drizzle-orm'
+import { and, eq, gt, gte, isNull, lt, lte, or, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { adminSessions, adminUsers } from '@/lib/db/schema'
 import { intervalSecs } from './_sql'
+import { recordAuthEvent } from './events'
+import { getRequestMeta, type RequestMeta } from './request'
 
 /**
  * `__Host-` 접두사: 서브도메인이 이 쿠키를 덮어쓸 수 없게 못박는다.
@@ -116,7 +118,8 @@ export async function startSession(input: CreateSessionInput): Promise<string> {
 export async function resolveSession(): Promise<AdminSession | null> {
   const raw = await readSessionCookie()
   if (!raw) return null
-  return resolveSessionByToken(raw)
+  // 메타데이터는 만료 이벤트에만 쓰이지만, 판정 실패 후에는 요청 컨텍스트를 다시 열 이유가 없으므로 미리 읽는다.
+  return resolveSessionByToken(raw, await getRequestMeta())
 }
 
 /**
@@ -128,7 +131,10 @@ export async function resolveSession(): Promise<AdminSession | null> {
  *
  * 쿠키 읽기와 분리해 둔 이유: 판정 로직이 HTTP 요청 컨텍스트 없이도 검증 가능해야 한다.
  */
-export async function resolveSessionByToken(raw: string): Promise<AdminSession | null> {
+export async function resolveSessionByToken(
+  raw: string,
+  meta: RequestMeta = { ip: null, userAgent: null }
+): Promise<AdminSession | null> {
   const tokenHash = sha256(raw)
 
   const rows = await db
@@ -155,7 +161,11 @@ export async function resolveSessionByToken(raw: string): Promise<AdminSession |
     .limit(1)
 
   const row = rows[0]
-  if (!row) return null
+  if (!row) {
+    // 어떤 조건에서 떨어졌는지는 이 쿼리로 알 수 없다. 만료·유휴인 경우에만 여기서 확정한다.
+    await expireSession(tokenHash, meta)
+    return null
+  }
 
   // 인덱스 조회만으로 이미 걸러졌지만, 애플리케이션 레벨 비교가 생긴 이상 상수 시간으로 한다 (H17).
   if (
@@ -172,6 +182,53 @@ export async function resolveSessionByToken(raw: string): Promise<AdminSession |
     userId: row.userId,
     email: row.email,
     displayName: row.displayName,
+  }
+}
+
+/**
+ * 만료·유휴로 판정에서 떨어진 세션을 그 자리에서 폐기하고 `session_expired` 를 남긴다 (06 §10).
+ *
+ * **요청마다 write 가 나가면 안 된다.** 그래서 폐기와 기록을 한 UPDATE 에 묶는다:
+ * `revoked_at is null` 이 조건에 있으므로 같은 쿠키로 몇 번을 더 와도 갱신되는 행이 0이고,
+ * 이벤트는 세션당 정확히 한 번만 기록된다. 존재하지 않는 토큰(= 무작위 대입)은 매칭 자체가 안 돼
+ * write 도 로그도 발생하지 않는다.
+ *
+ * `is_active=false` 나 비밀번호 변경으로 떨어진 세션은 만료 조건에 걸리지 않아 여기서 손대지 않는다 —
+ * 그 경로는 각자 `revoke` 와 `admin_deactivated`/`password_changed` 를 이미 남긴다.
+ */
+async function expireSession(tokenHash: Buffer, meta: RequestMeta): Promise<void> {
+  try {
+    const rows = await db
+      .update(adminSessions)
+      .set({ revokedAt: sql`now()` })
+      .where(
+        and(
+          eq(adminSessions.tokenHash, tokenHash),
+          isNull(adminSessions.revokedAt),
+          or(
+            lte(adminSessions.expiresAt, sql`now()`),
+            lte(adminSessions.lastSeenAt, sql`now() - ${intervalSecs(SESSION_IDLE_TTL_SEC)}`)
+          )
+        )
+      )
+      .returning({
+        userId: adminSessions.userId,
+        absolute: sql<boolean>`${adminSessions.expiresAt} <= now()`,
+      })
+
+    const expired = rows[0]
+    if (!expired) return
+
+    await recordAuthEvent({
+      kind: 'session_expired',
+      userId: expired.userId,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      detail: { reason: expired.absolute ? 'absolute' : 'idle' },
+    })
+  } catch {
+    // 기록 실패가 판정을 바꾸면 안 된다 — 세션은 어차피 거부된다. 에러 객체는 찍지 않는다 (06 §10).
+    console.error('[auth] 만료 세션 폐기 기록 실패')
   }
 }
 

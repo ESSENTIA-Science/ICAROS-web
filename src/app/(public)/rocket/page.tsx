@@ -1,27 +1,35 @@
 import type { Metadata } from 'next'
 import RocketCard from '@/components/rocket/RocketCard'
 import SeriesTabs from '@/components/rocket/SeriesTabs'
-import { parseSeries, seriesLabel } from '@/components/rocket/series'
+import { DEFAULT_SERIES, parseSeries, seriesLabel, type RocketSeries } from '@/components/rocket/series'
 import { countRocketsBySeries, listRocketsBySeries } from './_data'
 import styles from './page.module.css'
 
-export const metadata: Metadata = {
-  title: 'Rockets',
-  description: 'ICAROS가 설계·제작한 발사체 ICX 1/2 시리즈와 ICX MV 시리즈의 제원과 엔진 구성.',
-  alternates: { canonical: '/rocket' },
-}
+type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
-export default async function RocketIndexPage({
+/**
+ * 시리즈는 쿼리스트링에 있고 목록 내용이 통째로 달라진다 — 두 시리즈가 같은 title·canonical 을
+ * 들고 있으면 검색엔진이 한쪽을 중복으로 접는다. 기본 시리즈만 `/rocket` 을 canonical 로 쓴다.
+ */
+export async function generateMetadata({
   searchParams,
 }: {
-  // Next 16 에서 searchParams 는 Promise 다.
-  searchParams: Promise<Record<string, string | string[] | undefined>>
-}) {
+  searchParams: SearchParams
+}): Promise<Metadata> {
   const series = parseSeries((await searchParams).series)
-  const [rockets, counts] = await Promise.all([
-    listRocketsBySeries(series),
-    countRocketsBySeries(),
-  ])
+  const label = seriesLabel(series)
+  const canonical = series === DEFAULT_SERIES ? '/rocket' : `/rocket?series=${series}`
+
+  return {
+    title: `Rockets · ${label}`,
+    description: `ICAROS가 설계·제작한 ${label} 발사체의 제원과 엔진 구성.`,
+    alternates: { canonical },
+    openGraph: { title: `Rockets · ${label} · ICAROS`, url: canonical },
+  }
+}
+
+export default async function RocketIndexPage({ searchParams }: { searchParams: SearchParams }) {
+  const series = parseSeries((await searchParams).series)
 
   return (
     <section className={styles.page} data-theme="dark">
@@ -34,20 +42,40 @@ export default async function RocketIndexPage({
           </p>
         </header>
 
-        <SeriesTabs active={series} counts={counts} />
-
-        {rockets.length === 0 ? (
-          <p className={styles.empty}>
-            {seriesLabel(series)}에 공개된 기체가 아직 없습니다.
-          </p>
-        ) : (
-          <ul className={styles.grid}>
-            {rockets.map((r) => (
-              <RocketCard key={r.slug} rocket={r} />
-            ))}
-          </ul>
-        )}
+        {/* Suspense 경계를 두지 않는다.
+            경계가 실제로 지연되면 React 가 fallback 을 DOM 으로 먼저 내보내고 완료 스크립트($RC)로
+            교체하는데, 그러면 JS 없는 클라이언트·크롤러에게는 스켈레톤만 남는다.
+            실측에서 로컬 DB 인데도 8회 중 4회가 그랬다.
+            더 나쁜 건 SeriesTabs 가 경계 안에 있으면 **시리즈 B 로 가는 유일한 내비게이션**까지
+            사라진다는 것이다 — 방금 generateMetadata 로 시리즈별 canonical 을 나눠 놓은 것과 모순된다.
+            이 페이지는 force-dynamic 이고 로켓 4기짜리 쿼리 2개라 스트리밍으로 얻을 게 없다. */}
+        <RocketFleet series={series} />
       </div>
     </section>
+  )
+}
+
+async function RocketFleet({ series }: { series: RocketSeries }) {
+  const [rockets, counts] = await Promise.all([
+    listRocketsBySeries(series),
+    countRocketsBySeries(),
+  ])
+
+  return (
+    <>
+      <SeriesTabs active={series} counts={counts} />
+
+      {rockets.length === 0 ? (
+        <p className={styles.empty}>
+          {seriesLabel(series)}에 공개된 기체가 아직 없습니다.
+        </p>
+      ) : (
+        <ul className={styles.grid}>
+          {rockets.map((r) => (
+            <RocketCard key={r.slug} rocket={r} />
+          ))}
+        </ul>
+      )}
+    </>
   )
 }

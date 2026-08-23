@@ -50,6 +50,11 @@
   color: var(--fg);
 }
 
+/* 기체명은 CMS 자유 텍스트다. 한글이면 자간을 되돌린다 (globals 가드와 특이도 동률) */
+.name:lang(ko) {
+  letter-spacing: 0;
+}
+
 .meta {
   display: flex;
   align-items: baseline;

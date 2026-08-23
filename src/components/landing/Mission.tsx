@@ -1,6 +1,20 @@
 import Section, { type SectionTheme } from './Section'
 import styles from './Mission.module.css'
 
+export type MissionContent = {
+  body: string | undefined
+  listIntro: string | undefined
+  items: readonly string[]
+}
+
+/**
+ * 빈 섹션 규칙. listIntro 는 목록이 있을 때만 그려지므로 그것만으로는 내용으로 치지 않는다 —
+ * 도입문 한 줄과 텅 빈 <ul> 만 남기는 게 정확히 피하려는 상태다.
+ */
+export function hasMissionContent(c: MissionContent): boolean {
+  return Boolean(c.body) || c.items.length > 0
+}
+
 /**
  * Mission — 본문 + 리스트 도입문 + 활동 목록.
  * 레거시는 "주요 활동은 다음과 같습니다."를 JSX 에 하드코딩했었다 (요구사항 B5).
@@ -14,15 +28,14 @@ export default function Mission({
   body,
   listIntro,
   items,
-}: {
+}: MissionContent & {
   id: string
   label: string
   index: number
   theme?: SectionTheme
-  body: string | undefined
-  listIntro: string | undefined
-  items: readonly string[]
 }) {
+  if (!hasMissionContent({ body, listIntro, items })) return null
+
   return (
     <Section id={id} label={label} index={index} theme={theme}>
       <div className={styles.layout}>
@@ -32,8 +45,9 @@ export default function Mission({
           <div className={styles.listWrap}>
             {listIntro ? <p className={styles.listIntro}>{listIntro}</p> : null}
             <ul className={styles.list}>
-              {items.map((item) => (
-                <li key={item} className={styles.item}>
+              {/* 자유 텍스트라 같은 줄이 두 번 들어올 수 있다 — 본문을 key 로 쓰면 중복 key 가 난다 */}
+              {items.map((item, i) => (
+                <li key={`${i}-${item}`} className={styles.item}>
                   {item}
                 </li>
               ))}

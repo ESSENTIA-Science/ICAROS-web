@@ -11,6 +11,8 @@ export type StorageErrorCode =
   | 'object_missing' // 행은 있는데 S3 에 객체가 없다 (업로드 중단)
   | 'too_large'
   | 'wrong_type'
+  | 'range_not_satisfiable' // Range 헤더가 객체 크기 밖을 가리킨다
+  | 'rate_limited' // 관리자별 presign 쿼터 초과
   | 'in_use' // 아직 entity 가 참조 중이다
   | 'conflict' // 상태가 기대와 다르다
   | 'forbidden_key' // ICAROS 프리픽스 밖
@@ -23,6 +25,8 @@ const STATUS_BY_CODE: Readonly<Record<StorageErrorCode, number>> = {
   object_missing: 409,
   too_large: 413,
   wrong_type: 415,
+  range_not_satisfiable: 416,
+  rate_limited: 429,
   in_use: 409,
   conflict: 409,
   forbidden_key: 403,

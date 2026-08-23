@@ -204,6 +204,14 @@ async function requireAdmin() {
 
 **Route Handler를 쓰는 경우**(presigned URL 발급 등)에도 같은 게이트를 통과시킨다. Server Actions의 내장 보호는 Route Handler에 적용되지 않는다.
 
+`ALLOWED_ORIGINS` 의 실제 출처는 **`ADMIN_ALLOWED_ORIGINS` 환경변수 하나**다 (형식은 `.env.example`).
+
+- 설정돼 있으면 **그 목록만** 쓴다.
+- 미설정일 때만 `x-forwarded-host` + `x-forwarded-proto` 로 조립한 self-origin 으로 폴백하고, 서버 로그에 경고를 한 번 남긴다.
+- 값을 넣었는데 하나도 파싱되지 않으면 빈 집합 → 모든 mutation 거부(fail-closed).
+
+**두 출처를 합집합으로 쓰면 안 된다.** 그렇게 하면 이 층의 의미가 "Origin === 요청이 스스로 주장한 Host" 로 축소되고, `Origin: https://evil.com` + `x-forwarded-host: evil.com` 이 통과한다. 남는 안전은 코드가 아니라 "앞단 프록시가 그 헤더를 덮어쓴다"는 배포 토폴로지에 있게 된다.
+
 ---
 
 ## 6. Rate limit · 계정 열거 방지 (H13)
@@ -300,6 +308,41 @@ $ pnpm tsx scripts/bootstrap-admin.ts --email admin@icaros.kr
 | 비번 변경·비활성화 시각 | DB 연결 문자열 |
 
 애플리케이션 로그(stdout → Vercel)에도 동일 규칙을 적용한다. 에러 객체를 통째로 `console.error` 하는 코드가 자격증명을 흘리는 가장 흔한 경로다 — mutation 게이트에서 에러를 정규화한 뒤 로깅한다.
+
+### ⚠ `kind` 오버로딩 — 집계 전에 반드시 읽을 것
+
+`auth_events_kind_ck` 는 8개 값으로 고정돼 있고 스키마를 늘리려면 마이그레이션이 먼저다. 그래서 **두 종류의 이벤트가 의미가 다른 `kind` 를 빌려 쓰고 있다.** `kind` 만으로 집계하면 서로 다른 사건이 한 통계에 섞인다.
+
+| 실제 사건 | 기록되는 `kind` | 구분 조건 | 발행 위치 |
+|---|---|---|---|
+| 비밀번호 변경 시 **재인증 실패** (이미 인증된 세션 안) | `login_fail` | `detail->>'reason' = 'password_change_reauth'` | `src/lib/auth/account.ts` `changePassword()` |
+| 관리자 **재활성화** | `admin_deactivated` | `detail->>'action' = 'reactivated'` | `src/lib/auth/account.ts` `setAdminActive(true)` · `scripts/bootstrap-admin.ts --reactivate` |
+| 관리자 **비활성화** (본래 의미) | `admin_deactivated` | `detail->>'action' = 'deactivated'` | `src/lib/auth/account.ts` `setAdminActive(false)` |
+| CLI 비밀번호 **재설정** | `password_changed` | `detail->>'source' = 'scripts/bootstrap-admin.ts'` | `scripts/bootstrap-admin.ts --reset-password` |
+
+집계 시 규칙:
+
+```sql
+-- 미인증 로그인 실패만 (침해 조사·brute force 탐지)
+select count(*) from icaros.auth_events
+where kind = 'login_fail'
+  and coalesce(detail->>'reason', '') <> 'password_change_reauth';
+
+-- 권한 회수만 (재활성화 제외)
+select * from icaros.auth_events
+where kind = 'admin_deactivated'
+  and detail->>'action' = 'deactivated';
+```
+
+`detail.action` 이 없는 과거 행은 전부 비활성화다 — 재활성화 기록이 존재하지 않던 시기의 데이터다.
+
+`kind` 를 늘리는 마이그레이션(`password_reauth_fail` · `admin_reactivated`)을 넣게 되면 이 절과 두 발행 위치의 주석을 함께 지운다.
+
+### `session_expired` 발행 규칙
+
+만료·유휴로 세션 판정에서 떨어질 때 `src/lib/auth/session.ts` `expireSession()` 이 발행한다. **세션당 정확히 1회**다 — 폐기(`revoked_at = now()`)와 같은 UPDATE 에 묶여 있고 그 UPDATE 가 `revoked_at is null` 을 조건으로 두기 때문에, 만료된 쿠키를 든 브라우저가 계속 요청해도 두 번째부터는 갱신 행이 0이라 로그가 쌓이지 않는다. 존재하지 않는 토큰은 매칭되지 않으므로 무작위 대입으로 이 테이블을 부풀릴 수 없다.
+
+`detail.reason` 은 `absolute`(7일 절대 만료) 또는 `idle`(8시간 유휴). `is_active=false` · 비밀번호 변경으로 떨어진 세션은 여기 걸리지 않는다 — 각각 `admin_deactivated` · `password_changed` 가 이미 남는다.
 
 ---
 

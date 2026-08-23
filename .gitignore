@@ -8,5 +8,7 @@ next-env.d.ts
 # secrets
 .env
 .env.*
+# 템플릿은 예외 — 비밀값이 없고, 필수 변수의 형식을 알려주는 유일한 추적 파일이다
+!.env.example
 
 CLAUDE.md

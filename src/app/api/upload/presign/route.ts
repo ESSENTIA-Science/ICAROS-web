@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/auth/guard'
 import { PRESIGN_TTL_SECONDS } from '@/lib/image/policy'
 import type { PresignResponse } from '@/lib/image/contract'
 import { createUpload } from '@/lib/s3/media'
+import { consumePresignQuota } from '@/lib/s3/ratelimit'
 import { json, readJsonBody, toErrorResponse } from '@/lib/s3/http'
 import { parsePresignRequest } from '@/lib/s3/validate'
 
@@ -18,7 +19,9 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(req: Request): Promise<Response> {
   try {
-    await requireAdmin()
+    const session = await requireAdmin()
+    // 호출 1건이 곧 `media` 행 1개다. 인증만으로는 상한이 없어 관리자별 쿼터를 먼저 깎는다.
+    await consumePresignQuota(session.userId)
 
     const input = parsePresignRequest(await readJsonBody(req))
 

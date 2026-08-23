@@ -4,14 +4,30 @@ import 'server-only'
 
 export { getS3Config, isStorageConfigured, type S3Config } from './config'
 export { StorageError, type StorageErrorCode, describeError, redact } from './errors'
-export { buildObjectKey, assertKeyReadable, assertKeyWritable, folderOfKey } from './keys'
-export { presignGet, presignPut, type PresignGetOptions } from './presign'
-export { deleteObject, headObject, type ObjectHead } from './objects'
+export {
+  SNIFF_BYTES,
+  etagMatches,
+  isSameBucket,
+  isUuid,
+  quoteEtag,
+  sniffMime,
+  type SniffedMime,
+} from './predicates'
+export { buildObjectKey, assertBucketMatches, assertKeyReadable, assertKeyWritable, folderOfKey } from './keys'
+export { presignPut } from './presign'
+export {
+  deleteObject,
+  getObjectPrefix,
+  getObjectStream,
+  headObject,
+  type ObjectHead,
+  type ObjectStream,
+} from './objects'
+export { consumePresignQuota, presignQuotaKey } from './ratelimit'
 export {
   confirmUpload,
   createUpload,
   getServableMedia,
-  isUuid,
   type ConfirmResult,
   type CreateUploadInput,
   type CreateUploadResult,
@@ -20,8 +36,10 @@ export {
 export {
   deleteMedia,
   enqueueCleanup,
+  listAbandonedCleanupJobs,
   runCleanupJobs,
   sweepStalePendingUploads,
+  type AbandonedCleanupJob,
   type CleanupRunResult,
   type DeleteMediaResult,
   type SweepResult,

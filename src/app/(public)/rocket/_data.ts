@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { cache } from 'react'
 import { and, asc, eq } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
 import type { RocketSeries } from '@/components/rocket/series'
@@ -112,8 +113,13 @@ export async function countRocketsBySeries(): Promise<Record<RocketSeries, numbe
   return out
 }
 
-/** 비공개는 없는 것처럼 다룬다 — 상세는 notFound() 로 이어진다 (C8). */
-export async function getRocket(slug: string): Promise<RocketDetail | null> {
+/**
+ * 비공개는 없는 것처럼 다룬다 — 상세는 notFound() 로 이어진다 (C8).
+ *
+ * generateMetadata 와 본문이 각각 부르기 때문에 감싸지 않으면 렌더 1회에 4쿼리가 나간다.
+ * React.cache 는 요청 단위라 CMS 수정이 늦게 반영되는 일은 없다 (랜딩의 loadContent 와 동일 관례).
+ */
+export const getRocket = cache(async (slug: string): Promise<RocketDetail | null> => {
   const rows = await db
     .select({ ...listColumns, descriptionMd: schema.rockets.descriptionMd })
     .from(schema.rockets)
@@ -149,7 +155,7 @@ export async function getRocket(slug: string): Promise<RocketDetail | null> {
       mode: e.mode && e.mode.trim() !== '' ? e.mode : null,
     })),
   }
-}
+})
 
 /** generateStaticParams 용. 비공개는 프리렌더 목록에도 넣지 않는다. */
 export async function listPublishedRocketSlugs(): Promise<string[]> {

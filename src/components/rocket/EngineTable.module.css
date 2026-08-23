@@ -3,6 +3,10 @@
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
+/* 포커스 링이 스크롤 박스 안쪽에 그려져야 잘리지 않는다 */
+.scroll:focus-visible {
+  outline-offset: -2px;
+}
 
 .table {
   width: 100%;
@@ -36,6 +40,11 @@
   letter-spacing: var(--tr-mono);
   font-weight: var(--fw-medium);
   color: var(--fg);
+}
+/* globals 의 `:lang(ko)` 가드와 특이도가 동률이라 모듈이 이긴다 — 한글 값이면 되돌린다 */
+.type:lang(ko) {
+  font-family: var(--ff-body);
+  letter-spacing: 0;
 }
 
 .numCol {

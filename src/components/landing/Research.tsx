@@ -1,4 +1,5 @@
 import Section, { type SectionTheme } from './Section'
+import { textLang } from './text-lang'
 import styles from './Research.module.css'
 
 export type ResearchBlock = {
@@ -7,7 +8,14 @@ export type ResearchBlock = {
   body: string | undefined
 }
 
-/** Research Areas — 3블록. 제목은 영문(연구 분야명), 본문은 한국어. */
+const isFilled = (b: ResearchBlock): boolean => Boolean(b.title || b.body)
+
+/** 빈 섹션 규칙. 세 블록이 모두 비면 섹션을 그리지 않는다. */
+export function hasResearchContent(blocks: readonly ResearchBlock[]): boolean {
+  return blocks.some(isFilled)
+}
+
+/** Research Areas — 3블록. 제목은 연구 분야명(보통 영문), 본문은 한국어. */
 export default function Research({
   id,
   label,
@@ -21,7 +29,7 @@ export default function Research({
   theme?: SectionTheme
   blocks: readonly ResearchBlock[]
 }) {
-  const filled = blocks.filter((b) => b.title || b.body)
+  const filled = blocks.filter(isFilled)
   if (filled.length === 0) return null
 
   return (
@@ -33,7 +41,7 @@ export default function Research({
               {String(i + 1).padStart(2, '0')}
             </span>
             {block.title ? (
-              <h3 className={styles.title} lang="en">
+              <h3 className={styles.title} lang={textLang(block.title)}>
                 {block.title}
               </h3>
             ) : null}

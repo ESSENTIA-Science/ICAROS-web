@@ -5,6 +5,15 @@
   align-items: start;
 }
 
+/* 한쪽 열이 통째로 비면(CMS 에서 카피를 지운 경우) 남은 열이 6fr/5fr 에 갇히지 않게 한 열로 편다 */
+.layout[data-single] {
+  grid-template-columns: minmax(0, 1fr);
+}
+/* 혼자 남은 패널이 컨테이너 폭(150rem)까지 늘어나지 않도록 본문 측정폭에 맞춘다 */
+.layout[data-single] > .panel {
+  max-width: var(--measure);
+}
+
 .text {
   display: grid;
   align-content: start;

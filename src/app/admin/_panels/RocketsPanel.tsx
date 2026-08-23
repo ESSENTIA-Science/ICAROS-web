@@ -1,0 +1,209 @@
+import Link from 'next/link'
+import DeleteConfirm from '@/components/admin/DeleteConfirm'
+import Notice from '@/components/admin/Notice'
+import RocketForm from '@/components/admin/RocketForm'
+import { seriesLabel, type RocketSeries } from '@/components/rocket/series'
+import ui from '@/components/admin/ui.module.css'
+import { deleteRocketAction } from '../_actions/rockets'
+import {
+  getRocketForAdmin,
+  listRocketsForAdmin,
+  nextRocketSortOrder,
+  type AdminRocketListItem,
+} from '../_data/rockets'
+import { adminHref } from '../_tabs'
+
+const LIST_HREF = adminHref({ tab: 'rockets' })
+
+function narrowSeries(raw: string): RocketSeries {
+  return raw === 'B' ? 'B' : 'A'
+}
+
+/** 목록 한 줄에 붙는 요약. 값이 없는 항목은 아예 넣지 않는다 — `— m` 같은 빈 단위를 보여 주지 않는다. */
+function specSummary(r: AdminRocketListItem): string {
+  const parts: string[] = []
+  if (r.maxAltitudeM) parts.push(`고도 ${trim(r.maxAltitudeM)}m`)
+  if (r.sizeM) parts.push(`전장 ${trim(r.sizeM)}m`)
+  if (r.payloadKg) parts.push(`페이로드 ${trim(r.payloadKg)}kg`)
+  parts.push(`엔진 ${r.engineCount}`)
+  return parts.join(' · ')
+}
+
+function trim(v: string): string {
+  return v.includes('.') ? v.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '') : v
+}
+
+export default async function RocketsPanel({
+  create,
+  editId,
+  deleteId,
+  saved,
+}: {
+  create: boolean
+  editId: string | undefined
+  deleteId: string | undefined
+  saved: string | undefined
+}) {
+  if (create) {
+    const sortOrder = await nextRocketSortOrder('A')
+    return (
+      <>
+        <div className={ui.panelHead}>
+          <h2 className={ui.panelTitle}>새 로켓</h2>
+        </div>
+        <div className={ui.card}>
+          <RocketForm
+            mode="create"
+            cancelHref={LIST_HREF}
+            values={{
+              id: '',
+              name: '',
+              series: 'A',
+              sortOrder,
+              published: true,
+              descriptionMd: '',
+              maxAltitudeM: '',
+              sizeM: '',
+              payloadKg: '',
+              engines: [],
+            }}
+          />
+        </div>
+      </>
+    )
+  }
+
+  if (editId !== undefined) {
+    const rocket = await getRocketForAdmin(editId)
+    if (!rocket) {
+      return (
+        <>
+          <Notice tone="error">
+            해당 로켓을 찾을 수 없습니다. 다른 곳에서 이미 삭제되었을 수 있습니다.
+          </Notice>
+          <Link className={ui.btn} href={LIST_HREF}>
+            목록으로
+          </Link>
+        </>
+      )
+    }
+
+    return (
+      <>
+        <div className={ui.panelHead}>
+          <div>
+            <h2 className={ui.panelTitle}>{rocket.name}</h2>
+            <p className={ui.panelLede}>
+              <span className={ui.mono}>/rocket/{rocket.id}</span>
+            </p>
+          </div>
+        </div>
+        <div className={ui.card}>
+          <RocketForm
+            mode="edit"
+            cancelHref={LIST_HREF}
+            version={rocket.version}
+            values={{
+              id: rocket.id,
+              name: rocket.name,
+              series: rocket.series,
+              sortOrder: rocket.sortOrder,
+              published: rocket.published,
+              descriptionMd: rocket.descriptionMd,
+              maxAltitudeM: rocket.maxAltitudeM,
+              sizeM: rocket.sizeM,
+              payloadKg: rocket.payloadKg,
+              engines: rocket.engines.map((e) => ({
+                type: e.type,
+                thrustN: e.thrustN,
+                burnTimeS: e.burnTimeS,
+                count: e.count,
+                mode: e.mode,
+              })),
+            }}
+          />
+        </div>
+      </>
+    )
+  }
+
+  const rockets = await listRocketsForAdmin()
+  const target = deleteId !== undefined ? rockets.find((r) => r.id === deleteId) : undefined
+
+  return (
+    <>
+      <div className={ui.panelHead}>
+        <div>
+          <h2 className={ui.panelTitle} lang="en">
+            Rockets
+          </h2>
+          <p className={ui.panelLede}>
+            공개 목록은 시리즈별로 나뉘고 정렬순서를 따릅니다. 비공개 로켓은 목록과 직접 URL
+            양쪽에서 보이지 않습니다.
+          </p>
+        </div>
+        <Link className={`${ui.btn} ${ui.btnPrimary}`} href={adminHref({ tab: 'rockets', create: true })}>
+          새 로켓
+        </Link>
+      </div>
+
+      {saved === 'deleted' ? <Notice tone="ok">로켓을 삭제했습니다.</Notice> : null}
+      {saved !== undefined && saved !== 'deleted' ? (
+        <Notice tone="ok">저장했습니다. 공개 페이지에 반영되었습니다.</Notice>
+      ) : null}
+
+      {target ? (
+        <DeleteConfirm
+          action={deleteRocketAction}
+          id={target.id}
+          title={target.name}
+          description="등록된 엔진 정보도 함께 삭제됩니다."
+          cancelHref={LIST_HREF}
+        />
+      ) : null}
+
+      {deleteId !== undefined && !target ? (
+        <Notice tone="error">삭제하려는 로켓을 찾을 수 없습니다.</Notice>
+      ) : null}
+
+      <div className={ui.list}>
+        {rockets.length === 0 ? (
+          <p className={ui.empty}>등록된 로켓이 없습니다.</p>
+        ) : (
+          rockets.map((r) => (
+            <div className={ui.row} key={r.id}>
+              <div className={ui.rowMain}>
+                <p className={ui.rowName}>
+                  {r.name}
+                  <span className={`${ui.badge} ${ui.badgeSeries}`} lang="en">
+                    {seriesLabel(narrowSeries(r.series))}
+                  </span>
+                  {r.published ? null : (
+                    <span className={`${ui.badge} ${ui.badgeOff}`}>비공개</span>
+                  )}
+                </p>
+                <p className={ui.rowMeta}>
+                  <span className={ui.mono}>{r.id}</span> · 순서 {r.sortOrder} · {specSummary(r)}
+                </p>
+              </div>
+              <div className={ui.rowActions}>
+                <Link
+                  className={`${ui.btn} ${ui.btnSmall}`}
+                  href={adminHref({ tab: 'rockets', edit: r.id })}
+                >
+                  편집
+                </Link>
+                <Link
+                  className={`${ui.btn} ${ui.btnSmall}`}
+                  href={adminHref({ tab: 'rockets', remove: r.id })}
+                >
+                  삭제
+                </Link>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </>
+  )
+}

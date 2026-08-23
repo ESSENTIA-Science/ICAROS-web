@@ -38,6 +38,14 @@
   color: var(--fg-muted);
 }
 
+/* 태그라인은 CMS 값이다. 한글이 들어오면 모노 대문자 조판을 되돌린다 (globals 가드와 특이도 동률) */
+.tagline:lang(ko) {
+  font-family: var(--ff-body);
+  font-size: var(--fs-body);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .foot {
   display: flex;
   align-items: flex-end;

@@ -21,6 +21,11 @@
   text-wrap: balance;
 }
 
+/* globals.css 의 `:lang(ko)` 가드와 특이도가 동률이라 모듈이 이긴다 — 한글 슬로건이면 자간을 되돌린다 */
+.slogan:lang(ko) {
+  letter-spacing: 0;
+}
+
 .center .slogan {
   max-width: 22ch;
 }
