@@ -119,3 +119,33 @@ D1으로 서비스 토큰을 만들기로 이미 정했으므로 그 계정이 �
 `outsider` 역할 글이 `자유` 아닌 카테고리(= ICAROS 프로젝트)에 있는 조합은 **앱이 자연 발생시키지 않는다** — 비회원은 `자유`에만 쓸 수 있기 때문. 제약조건 위반은 아니고(`author_role`은 스냅샷이라 재검증되지 않음) 기능에도 영향이 없지만, 나중에 감사할 때 "이게 왜 여기 있지"가 될 수 있다. 원인은 이 결정이다.
 
 **D1 착수 시 같이 정할 것**: 프로젝트 카테고리 글쓰기는 회원 전용이라, `members` 행 없는 서비스 계정이 REST API로 쓸 수 있는지는 서비스 토큰 설계에 달려 있다. 레거시 18~19건 import는 D1 이전에 DB direct로 넣으므로 `user` 행만으로 충분하다.
+
+
+---
+
+## ⚠️ 운영 마이그레이션 시 반드시 알아야 할 것
+
+### `drizzle-kit migrate` 는 실패한 마이그레이션을 삼키고 **exit 0** 으로 끝난다
+
+로컬 셋업 중 실제로 겪었다. `0000` 이 통째로 적용되지 않았는데 exit code 는 0, stderr 도 비어 있었다.
+발견은 `pg_tables` 를 직접 세어 보고 나서였다.
+
+**원인**: `drizzle.config.ts` 의 `migrations: { schema: 'icaros' }` 때문에 drizzle-kit 이 원장 테이블을 만들려고
+**스키마를 먼저 생성**한다. 그다음 마이그레이션 본문의 `CREATE SCHEMA "icaros"` 가 충돌한다.
+`CREATE SCHEMA IF NOT EXISTS` 로 멱등화해 해결했다(`drizzle/0000_*.sql` 첫 줄).
+
+**운영 Neon 에 적용할 때의 규칙** — exit code 를 신뢰하지 마라. 적용 후 반드시 확인한다:
+
+```sql
+select count(*) from icaros.__drizzle_migrations;          -- 기대값과 대조
+select count(*) from pg_tables where schemaname = 'icaros'; -- 기대값과 대조
+select count(*) from pg_tables where schemaname = 'public'; -- ESSENTIA 테이블 수가 그대로인지
+```
+
+세 번째가 특히 중요하다. ESSENTIA 는 `spring.jpa.hibernate.ddl-auto: validate` 로 기동하므로
+`public` 이 한 칸이라도 어긋나면 **우리 배포가 상대 API 를 죽인다.**
+
+### 마이그레이션은 unpooled 로, `next build` 밖에서
+
+`DATABASE_URL_UNPOOLED` 를 쓴다. PgBouncer transaction 모드에서 DDL 은 예측 불가능하다.
+`drizzle-kit push` 는 **금지** — 라이브 DB 를 introspect 하므로 ESSENTIA 테이블이 시야에 들어온다.
