@@ -1,8 +1,9 @@
 .hero {
   /* 헤더가 sticky 라 그 높이만큼 뺀다. svh 를 쓰면 모바일 URL 바 개폐로 리플로우가 나지 않는다 */
   min-height: calc(100svh - var(--nav-h));
+  position: relative;
   display: grid;
-  /* 위 = 3D 타깃(남는 높이 전부), 아래 = 카피 + 발밑 눈금선 */
+  /* 카피가 아래 왼쪽(4분면)을 차지하고, 3D 는 그 위에 겹쳐 우상단을 쓴다. */
   grid-template-rows: 1fr auto auto;
   row-gap: var(--sp-9);
   padding-block: var(--sp-9) var(--sp-7);
@@ -10,9 +11,26 @@
   overflow: clip;
 }
 
+/**
+ * 3D 타깃을 **우상단 오버레이**로 둔다.
+ *
+ * 화면을 시계방향 4분면(1=좌상 2=우상 3=우하 4=좌하)으로 보면
+ * 로고·태그라인이 4분면을 쓰고, 로켓은 코가 315°(좌상향)를 향한 채
+ * 1·2·3 을 대각선으로 가로지른다.
+ *
+ * 문서 흐름에서 빼는 이유: 위쪽 띠로 두면 박스가 납작해져(실측 1360×239)
+ * 길쭉한 기체가 세로 구속에 걸려 머리카락처럼 보였다. 대각선은 가로·세로를 둘 다 써야 한다.
+ * `pointer-events: none` — 캔버스 자체도 그렇지만 타깃 박스가 카피를 덮으면 안 된다.
+ */
 .stageRow {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 64%;
+  height: 74%;
   display: flex;
   min-height: 0;
+  pointer-events: none;
 }
 
 /* 3D 가 오기 전에도 "측정된 영역"으로 읽히도록 네 모서리 십자만 남긴다.
@@ -21,6 +39,15 @@
   position: relative;
   flex: 1 1 auto;
   min-height: 14rem;
+}
+
+/* 좁은 화면에서는 겹치면 카피를 가린다. 문서 흐름으로 되돌려 위쪽 띠로 쓴다. */
+@media (max-width: 900px) {
+  .stageRow {
+    position: static;
+    width: auto;
+    height: auto;
+  }
 }
 
 .copy {

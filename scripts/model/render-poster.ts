@@ -17,7 +17,7 @@
  *     --width N --height N     출력 크기 (기본 900×1600)
  *     --ss N                   슈퍼샘플 배수 (기본 2)
  *     --yaw deg --pitch deg    카메라 궤도각 (기본 -28 / 8)
- *     --roll deg               화면 롤 (기본 90 — 길쭉한 기체를 가로로 눕힌다)
+ *     --roll deg               화면 롤 (기본 45 — 코가 좌상향, 화면 대각선)
  *     --fov deg                (기본 28)
  *     --fit N                  화면 채움 비율 0..1 (기본 0.86)
  *     --bg r,g,b[,a]           배경. 기본은 투명 (0,0,0,0)
@@ -66,7 +66,7 @@ function parseArgs(argv: readonly string[]): Args {
   let pitch = 8
   // src/components/three/config.ts 의 DEFAULT_STAGE.roll 과 **같은 수**여야 한다.
   // 어긋나면 폴백 2단(포스터)→1단(3D) 승격에서 그림이 튄다.
-  let roll = 90
+  let roll = 45
   let fov = 28
   let fit = 0.86
   let bg: [number, number, number, number] = [0, 0, 0, 0]
