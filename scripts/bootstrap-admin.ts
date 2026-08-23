@@ -20,6 +20,7 @@
  * 금지: 기본 비밀번호, 이메일·비밀번호 하드코딩, 초기 비밀번호 커밋, Production 관리자 자동 생성.
  */
 import { spawnSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { createInterface } from 'node:readline/promises'
@@ -106,8 +107,38 @@ const actions = recovery
 
 // ── 대상 DB 확인 ────────────────────────────────────────────────────────────
 
+/**
+ * `.env.local` 을 직접 읽는다.
+ *
+ * Next 는 자동으로 읽지만 이 스크립트는 tsx 로 맨몸 실행되므로 안 읽힌다.
+ * "`set -a && . .env.local` 후 다시 실행하라"고 안내만 하면 매번 걸린다 —
+ * 운영 복구 도구가 마찰을 만들면 정작 급할 때 못 쓴다.
+ *
+ * **이미 설정된 환경변수를 덮어쓰지 않는다.** 운영에서 셸이 준 값이 파일보다 우선이어야 한다.
+ */
+function loadEnvLocal(): void {
+  const path = '.env.local'
+  if (!existsSync(path)) return
+  for (const raw of readFileSync(path, 'utf8').split('\n')) {
+    const line = raw.trim()
+    if (line === '' || line.startsWith('#')) continue
+    const eq = line.indexOf('=')
+    if (eq <= 0) continue
+    const key = line.slice(0, eq).trim()
+    if (process.env[key] !== undefined) continue
+    let value = line.slice(eq + 1).trim()
+    // 따옴표로 감싼 값은 벗긴다. PEM 처럼 여러 줄인 값은 여기서 다루지 않는다.
+    if (value.length >= 2 && ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'")))) {
+      value = value.slice(1, -1)
+    }
+    process.env[key] = value
+  }
+}
+
+loadEnvLocal()
+
 const dbUrl = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL
-if (!dbUrl) fail('DATABASE_URL 이 설정되지 않았습니다. `set -a && . .env.local && set +a` 후 다시 실행하십시오.')
+if (!dbUrl) fail('DATABASE_URL 이 없습니다. .env.local 에 넣거나 환경변수로 주십시오.')
 
 console.log('')
 console.log('  대상 DB   ', redactDbUrl(dbUrl))
