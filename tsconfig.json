@@ -37,9 +37,6 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules",
-    "src/**/*.jsx",
-    "src/**/*.js",
-    "dist"
+    "node_modules"
   ]
 }

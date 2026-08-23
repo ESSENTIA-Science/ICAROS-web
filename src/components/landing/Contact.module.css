@@ -1,6 +1,6 @@
 .layout {
   display: grid;
-  gap: var(--sp-8);
+  gap: var(--sp-9);
 }
 
 .body {
@@ -11,28 +11,31 @@
   color: var(--fg-muted);
 }
 
-.grid {
+.rows {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--sp-4);
 }
 
-.card {
+.row {
   display: grid;
-  gap: var(--sp-4);
-  padding: var(--sp-6);
-  height: 100%;
-  border: 1px solid var(--rule);
+  grid-template-columns: 12em minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--sp-5);
+  padding: var(--sp-6) 0;
+  border-top: 1px solid var(--rule);
   transition: var(--t-color);
 }
-.card:hover {
-  border-color: var(--fg);
-  background: var(--glass);
+.rows > li:last-child .row {
+  border-bottom: 1px solid var(--rule);
+}
+.row:hover,
+.row:focus-visible {
+  color: var(--fg);
+  border-color: var(--rule-strong);
 }
 
 .label {
   font-family: var(--ff-mono);
-  font-size: var(--fs-mono-s);
+  font-size: var(--fs-mono);
   line-height: var(--lh-mono);
   letter-spacing: var(--tr-mono);
   text-transform: uppercase;
@@ -40,12 +43,43 @@
 }
 
 .value {
-  font-size: var(--fs-body-l);
+  font-family: var(--ff-display);
+  font-weight: var(--fw-display);
+  font-stretch: var(--display-wdth);
+  font-size: clamp(1.8rem, 2.6vw, 3.2rem);
+  line-height: 1.1;
+  letter-spacing: var(--tr-h4);
   overflow-wrap: anywhere;
 }
 
+.arrow {
+  align-self: center;
+  color: var(--fg-faint);
+  transition: var(--t-color), var(--t-move);
+}
+.arrowSvg {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+.row:hover .arrow,
+.row:focus-visible .arrow {
+  color: var(--fg);
+  transform: translate(0.3rem, -0.3rem);
+}
+
+/* 호버가 없는 기기에서는 이동 자체를 지운다 — 유령 호버를 남기지 않는다 */
+@media (hover: none) {
+  .arrow { transition: none; }
+}
+
 @media (max-width: 767px) {
-  .grid { grid-template-columns: minmax(0, 1fr); }
+  .layout { gap: var(--sp-7); }
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--sp-2) var(--sp-4);
+    padding: var(--sp-5) 0;
+  }
+  .label { grid-column: 1 / -1; }
   .body { font-size: var(--fs-body); }
-  .card { padding: var(--sp-5); }
 }

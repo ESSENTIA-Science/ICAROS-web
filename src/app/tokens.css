@@ -30,8 +30,12 @@ html {
 
   /* ---- Signal: Flare — 유일한 액센트 ---- */
   --sig: #ff7a00;                   /* 마크 전용. 밝은 배경 텍스트로 쓰면 2.46:1 로 실패 */
-  --sig-ink: #b04600;               /* 밝은 배경의 액센트 텍스트 — 5.31:1 */
+  --sig-ink: #b04600;               /* 밝은 배경의 액센트 텍스트 — n-25 위 5.31:1 */
+  --sig-deep: #632800;              /* graphite(중간톤) 위의 액센트 텍스트 — n-300 위 4.80:1 */
   --sig-soft: rgb(255 122 0 / 0.14);
+  /* 마크(1px 선·6~10px 사각형·진행률 채움)용 시그널. 테마별로 다시 매핑된다 —
+     --sig 는 중간톤(n-300) 위에서 1.09:1 로 사실상 보이지 않기 때문이다. */
+  --mark: var(--sig);
 
   /* ---- Status: 폼 전용. 장식으로 쓰지 않는다 ---- */
   --ok: #1f8a4c;
@@ -59,6 +63,10 @@ html {
   --fw-body: 400;
   --fw-medium: 500;
   --fw-strong: 600;
+
+  /* Archivo 의 wdth 축(62–125) 최대치 = Expanded. 교체 전 서체가 담당하던 폭을 여기서 되찾는다.
+     폭축이 없는 폴백(Pretendard)에는 아무 영향이 없다 — 브라우저는 폭을 합성하지 않는다. */
+  --display-wdth: 125%;
 
   --fs-display: clamp(5.6rem, 10.5vw, 14rem);
   --fs-h1: clamp(3.6rem, 6vw, 7.2rem);
@@ -127,6 +135,9 @@ html {
   --dur-5: calc(900ms * var(--motion));
   --delay-nudge: 80ms;
   --stagger: 60ms;
+  /* 단어 단위는 개수가 많아 60ms 로는 마지막 단어가 1초 뒤에 든다. 문장 하나가
+     0.4s 안에 다 켜지도록 별도 값을 둔다 (03 §Anti-patterns: 리빌이 콘텐츠를 늦추지 않는다) */
+  --stagger-word: 34ms;
 
   --ease-primary: cubic-bezier(0.62, 0.05, 0.01, 0.99);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
@@ -152,14 +163,73 @@ html {
   --z-loader: 9000;
 }
 
-/* ---- DARK 섹션 ---- */
+/* ============================================================
+   섹션 테마 — [data-section-theme] 5값
+   레퍼런스(03 §4)의 5단 구성을 우리 그래파이트 램프로 옮긴 것.
+   사용 비율은 밝은 쪽 ~80% / 어두운 쪽 ~20% 를 지킨다 — 어두운 섹션이 드물어야
+   "순간"으로 읽힌다. 컴포넌트를 복제하지 않고 여기서 색만 다시 매핑한다.
+
+   레거시 `[data-theme="dark|tint"]` 는 Header·Footer·다른 라우트가 이미 쓰고 있어
+   같은 선언 블록에 별칭으로 붙인다 — 이름만 바뀌고 동작은 그대로다.
+
+   대비는 전부 WCAG 2.1 상대휘도로 계산한 실측값이다.
+   ============================================================ */
+
+/* 1) white — 가장 밝은 면. 사진·카드가 놓이는 자리 */
+[data-section-theme="white"] {
+  --bg: var(--n-0);
+  --bg-raised: var(--n-25);
+  --bg-sunken: var(--n-50);
+  --fg: var(--n-800);               /* 17.06:1 */
+  --fg-muted: var(--n-500);         /*  6.55:1 */
+  --fg-faint: var(--n-400);         /*  3.99:1 — 마크·큰 글자 전용 */
+}
+
+/* 2) paper — 기본값(:root 와 동일). 명시적으로 선언해 두면 어느 위치에서도 되돌릴 수 있다 */
+[data-section-theme="paper"] {
+  --bg: var(--n-25);
+  --bg-raised: var(--n-0);
+  --bg-sunken: var(--n-50);
+  --fg: var(--n-800);               /* 15.92:1 */
+  --fg-muted: var(--n-500);         /*  6.26:1 */
+  --fg-faint: var(--n-400);         /*  3.75:1 */
+}
+
+/* 3) mist — 조용한 tint. 인접한 밝은 섹션과 경계를 만든다 */
+[data-section-theme="mist"],
+[data-theme="tint"] {
+  --bg: var(--n-100);
+  --bg-raised: var(--n-50);
+  --bg-sunken: var(--n-200);
+  --fg: var(--n-800);               /* 13.37:1 */
+  --fg-muted: var(--n-500);         /*  5.14:1 */
+  --fg-faint: var(--n-400);         /*  3.13:1 */
+}
+
+/* 4) graphite — 중간톤 앵커. 밝은 쪽과 어두운 쪽 사이의 유일한 중간값이라
+      본문 색을 통째로 한 단계씩 내려야 대비가 선다 */
+[data-section-theme="graphite"] {
+  --bg: var(--n-300);
+  --bg-raised: var(--n-200);
+  --bg-sunken: var(--n-400);
+  --fg: var(--n-800);               /* 7.12:1 */
+  --fg-muted: var(--n-700);         /* 5.83:1 — n-500 은 2.73:1 로 실패한다 */
+  --fg-faint: var(--n-600);         /* 4.36:1 */
+  --rule: rgb(14 17 20 / 0.2);
+  --rule-strong: rgb(14 17 20 / 0.36);
+  --sig-ink: var(--sig-deep);       /* --sig-ink(#b04600)는 여기서 2.35:1 로 실패한다 */
+  --mark: var(--sig-deep);          /* --sig 는 1.09:1 로 사라진다. 마크도 같이 내린다 */
+}
+
+/* 5) ink — 어두운 앵커. 히어로와 마지막 섹션에만 */
+[data-section-theme="ink"],
 [data-theme="dark"] {
   --bg: var(--n-900);
   --bg-raised: var(--n-800);
   --bg-sunken: var(--n-950);
-  --fg: var(--n-0);
-  --fg-muted: var(--n-300);
-  --fg-faint: var(--n-400);
+  --fg: var(--n-0);                 /* 18.94:1 */
+  --fg-muted: var(--n-300);         /*  7.90:1 */
+  --fg-faint: var(--n-400);         /*  4.75:1 */
   --rule: rgb(255 255 255 / 0.14);
   --rule-strong: rgb(255 255 255 / 0.28);
   --scrim: rgb(7 9 11 / 0.45);
@@ -168,18 +238,11 @@ html {
   color-scheme: dark;
 }
 
-/* ---- TINT 섹션 (조용한 제3 상태) ---- */
-[data-theme="tint"] {
-  --bg: var(--n-100);
-  --bg-raised: var(--n-50);
-  --bg-sunken: var(--n-200);
-}
-
 @media (max-width: 991px) { :root { --page-pad: var(--sp-5); } }
 @media (max-width: 479px) { :root { --page-pad: var(--sp-4); } }
 
 @media (prefers-reduced-motion: reduce) {
-  :root { --motion: 0; --stagger: 0ms; }
+  :root { --motion: 0; --stagger: 0ms; --stagger-word: 0ms; }
   *, *::before, *::after {
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;

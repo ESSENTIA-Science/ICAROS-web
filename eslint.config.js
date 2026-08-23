@@ -6,17 +6,9 @@ import typescript from 'eslint-config-next/typescript'
 
 const config = [
   {
-    // 레거시 Vite 트리는 Gate 6 삭제 전까지 검사 대상에서 제외한다.
-    ignores: [
-      '.next/**',
-      'dist/**',
-      'node_modules/**',
-      'src/**/*.jsx',
-      'src/**/*.js',
-      'src/assets/**',
-      'docs/**',
-      'next-env.d.ts',
-    ],
+    // 레거시 Vite 트리는 Gate 6 에서 삭제됐다. 남은 항목은 빌드 산출물과 생성 파일뿐이다.
+    // (`src/**/*.jsx`·`src/**/*.js`·`src/assets/**`·`dist/**` 는 대상이 사라져 제거)
+    ignores: ['.next/**', 'node_modules/**', 'docs/**', 'next-env.d.ts'],
   },
   ...(Array.isArray(coreWebVitals) ? coreWebVitals : [coreWebVitals]),
   ...(Array.isArray(typescript) ? typescript : [typescript]),

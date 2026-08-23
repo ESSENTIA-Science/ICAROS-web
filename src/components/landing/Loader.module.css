@@ -1,0 +1,68 @@
+.loader {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-loader);
+  /* data-section-theme="ink" 를 함께 달아 --bg / --rule 이 어두운 값으로 풀리게 한다.
+     팔레트 토큰을 직접 박으면 헤어라인(--rule)이 밝은 테마 값으로 남아 커버 위에서 안 보인다. */
+  background: var(--bg);
+  /* 커버가 남아 있는 동안에도 아래 콘텐츠를 막지 않는다 */
+  pointer-events: none;
+  /* 백스톱. JS 가 죽어도 커버는 반드시 걷힌다. delay 를 쓰지 않고 키프레임 안에 넣는 이유는
+     prefers-reduced-motion 이 duration 만 1ms 로 줄이기 때문이다 — delay 가 있으면 그만큼 남는다. */
+  animation: loader-clear 800ms linear forwards;
+}
+
+/* 문서 로드가 끝난 시점에 붙는다. 남은 시간을 기다리지 않고 바로 걷는다. */
+.loader[data-done] {
+  animation: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--dur-2) var(--ease-out), visibility var(--dur-2);
+}
+
+@keyframes loader-clear {
+  0%, 62% { opacity: 1; visibility: visible; }
+  100%    { opacity: 0; visibility: hidden; }
+}
+
+/* nav 와 같은 기하. Header.module.css 의 .inner 와 값이 일치해야 로고가 안 움직인다. */
+.row {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: var(--nav-h);
+  max-width: var(--container);
+  margin-inline: auto;
+  padding-inline: var(--page-pad);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+}
+
+.wordmark {
+  height: 2.4rem;
+  width: auto;
+  flex: none;
+}
+
+.line {
+  position: relative;
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--rule);
+  overflow: hidden;
+}
+
+/* 시그널 컬러의 유일한 "진행률 채움" 용례 */
+.fill {
+  position: absolute;
+  inset: 0;
+  background: var(--sig);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  animation: loader-fill 620ms var(--ease-primary) forwards;
+}
+
+@keyframes loader-fill {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}

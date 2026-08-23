@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 import MemberCard from '@/components/member/MemberCard'
+import InView from '@/components/rocket/InView'
+import RevealNoScript from '@/components/rocket/RevealNoScript'
 import { groupBySquad, listMembers } from './_data'
 import styles from './page.module.css'
 
@@ -25,7 +27,12 @@ export default async function MemberPage() {
   const squads = groupBySquad(await listMembers())
 
   return (
-    <section className={styles.page}>
+    // 여기에 loading.tsx 를 다시 만들지 말 것. 이 라우트는 force-dynamic 이라 로딩 경계가
+    // 생기면 Next 가 fallback 셸을 먼저 흘려보내고 본문은 문서 끝의 hidden 조각으로 붙는다.
+    // 실측: 그 상태에서 /member 의 HTML 은 스켈레톤이 3.8KB 지점, 본문은 hidden 안에 있었다 —
+    // JS 없는 클라이언트·크롤러에게는 명단이 통째로 사라진다.
+    <section className={styles.page} data-section-theme="paper">
+      <RevealNoScript />
       <div className="container">
         <header className={styles.head}>
           <p className="eyebrow" lang="en">Crew</p>
@@ -40,17 +47,22 @@ export default async function MemberPage() {
         ) : (
           squads.map((squad) => (
             <section key={squad.key} className={styles.squad}>
-              <h2 className={styles.squadTitle}>
-                {squad.squad ?? UNASSIGNED_SQUAD_LABEL}
+              <div className={styles.squadHead}>
+                <h2 className={styles.squadTitle}>{squad.squad ?? UNASSIGNED_SQUAD_LABEL}</h2>
+                {/* 인원 수는 바로 옆 목록으로도 셀 수 있다 — 보조기술에는 중복이라 숨긴다 */}
                 <span className={`${styles.squadCount} num`} aria-hidden="true">
                   {squad.members.length}
                 </span>
-              </h2>
-              <ul className={styles.grid}>
-                {squad.members.map((m) => (
-                  <MemberCard key={m.id} member={m} />
-                ))}
-              </ul>
+              </div>
+
+              {/* 리빌은 카드 격자에만. 부서 제목은 문서 구조라 항상 그려져 있어야 한다 */}
+              <InView>
+                <ul className={styles.grid}>
+                  {squad.members.map((m) => (
+                    <MemberCard key={m.id} member={m} />
+                  ))}
+                </ul>
+              </InView>
             </section>
           ))
         )}

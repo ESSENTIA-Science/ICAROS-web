@@ -1,7 +1,8 @@
-.card { display: grid; gap: var(--sp-4); align-content: start; }
+.card { display: grid; gap: var(--sp-3); align-content: start; }
 
 .figure {
   position: relative;
+  /* 실제 프로필 사진 4장이 전부 3:4 세로다. 프레임을 그 비율로 두면 얼굴이 잘리지 않는다 */
   aspect-ratio: 3 / 4;
   background: var(--bg-sunken);
   border: 1px solid var(--rule);
@@ -10,12 +11,32 @@
 
 .img { object-fit: cover; }
 
+/**
+ * 사진이 없는 23명. 플레이스홀더를 지우지 않고(E6) 밀도만 낮춘다 —
+ * 같은 회색 아바타 23장이 같은 세기로 늘어서면 명단이 아니라 결번표로 읽힌다.
+ * 불투명도만 건드리고 색은 넣지 않는다. 남는 건 정직한 여백이다.
+ */
+/**
+ * 플레이스홀더는 프레임을 채우지 않고 가운데의 작은 마크로 줄인다.
+ * 1280 실측에서 cover 로 꽉 채웠더니 같은 아바타 23장이 페이지를 지배해 명단이 아니라
+ * 결번표로 읽혔다. 불투명도만 낮추는 것으로는 크기가 그대로라 소용이 없었다.
+ *
+ * `multiply` 는 원본의 흰 배경(#f7f7f7, 알파 없음)을 프레임 색에 녹인다 —
+ * contain 으로 줄이기만 하면 프레임 한가운데에 밝은 사각형이 하나 더 생긴다.
+ */
+.figure[data-empty] .img {
+  object-fit: contain;
+  padding: 30%;
+  mix-blend-mode: multiply;
+  opacity: 0.6;
+}
+
 .body { display: grid; gap: var(--sp-1); }
 
 .name {
-  font-size: var(--fs-body-l);
+  font-size: var(--fs-body);
   font-weight: var(--fw-medium);
-  line-height: 1.3;
+  line-height: 1.35;
   color: var(--fg);
 }
 

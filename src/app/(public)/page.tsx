@@ -32,15 +32,24 @@ const loadSections = cache(async () =>
 )
 
 /**
- * 섹션 테마. page_sections 에는 테마 컬럼이 없고 스키마는 건드리지 않으므로 id 로 고정한다.
- * 레퍼런스 비율(밝은 쪽 ~80% / 어두운 쪽 ~20%)에 맞춰 어두운 섹션은 양 끝 둘뿐이고,
- * contact 는 이미 dark 인 Footer 로 그대로 이어진다.
+ * 섹션 테마 배분. page_sections 에는 테마 컬럼이 없고 스키마는 건드리지 않으므로 id 로 고정한다.
+ *
+ * 5값을 전부 쓰되 비율을 지킨다 (03 §4: 밝은 쪽 ~80% / 어두운 쪽 ~20%) —
+ * ink 는 양 끝 둘뿐이고, contact 는 이미 dark 인 Footer 로 그대로 이어진다.
+ * graphite(중간톤)는 모금액이 주인공인 donate 하나에만 준다. 중간톤이 두 번 나오면
+ * "앵커"가 아니라 "또 하나의 배경"이 된다.
+ *
+ * hero 는 Section 껍데기를 쓰지 않아 자기 안에서 ink 를 직접 선언한다 — 여기 목록은
+ * 배분을 한눈에 보기 위한 것이므로 hero 도 같이 적어 둔다.
  */
 const SECTION_THEME: Readonly<Record<string, SectionTheme>> = {
-  hero: 'dark',
-  vision: 'tint',
-  mission: 'tint',
-  contact: 'dark',
+  hero: 'ink',
+  about: 'paper',
+  vision: 'white',
+  research: 'mist',
+  mission: 'paper',
+  donate: 'graphite',
+  contact: 'ink',
 }
 
 /** about.body 앞부분을 메타 description 으로. 카피를 따로 쓰지 않고 CMS 값을 그대로 쓴다 (A10). */
@@ -109,7 +118,14 @@ function buildSection(row: SectionRow, c: SiteContent, ctx: BuildContext): Secti
       if (!hasStatementContent(content)) return null
       return function renderAbout(index) {
         return (
-          <Statement key={row.id} {...shell} index={index} variant="split" {...content} />
+          <Statement
+            key={row.id}
+            {...shell}
+            index={index}
+            variant="split"
+            emphasis="words"
+            {...content}
+          />
         )
       }
     }
@@ -210,11 +226,14 @@ export default async function HomePage() {
 
   return (
     <>
-      {/* 리빌은 JS 가 살아 있을 때만 의미가 있다. 스크립트가 없으면 숨김 상태로 갇히지 않게 푼다. */}
+      {/* 리빌은 JS 가 살아 있을 때만 의미가 있다. 스크립트가 없으면 숨김 상태로 갇히지 않게 푼다.
+          세 종류(덩어리·순차 자식·단어)를 전부 풀어야 한다 — 하나라도 빠지면 그 자리만 안 보인다.
+          CSS Modules 의 해시 클래스명은 여기서 지목할 수 없어 리빌 상태를 전부 데이터 속성으로 둔다. */}
       <noscript>
         <style
           dangerouslySetInnerHTML={{
-            __html: '[data-reveal]{opacity:1!important;transform:none!important}',
+            __html:
+              '[data-reveal],[data-reveal-item],[data-word]{opacity:1!important;transform:none!important}',
           }}
         />
       </noscript>

@@ -1,12 +1,13 @@
 .page {
-  padding-block: var(--section-pad-xl) var(--section-pad-xxl);
+  padding-block: var(--section-pad-xl) var(--section-pad-xl);
   min-height: 70vh;
 }
 
 .head {
   display: grid;
   gap: var(--sp-4);
-  margin-bottom: var(--sp-9);
+  margin-bottom: var(--sp-8);
+  max-width: 96rem;
 }
 
 .lede {
@@ -15,20 +16,41 @@
   font-size: var(--fs-body-l);
 }
 
+/**
+ * Vast 의 updates 격자를 그대로 옮긴 비율 — 열 간격 1.6rem 대 행 간격 9.6rem (6:1).
+ * 한 행의 두 카드는 거의 붙어 하나의 가로 띠로 읽히고, 행끼리는 완전히 다른 사건으로 읽힌다.
+ * 기체가 시리즈당 둘뿐이라 auto-fill 로 두면 1920 에서 네 칸 중 두 칸만 차고 격자가 성기다.
+ * 그래서 열 수를 고정한다.
+ */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
-  gap: var(--grid-gap-y) var(--grid-gap-x);
-  margin-top: var(--sp-8);
-  max-width: 112rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--grid-gap-x);
+  row-gap: var(--grid-gap-y);
+  margin-top: var(--sp-9);
 }
+
+/* 순차 리빌 지연 계수. 카드 수가 늘어도 마지막 카드가 한없이 늦게 들지 않도록 상한을 둔다 */
+.grid > :nth-child(2) { --i: 1; }
+.grid > :nth-child(3) { --i: 2; }
+.grid > :nth-child(4) { --i: 3; }
+.grid > :nth-child(n + 5) { --i: 4; }
 
 .empty {
   margin-top: var(--sp-9);
   color: var(--fg-muted);
 }
 
+@media (max-width: 899px) {
+  /* 카드 자체가 가로 분할이라 한 열로 떨어져도 높이가 폭발하지 않는다 */
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--sp-9);
+  }
+}
+
 @media (max-width: 599px) {
   .page { padding-block: var(--section-pad) var(--section-pad-l); }
-  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-7) var(--sp-4); }
+  .head { margin-bottom: var(--sp-7); }
+  .grid { margin-top: var(--sp-7); row-gap: var(--sp-8); }
 }

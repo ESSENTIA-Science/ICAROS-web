@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { body, display, mono } from '@/lib/fonts'
 import { getSeo, getSiteContentSafe } from '@/lib/content'
+import Loader from '@/components/landing/Loader'
 import './globals.css'
 
 /**
@@ -41,7 +42,15 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko" className={`${body.variable} ${display.variable} ${mono.variable}`}>
-      <body>{children}</body>
+      <body>
+        {/*
+          루트에 두는 이유: 여기서만 "문서당 한 번"이 보장된다. 페이지나 (public) 레이아웃에
+          두면 클라이언트 내비게이션마다 다시 마운트돼 커버가 재생된다.
+          커버는 pointer-events: none 이고 CSS 백스톱으로 스크립트 없이도 걷힌다.
+        */}
+        <Loader />
+        {children}
+      </body>
     </html>
   )
 }

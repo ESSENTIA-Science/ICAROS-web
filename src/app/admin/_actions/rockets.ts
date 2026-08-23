@@ -37,12 +37,14 @@ import {
   zodSummary,
 } from '../_lib/form'
 import {
+  GALLERY_FIELD,
   MediaRejected,
   checkMediaAttachable,
   deleteGalleryOrder,
   listAttachedMediaIds,
   mediaIdField,
   parseGalleryIds,
+  rejectedFields,
   retireMedia,
   saveGalleryOrder,
   stampMediaEntity,
@@ -146,8 +148,11 @@ function parseRocketForm(form: FormData): ParseOutcome {
   }
 
   // 갤러리는 hidden 이 순서대로 반복 제출된다. 그 순서가 곧 공개 화면의 표시 순서다 (C7).
-  const gallery = parseGalleryIds(readList(form, 'galleryMediaIds'))
-  if (!gallery.ok) return { ok: false, result: fail(gallery.message) }
+  const gallery = parseGalleryIds(readList(form, GALLERY_FIELD))
+  // 갤러리 문제는 갤러리 입력 옆에 띄운다. 대표 이미지 필드에 붙이면 엉뚱한 곳을 고치게 된다.
+  if (!gallery.ok) {
+    return { ok: false, result: fail(gallery.message, { [GALLERY_FIELD]: gallery.message }) }
+  }
 
   return { ok: true, rocket: parsed.data, engines, galleryIds: gallery.ids }
 }
@@ -195,7 +200,10 @@ function revalidateRockets(): void {
 function describeWriteError(err: unknown): ActionResult {
   if (err instanceof VersionConflict) return CONFLICT
   // 미디어 부착 거부는 사용자가 고칠 수 있는 상황이라 문구를 그대로 보여 준다.
-  if (err instanceof MediaRejected) return fail(err.message, { coverMediaId: err.message })
+  // 원인이 대표 이미지인지 갤러리인지는 MediaRejected 가 들고 온다 — 아무 데나 붙이지 않는다.
+  if (err instanceof MediaRejected) {
+    return fail(err.message, Object.fromEntries(err.fields.map((f) => [f, err.message])))
+  }
   if (err instanceof RowGone) {
     return fail(
       '이 로켓은 다른 곳에서 이미 삭제되었습니다. 저장할 대상이 없습니다 — 목록으로 돌아간 뒤 필요하면 다시 등록해 주세요.'
@@ -234,13 +242,19 @@ export async function createRocketAction(
 
   const id = parsed.rocket.id
   const attach = attachedIds(parsed)
+  const cover = emptyToNull(parsed.rocket.coverMediaId)
 
   try {
     await db.transaction(async (tx) => {
       // 부착 검증이 먼저다. 행을 만든 뒤에 거부하면 롤백으로 되돌아가긴 하지만,
       // 그 사이에 UNIQUE 위반 같은 다른 오류가 겹치면 원인이 둘로 보인다.
       const attachable = await checkMediaAttachable(tx, attach, 'rocket', id)
-      if (!attachable.ok) throw new MediaRejected(attachable.message)
+      if (!attachable.ok) {
+        throw new MediaRejected(
+          attachable.message,
+          rejectedFields(attachable.ids, cover, parsed.galleryIds, 'coverMediaId')
+        )
+      }
 
       await tx.insert(schema.rockets).values({ id, ...toRocketValues(parsed.rocket) })
       const engines = toEngineValues(id, parsed.engines)
@@ -275,6 +289,7 @@ export async function updateRocketAction(
 
   const id = parsed.rocket.id
   const attach = attachedIds(parsed)
+  const cover = emptyToNull(parsed.rocket.coverMediaId)
   /** 이번 저장으로 떨어져 나간 미디어. 커밋된 뒤에만 정리한다. */
   let dropped: string[] = []
 
@@ -296,7 +311,12 @@ export async function updateRocketAction(
       if (!previous) throw new RowGone()
 
       const attachable = await checkMediaAttachable(tx, attach, 'rocket', id)
-      if (!attachable.ok) throw new MediaRejected(attachable.message)
+      if (!attachable.ok) {
+        throw new MediaRejected(
+          attachable.message,
+          rejectedFields(attachable.ids, cover, parsed.galleryIds, 'coverMediaId')
+        )
+      }
 
       const previousIds = await listAttachedMediaIds(tx, 'rocket', id)
 

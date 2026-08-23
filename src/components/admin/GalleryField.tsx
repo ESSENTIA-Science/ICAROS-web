@@ -29,6 +29,7 @@ export default function GalleryField({
   initial,
   storageReady,
   max,
+  error,
 }: {
   name: string
   label: string
@@ -39,6 +40,8 @@ export default function GalleryField({
   initial: readonly MediaPreview[]
   storageReady: boolean
   max: number
+  /** 서버가 이 입력을 원인으로 지목한 오류. 대표 이미지 필드에 붙던 것을 여기로 되돌렸다. */
+  error?: string
 }) {
   const fieldId = useId()
   const [items, setItems] = useState<MediaPreview[]>([...initial])
@@ -207,6 +210,8 @@ export default function GalleryField({
           {failure}
         </p>
       ) : null}
+
+      {error ? <p className={ui.error}>{error}</p> : null}
 
       <noscript>
         <p className={ui.hint}>

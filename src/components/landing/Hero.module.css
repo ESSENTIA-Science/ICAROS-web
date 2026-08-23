@@ -1,20 +1,32 @@
 .hero {
   /* 헤더가 sticky 라 그 높이만큼 뺀다. svh 를 쓰면 모바일 URL 바 개폐로 리플로우가 나지 않는다 */
   min-height: calc(100svh - var(--nav-h));
-  display: flex;
-  flex-direction: column;
-  /* Vast 히어로와 동일하게 콘텐츠를 하단에 붙인다 */
-  justify-content: flex-end;
-  gap: var(--sp-9);
-  padding-block: var(--sp-11) var(--sp-7);
+  display: grid;
+  /* 위 = 3D 타깃(남는 높이 전부), 아래 = 카피 + 발밑 눈금선 */
+  grid-template-rows: 1fr auto auto;
+  row-gap: var(--sp-9);
+  padding-block: var(--sp-9) var(--sp-7);
   scroll-margin-top: var(--nav-h);
   overflow: clip;
 }
 
-.inner {
+.stageRow {
+  display: flex;
+  min-height: 0;
+}
+
+/* 3D 가 오기 전에도 "측정된 영역"으로 읽히도록 네 모서리 십자만 남긴다.
+   면도 테두리도 두지 않는다 — 빈 상자를 그리면 콘텐츠가 없다는 사실이 더 크게 보인다. */
+.stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 14rem;
+}
+
+.copy {
   display: grid;
   justify-items: start;
-  gap: var(--sp-6);
+  gap: var(--sp-7);
 }
 
 .brand {
@@ -23,38 +35,57 @@
 }
 
 .logo {
-  width: min(64rem, 78vw);
+  width: min(38rem, 62vw);
   height: auto;
 }
 
+/* 랜딩에서 가장 큰 활자. 디스플레이 서체 + Expanded 폭 + 단일 웨이트 */
 .tagline {
-  max-width: 62rem;
-  font-family: var(--ff-mono);
-  font-size: var(--fs-body-s);
-  font-weight: 400;
-  line-height: 1.7;
-  letter-spacing: var(--tr-mono);
-  text-transform: uppercase;
-  color: var(--fg-muted);
+  max-width: 108rem;
+  font-family: var(--ff-display);
+  font-weight: var(--fw-display);
+  font-stretch: var(--display-wdth);
+  font-size: clamp(2.6rem, 4.4vw, 6rem);
+  line-height: 0.98;
+  letter-spacing: var(--tr-h2);
+  text-wrap: balance;
 }
 
-/* 태그라인은 CMS 값이다. 한글이 들어오면 모노 대문자 조판을 되돌린다 (globals 가드와 특이도 동률) */
+/* 태그라인은 CMS 값이다. 한글이 들어오면 라틴용 음수 자간을 되돌린다
+   (globals 의 `:lang(ko)` 가드와 특이도 동률이라 모듈이 이긴다) */
 .tagline:lang(ko) {
-  font-family: var(--ff-body);
-  font-size: var(--fs-body);
   letter-spacing: 0;
-  text-transform: none;
+  line-height: 1.15;
 }
 
 .foot {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-5);
+}
+
+/* 발밑 제도 치수선 — 섹션 헤더의 괘선과 같은 문법 */
+.footRule {
+  flex: 1 1 auto;
+  position: relative;
+  height: 1px;
+  color: var(--rule-strong);
+  background: currentColor;
+}
+.footRule::after {
+  content: '';
+  position: absolute;
+  top: -1.15rem;
+  right: 1.2rem;
+  width: 1px;
+  height: 2.4rem;
+  background: currentColor;
 }
 
 .scroll {
-  display: inline-grid;
-  justify-items: start;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
   gap: var(--sp-3);
   color: var(--fg-faint);
   transition: var(--t-color);
@@ -89,9 +120,11 @@
 
 @media (max-width: 767px) {
   .hero {
-    gap: var(--sp-7);
-    padding-block: var(--sp-9) var(--sp-6);
+    row-gap: var(--sp-7);
+    padding-block: var(--sp-7) var(--sp-6);
   }
-  .logo { width: min(38rem, 82vw); }
-  .tagline { font-size: var(--fs-mono); line-height: 1.8; }
+  .stage { min-height: 10rem; }
+  .copy { gap: var(--sp-5); }
+  .logo { width: min(30rem, 74vw); }
+  .tagline { line-height: 1.02; }
 }

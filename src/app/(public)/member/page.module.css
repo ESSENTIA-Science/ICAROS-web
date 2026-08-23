@@ -15,39 +15,89 @@
   font-size: var(--fs-body-l);
 }
 
-.squad + .squad { margin-top: var(--sp-10); }
+/**
+ * 부서를 좌우로 나눈다 — 왼쪽에 부서명, 오른쪽에 그 부서 사람들.
+ *
+ * 왜: 부서 인원이 1·10·6·1·1·8 로 극단적으로 다르다. 제목을 격자 위에 가로로 얹으면
+ * 1명짜리 부서가 제목 한 줄 + 카드 한 장으로 끝나 "빠뜨린 것처럼" 보인다.
+ * 제목을 옆 기둥으로 빼면 인원 수와 무관하게 왼쪽이 일정한 조직도 열로 읽히고,
+ * 오른쪽 격자는 몇 장이든 자기 리듬대로 흐른다.
+ */
+.squad {
+  display: grid;
+  grid-template-columns: minmax(0, 18rem) minmax(0, 1fr);
+  gap: var(--sp-8);
+  padding-top: var(--sp-8);
+  border-top: 1px solid var(--rule-strong);
+}
+.squad + .squad { margin-top: var(--sp-9); }
+
+.squadHead {
+  /* 긴 부서(10명)를 스크롤하는 동안 어느 부서를 보고 있는지 왼쪽에 남는다 */
+  position: sticky;
+  top: calc(var(--nav-h) + var(--sp-5));
+  align-self: start;
+  display: grid;
+  gap: var(--sp-3);
+  justify-items: start;
+}
 
 .squadTitle {
-  display: flex;
-  align-items: baseline;
-  gap: var(--sp-3);
   font-family: var(--ff-body);
-  font-size: var(--fs-h5);
-  font-weight: var(--fw-strong);
-  line-height: 1.3;
+  font-size: var(--fs-h4);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-h4);
+  letter-spacing: 0;
   color: var(--fg);
-  padding-bottom: var(--sp-4);
-  margin-bottom: var(--sp-7);
-  border-bottom: 1px solid var(--rule-strong);
 }
 
 .squadCount {
   font-family: var(--ff-mono);
-  font-size: var(--fs-mono-s);
+  font-size: var(--fs-mono);
   letter-spacing: var(--tr-mono);
-  color: var(--sig-ink);
+  color: var(--fg-muted);
+  /* 숫자 위의 1px 마크 — 시그널 컬러의 허용 용법 */
+  border-top: 1px solid var(--sig);
+  padding-top: var(--sp-2);
+  min-width: 3ch;
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
-  gap: var(--sp-8) var(--grid-gap-x);
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  column-gap: var(--grid-gap-x);
+  row-gap: var(--sp-8);
 }
 
+/* 순차 리빌 지연 계수. 한 부서 최대 10명이라 5까지만 세고 나머지는 함께 든다 */
+.grid > :nth-child(2) { --i: 1; }
+.grid > :nth-child(3) { --i: 2; }
+.grid > :nth-child(4) { --i: 3; }
+.grid > :nth-child(5) { --i: 4; }
+.grid > :nth-child(n + 6) { --i: 5; }
+
 .empty { color: var(--fg-muted); }
+
+@media (max-width: 999px) {
+  /* 왼쪽 기둥을 유지하기엔 오른쪽 격자가 두 열까지 줄어든다 — 제목을 위로 되돌린다 */
+  .squad {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-6);
+    padding-top: var(--sp-7);
+  }
+  .squadHead {
+    position: static;
+    grid-auto-flow: column;
+    justify-content: start;
+    align-items: baseline;
+    gap: var(--sp-4);
+  }
+  .squadCount { border-top: 0; border-left: 1px solid var(--sig); padding-top: 0; padding-left: var(--sp-3); }
+}
 
 @media (max-width: 599px) {
   .page { padding-block: var(--section-pad) var(--section-pad-l); }
   .head { margin-bottom: var(--sp-8); }
-  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-7) var(--sp-4); }
+  .squad + .squad { margin-top: var(--sp-8); }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--sp-7); }
 }

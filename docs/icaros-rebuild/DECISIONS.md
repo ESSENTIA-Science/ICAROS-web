@@ -338,3 +338,58 @@ D2(별도 `icaros` 스키마)도 그대로 유효하며, `ddl-auto: validate` �
 #### 상태
 **미승인.** `essentia_infra` 는 이 결정을 승인된 것으로 취급하지 않고 네트워크·role·파라미터 어느 것도 건드리지 않았다.
 ④·⑤는 사용자가 결정 시점에 알고 있어야 할 내용이라 별도로 올렸다.
+
+
+---
+
+## D20 — DB 접근은 **B안 확정**: RDS 퍼블릭 + IAM 데이터베이스 인증
+
+사용자 결정(2026-08-24). 선택지가 셋으로 좁혀진 뒤의 재확인이다 —
+`essentia_infra` 가 **Cloudflare Tunnel(C)이 이 용도에 성립하지 않음**을 정정했다:
+raw TCP(Postgres)를 터널로 쓰려면 클라이언트에서 `cloudflared access tcp` 프록시를 띄워야 하는데
+**Vercel 함수 안에서는 바이너리를 실행할 수 없다.** HTTP 는 되지만 Postgres 프로토콜은 안 된다
+(TCP 를 공개 호스트명으로 직접 받는 Spectrum 은 Enterprise 전용).
+
+기각된 대안: ②(ICAROS 전용 무료 DB — 노출 0, 인프라 작업 0) · ⑤(D1 완성까지 배포 보류).
+세 안 모두 비용은 $0 이었고, **사용자가 노출을 감수하고 단일 DB 를 택했다.**
+
+### 실행 (전부 $0)
+| # | 항목 | 시점 |
+|---|---|---|
+| 1 | RDS `PubliclyAccessible` → true | 사용자 명시 승인 후 |
+| 2 | `essentia-db-sg` 5432 인바운드 `0.0.0.0/0` | 사용자 명시 승인 후 |
+| 3 | `IAMDatabaseAuthenticationEnabled` → true (재부팅 불필요) | 승인 후 밤에 가능 |
+| 4 | `icaros` 스키마 + `icaros_migrator` + `icaros_app`(`rds_iam` 상속, 비밀번호 없음) | 승인 후 밤에 가능 |
+| 5 | 🔴 **마스터 비밀번호 교체** | **B 와 무관하게 필수** — 오늘 이관 과정에서 셸 이력에 남았다 |
+| 6 | 클라이언트 `sslmode=verify-full` + RDS CA(`rds-ca-rsa2048-g1`) | ICAROS 작업 |
+
+`grant` 에 반드시 포함: `ALTER DEFAULT PRIVILEGES FOR ROLE icaros_migrator IN SCHEMA icaros`,
+시퀀스 권한(현재 불필요하나 미래 대비). `icaros_app` 은 DDL 권한 없음, `public` 에 grant 없음.
+
+**받아들인 잔여 위험**: 5432 인증 표면이 인터넷에 노출된다. Postgres 에는 로그인 시도 제한이 없다
+(fail2ban 도 계정 잠금도 없음). IAM 인증으로 `icaros_app` 의 정적 비밀번호는 제거되지만
+마스터 계정 로그인은 여전히 인터넷에서 도달 가능하다.
+
+## D21 — D1 서비스 계정은 `members` 행 없이 회원 판정을 우회한다
+
+사용자 결정(2026-08-24). **(a) 명단 노출 · (b) 숨김 플래그 추가를 제치고 (c) 를 선택.**
+
+> ⚠️ **나와 `essentia_infra` 둘 다 (c) 를 비권장했다.** 권한 모델에 예외를 뚫는 것이고,
+> 예외가 하나 생기면 나중에 그 예외를 기준으로 또 뚫리기 때문이다. 사용자가 알고 선택했다.
+
+### 그래서 예외를 최대한 좁게 못박는다 — 구현 조건
+1. 우회는 **`isMember()` 판정 하나에만** 적용한다. `isPresident()`·`isOfficer()` 등 다른 술어에는 절대 적용하지 않는다.
+2. **`/api/forum/**` 경로에서만** 유효하다. `/api/admin/**` 에는 어떤 경우에도 통하지 않는다.
+3. 서비스 토큰으로 들어온 요청은 **ICAROS 프로젝트 카테고리에만** 쓸 수 있다. 다른 카테고리는 거부.
+4. `author_role` 은 `outsider` (D14 유지). `author_name` 은 사람 이름이 아니라 팀/봇 표기.
+5. **네거티브 테스트가 필수다** — 서비스 토큰이 관리자 경로·타 카테고리·임원 전용 게시판에서
+   거부되는 것을 명시적으로 검증한다. 통과 테스트만 있으면 이 예외는 검증된 게 아니다.
+6. 감사로그에 서비스 토큰 사용이 사람 계정과 **구별되게** 남아야 한다.
+
+`members` 행을 만들지 않으므로 공개 명단·회원 수·회원코드는 오염되지 않는다(그것이 이 선택의 이득이다).
+
+## D22 — ICAROS → ESSENTIA API 호출은 **서버 사이드 전용**
+
+선택의 여지가 없다. 서비스 토큰이 브라우저에 노출되면 안 된다.
+→ Next.js route handler / Server Action 에서만 호출한다. 클라이언트 컴포넌트에서 직접 호출 금지.
+→ 따라서 **`essentia.cors.allowed-origins` 에 Vercel 오리진을 추가할 필요가 없다.**

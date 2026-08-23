@@ -19,9 +19,12 @@
   margin-bottom: var(--sp-5);
 }
 
+/* 제원표 행 — 모노 번호 + 항목, 사이는 10~20% 알파 괘선 하나뿐 (03 §6c) */
 .item {
-  position: relative;
-  padding: var(--sp-4) 0 var(--sp-4) var(--sp-5);
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-5);
+  padding: var(--sp-4) 0;
   border-bottom: 1px solid var(--rule);
   font-size: var(--fs-body);
   line-height: var(--lh-body-s);
@@ -30,15 +33,19 @@
   border-top: 1px solid var(--rule);
 }
 
-/* 시그널 컬러는 6px 사각형 마크로만 쓴다 — 면이나 텍스트로 쓰지 않는다 */
-.item::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: calc(var(--sp-4) + 0.8em);
-  width: 6px;
-  height: 6px;
-  background: var(--sig);
+.no {
+  flex: none;
+  /* 자릿수가 달라져도 항목 시작 위치가 흔들리지 않게 em 으로 폭을 고정한다 */
+  width: 2.5em;
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--tr-mono);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.text {
+  flex: 1 1 auto;
 }
 
 @media (max-width: 991px) {
@@ -50,4 +57,6 @@
 
 @media (max-width: 767px) {
   .body { font-size: var(--fs-body); }
+  .item { gap: var(--sp-4); }
+  .no { width: 2.2em; }
 }

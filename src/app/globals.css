@@ -22,8 +22,23 @@ ul, ol { list-style: none; padding: 0; }
 /* 한글 가드 — 한글은 자간 0.02em 을 넘으면 깨지고 uppercase 는 무의미하다 */
 :lang(ko) { letter-spacing: 0; text-transform: none; }
 
-h1 { font-family: var(--ff-display); font-weight: var(--fw-display); font-size: var(--fs-h1); line-height: var(--lh-h1); letter-spacing: var(--tr-h1); }
-h2 { font-family: var(--ff-display); font-weight: var(--fw-display); font-size: var(--fs-h2); line-height: var(--lh-h2); letter-spacing: var(--tr-h2); }
+/* 섹션 테마를 선언한 요소는 그 자리에서 면과 글자색을 갖는다.
+   `section` 만 대상으로 하면 <header>·<div> 에 테마를 걸 수 없다. */
+[data-section-theme],
+section {
+  background-color: var(--bg);
+  color: var(--fg);
+}
+
+/* 디스플레이는 단일 웨이트 + 단일 폭. 폭을 빼먹으면 Archivo 가 기본 100% 로 떨어져
+   교체 전 서체가 담당하던 "넓은 그로테스크" 성격이 사라진다. */
+h1, h2 {
+  font-family: var(--ff-display);
+  font-weight: var(--fw-display);
+  font-stretch: var(--display-wdth);
+}
+h1 { font-size: var(--fs-h1); line-height: var(--lh-h1); letter-spacing: var(--tr-h1); }
+h2 { font-size: var(--fs-h2); line-height: var(--lh-h2); letter-spacing: var(--tr-h2); }
 h3 { font-size: var(--fs-h3); line-height: var(--lh-h3); font-weight: var(--fw-medium); }
 h4 { font-size: var(--fs-h4); line-height: var(--lh-h4); font-weight: var(--fw-medium); }
 
@@ -54,8 +69,6 @@ h4 { font-size: var(--fs-h4); line-height: var(--lh-h4); font-weight: var(--fw-m
 }
 .measure { max-width: var(--measure); }
 
-section { background-color: var(--bg); color: var(--fg); }
-
 ::selection { background: var(--sig); color: var(--n-900); }
 
 :focus-visible {
@@ -82,7 +95,47 @@ section { background-color: var(--bg); color: var(--fg); }
 }
 .skip-link:focus { top: var(--sp-4); }
 
-@keyframes icaros-rail {
-  0%   { transform: scaleX(0); }
-  100% { transform: scaleX(1); }
+/* ============================================================
+   리빌 — IntersectionObserver 일회성. 여기(전역)에 두는 이유가 있다.
+   JS 가 죽었을 때 page.tsx 의 <noscript> 가 숨김을 풀어야 하는데,
+   CSS Modules 의 해시 클래스명은 그 인라인 스타일에서 지목할 수 없다.
+   그래서 상태를 데이터 속성으로만 표현한다.
+   ============================================================ */
+
+/* 덩어리 단위 리빌 */
+[data-reveal="block"] {
+  opacity: 0;
+  transform: translateY(1.6rem);
+  transition: var(--t-reveal);
+}
+[data-reveal="block"][data-shown] { opacity: 1; transform: none; }
+
+/* 자식 순차 리빌. 부모는 그대로 두고 자식만 --i 만큼 늦게 든다 —
+   부모까지 페이드하면 자식 불투명도가 곱해져 계단이 뭉갠다. */
+[data-reveal-item] {
+  opacity: 0;
+  transform: translateY(1.2rem);
+  transition: var(--t-reveal);
+  transition-delay: calc(var(--i, 0) * var(--stagger));
+}
+[data-reveal][data-shown] [data-reveal-item] { opacity: 1; transform: none; }
+
+/* 단어 단위. 이동 없이 불투명도만 — 읽으려는 글자 위에서 움직이지 않는다.
+   시작값이 0 이 아니라 0.28 인 것도 같은 이유다. 관찰이 실패해도 문장은 읽힌다. */
+[data-word] {
+  display: inline-block;
+  opacity: 0.28;
+  transition: opacity var(--dur-3) var(--ease-out);
+  transition-delay: calc(var(--i, 0) * var(--stagger-word));
+}
+[data-reveal][data-shown] [data-word] { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal="block"],
+  [data-reveal-item],
+  [data-word] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }

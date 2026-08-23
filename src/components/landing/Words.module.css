@@ -1,0 +1,5 @@
+/* --sig 는 밝은 배경에서 2.46:1 로 실패한다. --sig-ink 는 ink 테마에서 --sig 로,
+   graphite 테마에서 --sig-deep 으로 치환되므로 어느 섹션에 놓여도 대비가 유지된다. */
+.mark {
+  color: var(--sig-ink);
+}

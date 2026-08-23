@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { createRocketAction, updateRocketAction } from '@/app/admin/_actions/rockets'
 import type { FormState } from '@/app/admin/_actions/result'
 import { SERIES } from '@/components/rocket/series'
+// 상한은 브라우저·서버가 같은 파일을 본다. 여기에 숫자를 다시 적으면 두 벌이 갈라진다.
+import { MAX_GALLERY_IMAGES } from '@/lib/image/policy'
 import EngineEditor, { type EngineInit } from './EngineEditor'
 import { SelectField, TextField, ToggleField } from './Fields'
 import GalleryField from './GalleryField'
@@ -31,9 +33,6 @@ export type RocketFormValues = {
   gallery: readonly MediaPreview[]
   engines: readonly EngineInit[]
 }
-
-/** 갤러리 상한. 서버(`_lib/media.ts`)의 `MAX_GALLERY_IMAGES` 와 같은 값이어야 한다. */
-const MAX_GALLERY = 12
 
 const SERIES_OPTIONS = SERIES.map((s) => ({ value: s.id, label: `${s.id} — ${s.label}` }))
 
@@ -169,12 +168,13 @@ export default function RocketForm({
       <GalleryField
         name="galleryMediaIds"
         label="Gallery"
-        hint={`대표 이미지 외 추가 사진입니다. 위에서 아래 순서대로 표시됩니다. 최대 ${MAX_GALLERY}장, 긴 변 512px · 1MB 이하로 변환됩니다.`}
+        hint={`대표 이미지 외 추가 사진입니다. 위에서 아래 순서대로 표시됩니다. 최대 ${MAX_GALLERY_IMAGES}장, 긴 변 512px · 1MB 이하로 변환됩니다.`}
         kind="media"
         entityType="rocket"
         initial={values.gallery}
         storageReady={storageReady}
-        max={MAX_GALLERY}
+        max={MAX_GALLERY_IMAGES}
+        error={fieldErrors['galleryMediaIds']}
       />
 
       <MarkdownField

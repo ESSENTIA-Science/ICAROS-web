@@ -2,15 +2,23 @@
 .scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  /* 열이 넷뿐이라 컨테이너 폭(1280 에서 1200px)을 다 쓰면 형식 열 하나가 700px 이 된다.
+     행이 아니라 흩어진 값 넷으로 읽히므로 표 자체의 폭을 묶는다 */
+  max-width: 84rem;
 }
 /* 포커스 링이 스크롤 박스 안쪽에 그려져야 잘리지 않는다 */
 .scroll:focus-visible {
   outline-offset: -2px;
 }
 
+/**
+ * min-width 는 "이 폭 아래로는 셀이 줄바꿈되느니 스크롤이 낫다"는 경계다.
+ * 값 셀 셋이 각각 8~9ch, 형식 열이 'Black Powder' 기준 12ch — 합쳐 36rem 이면 줄바꿈이 없다.
+ * 예전 48rem 은 768 에서도 스크롤을 만들었다.
+ */
 .table {
   width: 100%;
-  min-width: 48rem;
+  min-width: 36rem;
   border-collapse: collapse;
   text-align: left;
 }
@@ -47,9 +55,34 @@
   letter-spacing: 0;
 }
 
+/* 숫자 열은 머리글까지 오른쪽으로 붙여야 열이 하나로 읽힌다 */
 .numCol {
+  text-align: right;
   font-size: var(--fs-body-s);
   color: var(--fg-muted);
+}
+
+.measure {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35em;
+  font-family: var(--ff-mono);
+  letter-spacing: var(--tr-mono);
+  color: var(--fg);
+}
+
+/* 자릿수가 달라도 소수점이 한 줄에 서도록 숫자만 고정폭 상자에 넣는다 */
+.num {
+  display: inline-block;
+  min-width: 4ch;
+  text-align: right;
+}
+
+.unit {
+  min-width: 1ch;
+  text-align: left;
+  color: var(--fg-muted);
+  font-size: var(--fs-mono);
 }
 
 .empty {

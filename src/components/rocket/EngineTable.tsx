@@ -27,8 +27,8 @@ export default function EngineTable({
   const captionId = `engine-table-${scopeId}-caption`
 
   return (
-    // 표가 min-width 48rem 이라 375px 에서 가로로 잘린다. tabindex 로 스크롤 컨테이너 자체를
-    // 포커스 가능하게 만들지 않으면 키보드만 쓰는 사람이 잘린 열에 도달할 수 없다 (WCAG 2.1.1).
+    // 표가 좁은 화면에서 가로로 잘린다. tabindex 로 스크롤 컨테이너 자체를 포커스 가능하게
+    // 만들지 않으면 키보드만 쓰는 사람이 잘린 열에 도달할 수 없다 (WCAG 2.1.1).
     // role=region + 이름이 있어야 그 포커스 정지점이 무엇인지 스크린리더가 말해 준다.
     <div className={styles.scroll} role="region" aria-labelledby={captionId} tabIndex={0}>
       <table className={styles.table}>
@@ -49,21 +49,34 @@ export default function EngineTable({
             <tr key={e.id}>
               {/* 엔진 형식은 CMS 자유 텍스트다 — 언어를 값에서 판별한다 */}
               <th scope="row" className={styles.type} lang={textLang(e.type)}>{e.type}</th>
-              <td className={styles.numCol}>
-                {e.thrustN ? <><span className="num">{e.thrustN}</span> N</> : <Dash />}
-              </td>
-              <td className={styles.numCol}>
-                {e.burnTimeS ? <><span className="num">{e.burnTimeS}</span> s</> : <Dash />}
-              </td>
-              <td className={styles.numCol}>
-                <span className="num">{e.count}</span>
-              </td>
+              <Measure value={e.thrustN} unit="N" />
+              <Measure value={e.burnTimeS} unit="s" />
+              <Measure value={String(e.count)} unit={null} />
               {hasMode ? <td>{e.mode ?? <Dash />}</td> : null}
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+  )
+}
+
+/**
+ * 숫자 폭을 문자수로 고정한 셀. 값을 오른쪽 정렬만 하면 '146 N' 과 '6.8 N' 의 단위는 붙지만
+ * 자릿수가 어긋나 소수점이 흩어진다. 숫자만 고정폭 상자에 넣고 단위를 그 밖에 두면 둘 다 선다.
+ */
+function Measure({ value, unit }: { value: string | null; unit: string | null }) {
+  return (
+    <td className={styles.numCol}>
+      {value == null ? (
+        <Dash />
+      ) : (
+        <span className={styles.measure}>
+          <span className={`${styles.num} num`}>{value}</span>
+          {unit ? <span className={styles.unit}>{unit}</span> : null}
+        </span>
+      )}
+    </td>
   )
 }
 

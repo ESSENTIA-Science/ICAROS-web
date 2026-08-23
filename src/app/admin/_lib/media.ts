@@ -4,7 +4,7 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 
 import { db, schema } from '@/lib/db'
-import type { MediaEntityType } from '@/lib/image/policy'
+import { MAX_GALLERY_IMAGES, type MediaEntityType } from '@/lib/image/policy'
 import { StorageError, deleteMedia, describeError, enqueueCleanup, isUuid, hasReferences } from '@/lib/s3'
 
 /**
@@ -21,8 +21,11 @@ import { StorageError, deleteMedia, describeError, enqueueCleanup, isUuid, hasRe
 /** drizzle 트랜잭션 핸들. 제네릭을 손으로 적지 않고 `db.transaction` 콜백 인자에서 뽑는다. */
 export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
-/** 로켓 한 기의 갤러리 상한. 카드 뷰 전송량(I16)과 폼 길이 양쪽을 감안한 값이다. */
-export const MAX_GALLERY_IMAGES = 12
+/**
+ * 갤러리 상한은 `lib/image/policy.ts` 가 갖는다 — 브라우저 폼과 서버가 반드시 같은 값을 봐야 하는데
+ * 이 파일은 `server-only` 라 폼에서 가져다 쓸 수 없다. 기존 import 경로를 지키려고 여기서 다시 내보낸다.
+ */
+export { MAX_GALLERY_IMAGES } from '@/lib/image/policy'
 
 // ── 폼 값 검증 ──────────────────────────────────────────────────────────────
 
@@ -39,6 +42,11 @@ export function mediaIdField(): z.ZodType<string, string> {
       '이미지 값이 올바르지 않습니다. 새로고침한 뒤 다시 시도해 주세요.'
     )
 }
+
+/** 갤러리 입력이 붙는 폼 필드 이름. 오류를 그 입력 옆에 띄우려면 서버도 같은 이름을 알아야 한다. */
+export const GALLERY_FIELD = 'galleryMediaIds'
+/** 대표 이미지 입력이 붙는 폼 필드 이름. 로켓·부원이 서로 다른 이름을 쓰므로 호출부가 넘긴다. */
+export type CoverFieldName = 'coverMediaId' | 'imageMediaId'
 
 export type GalleryParse = { ok: true; ids: string[] } | { ok: false; message: string }
 
@@ -123,10 +131,25 @@ export async function deleteGalleryOrder(tx: Tx, rocketId: string): Promise<void
 
 // ── 부착 ────────────────────────────────────────────────────────────────────
 
-/** 부착 거부를 트랜잭션 밖으로 옮기는 신호. 문구는 그대로 사용자에게 보여 준다. */
-export class MediaRejected extends Error {}
+/**
+ * 부착 거부를 트랜잭션 밖으로 옮기는 신호. 문구는 그대로 사용자에게 보여 준다.
+ *
+ * `fields` 는 **어느 입력이 원인인가**다. 예전에는 호출부가 무조건 대표 이미지 필드에 붙였는데,
+ * 갤러리 12번째 사진이 문제여도 오류가 대표 이미지 아래에 떠서 멀쩡한 대표 이미지를 지우고
+ * 다시 올리는 오진을 유도했다. 원인 id 를 필드로 되돌려 그 입력 옆에 띄운다.
+ */
+export class MediaRejected extends Error {
+  readonly fields: readonly string[]
+  constructor(message: string, fields: readonly string[]) {
+    super(message)
+    this.fields = fields
+  }
+}
 
-export type AttachCheck = { ok: true } | { ok: false; message: string }
+export type AttachCheck =
+  | { ok: true }
+  /** `ids` = 거부를 유발한 media id. 호출부가 이걸로 대표/갤러리를 가른다. 특정 불가면 빈 배열. */
+  | { ok: false; message: string; ids: readonly string[] }
 
 /**
  * 폼이 돌려준 media id 를 이 entity 에 붙여도 되는지 본다.
@@ -160,22 +183,50 @@ export async function checkMediaAttachable(
     )
 
   if (rows.length !== ids.length) {
+    const found = new Set(rows.map((r) => r.id))
     return {
       ok: false,
       message: '선택한 이미지를 찾을 수 없습니다. 업로드가 끝난 뒤 저장해 주세요.',
+      ids: ids.filter((id) => !found.has(id)),
     }
   }
 
   for (const row of rows) {
     if (row.entityType !== null && row.entityType !== entityType) {
-      return { ok: false, message: '다른 용도로 올린 이미지는 여기에 사용할 수 없습니다.' }
+      return {
+        ok: false,
+        message: '다른 용도로 올린 이미지는 여기에 사용할 수 없습니다.',
+        ids: [row.id],
+      }
     }
     if (row.entityId !== null && row.entityId !== entityId) {
-      return { ok: false, message: '이미 다른 항목에 연결된 이미지입니다.' }
+      return { ok: false, message: '이미 다른 항목에 연결된 이미지입니다.', ids: [row.id] }
     }
   }
 
   return { ok: true }
+}
+
+/**
+ * 거부된 media id → 오류를 붙일 폼 필드.
+ *
+ * 대표 이미지와 갤러리가 동시에 걸릴 수 있으므로 **둘 다** 돌려준다.
+ * 원인을 특정하지 못했으면(빈 배열) 대표 이미지 쪽으로 보낸다 — 갤러리는 폼에서 항목별로
+ * 지울 수 있어 사용자가 스스로 좁힐 수 있지만, 대표 이미지는 한 칸뿐이라 놓치면 단서가 없다.
+ */
+export function rejectedFields(
+  rejected: readonly string[],
+  cover: string | null,
+  galleryIds: readonly string[],
+  coverField: CoverFieldName
+): string[] {
+  if (rejected.length === 0) return [coverField]
+
+  const fields: string[] = []
+  if (cover !== null && rejected.includes(cover)) fields.push(coverField)
+  if (rejected.some((id) => galleryIds.includes(id))) fields.push(GALLERY_FIELD)
+  // 어느 쪽에도 속하지 않는 id 가 남았다면 폼과 서버가 어긋난 것이다. 최소한 한 군데엔 띄운다.
+  return fields.length > 0 ? fields : [coverField]
 }
 
 /**

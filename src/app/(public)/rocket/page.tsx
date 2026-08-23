@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+import InView from '@/components/rocket/InView'
+import RevealNoScript from '@/components/rocket/RevealNoScript'
 import RocketCard from '@/components/rocket/RocketCard'
 import SeriesTabs from '@/components/rocket/SeriesTabs'
 import { DEFAULT_SERIES, parseSeries, seriesLabel, type RocketSeries } from '@/components/rocket/series'
@@ -32,7 +34,10 @@ export default async function RocketIndexPage({ searchParams }: { searchParams: 
   const series = parseSeries((await searchParams).series)
 
   return (
-    <section className={styles.page} data-theme="dark">
+    // 기체 렌더가 밝은 회색 실루엣이라 어두운 면 위에서만 형태가 선다.
+    // `ink` 는 tokens.css 의 섹션 테마 5값 중 어두운 앵커다.
+    <section className={styles.page} data-section-theme="ink">
+      <RevealNoScript />
       <div className="container">
         <header className={styles.head}>
           <p className="eyebrow" lang="en">Fleet</p>
@@ -70,11 +75,14 @@ async function RocketFleet({ series }: { series: RocketSeries }) {
           {seriesLabel(series)}에 공개된 기체가 아직 없습니다.
         </p>
       ) : (
-        <ul className={styles.grid}>
-          {rockets.map((r) => (
-            <RocketCard key={r.slug} rocket={r} />
-          ))}
-        </ul>
+        // 리빌은 격자에만 건다 — 탭은 내비게이션이라 어떤 조건에서도 즉시 보여야 한다.
+        <InView>
+          <ul className={styles.grid}>
+            {rockets.map((r) => (
+              <RocketCard key={r.slug} rocket={r} />
+            ))}
+          </ul>
+        </InView>
       )}
     </>
   )

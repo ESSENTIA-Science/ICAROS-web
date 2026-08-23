@@ -1,5 +1,5 @@
 import localFont from 'next/font/local'
-import { IBM_Plex_Mono } from 'next/font/google'
+import { Archivo, IBM_Plex_Mono } from 'next/font/google'
 
 /**
  * 본문 — Pretendard. woff2 만 로드한다 (레거시 ttf 17MB 는 이전 대상이 아니다).
@@ -28,18 +28,27 @@ export const mono = IBM_Plex_Mono({
 })
 
 /**
- * 디스플레이 — DECISIONS D10 미해소.
- * `WidescreenUEx_Trial_*` 는 파일명이 Trial 이고 웹 라이선스가 확인되지 않았다.
- * 확인 전까지 Pretendard 를 디스플레이 역할로 **별도 변수에 담아** 대체한다.
+ * 디스플레이 — DECISIONS D18. `WidescreenUEx_Trial_*` 를 대체한다.
  *
- * `export const display = body` 로 두면 variable 이 `--font-body` 라서 `--font-display` 가
- * 영영 정의되지 않고, tokens.css 의 `--ff-display: var(--font-display), ...` 선언이
- * invalid at computed-value time 이 되어 폴백 체인째로 죽는다.
- * 라이선스가 풀리면 아래 src 배열만 실제 디스플레이 서체로 바꾸면 된다.
+ * **왜 Archivo 인가.** 대체 대상은 *울트라 익스팬디드* 그로테스크다. 후보 중
+ * Anton(400 단일)·Bebas Neue(400 단일)·Oswald(wght 축만)는 전부 **콘덴스트** 계열이라
+ * 폭이 반대 방향이다 — 넓힐 축이 아예 없다. `next/font/google` 메타데이터 실측 기준
+ * Archivo 만 `wdth` 62–125 가변 축을 갖는다(OFL, Omnibus-Type). 125 가 Expanded 다.
+ *
+ * `axes: ['wdth']` 를 주려면 weight 를 비워 variable 로 받아야 한다(로더 제약).
+ * 그래서 파일 자체는 wght 100–900 을 담지만, **쓰는 인스턴스는 하나뿐이다** —
+ * tokens.css 가 `--fw-display: 500` · `--display-wdth: 125%` 로 고정한다.
+ * Vast 가 디스플레이를 Medium 500 한 벌로만 쓰는 것과 같은 규율이고, bold 를 추가하지 않는다.
+ *
+ * `variable` 이 `--font-display` 여야 한다. 예전에 이 변수가 정의되지 않아
+ * tokens.css 의 `--ff-display: var(--font-display), …` 선언 전체가
+ * invalid at computed-value time 이 되어 폴백 체인째로 죽은 적이 있다.
+ * 히어로 조판이 이 서체이므로 preload 한다.
  */
-export const display = localFont({
-  src: [{ path: '../assets/fonts/woff2/Pretendard-Medium.woff2', weight: '500', style: 'normal' }],
+export const display = Archivo({
+  subsets: ['latin'],
+  axes: ['wdth'],
   variable: '--font-display',
   display: 'swap',
-  preload: false,
+  preload: true,
 })

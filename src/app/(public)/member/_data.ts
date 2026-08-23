@@ -14,6 +14,12 @@ export type MemberDto = {
   squad: string | null
   school: string | null
   imageSrc: string
+  /**
+   * 실제 사진인지, 27명 중 23명이 공유하는 플레이스홀더인지.
+   * 뷰가 `imageSrc === MEMBER_PLACEHOLDER` 로 문자열 비교를 하게 두면 경로가 바뀌는 날
+   * 조용히 틀린다. 판정을 해석이 일어나는 자리(DAL)에 둔다.
+   */
+  hasPhoto: boolean
 }
 
 export type MemberSquad = {
@@ -58,14 +64,18 @@ export async function listMembers(): Promise<MemberDto[]> {
     .where(eq(schema.members.published, true))
     .orderBy(asc(schema.members.sortOrder), asc(schema.members.createdAt), asc(schema.members.id))
 
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    role: blankToNull(r.role),
-    squad: blankToNull(r.squad),
-    school: blankToNull(r.school),
-    imageSrc: resolveMemberImage(r.mediaId, r.legacyImagePath),
-  }))
+  return rows.map((r) => {
+    const imageSrc = resolveMemberImage(r.mediaId, r.legacyImagePath)
+    return {
+      id: r.id,
+      name: r.name,
+      role: blankToNull(r.role),
+      squad: blankToNull(r.squad),
+      school: blankToNull(r.school),
+      imageSrc,
+      hasPhoto: imageSrc !== MEMBER_PLACEHOLDER,
+    }
+  })
 }
 
 const blankToNull = (v: string | null): string | null => (v && v.trim() !== '' ? v.trim() : null)

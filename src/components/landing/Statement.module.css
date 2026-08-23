@@ -1,6 +1,6 @@
 .split {
   display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
   gap: var(--sp-9) var(--sp-10);
   align-items: start;
 }
@@ -12,9 +12,11 @@
   text-align: center;
 }
 
+/* 이 페이지에서 히어로 다음으로 큰 활자. 디스플레이 서체 + Expanded 폭 + 단일 웨이트 */
 .slogan {
   font-family: var(--ff-display);
   font-weight: var(--fw-display);
+  font-stretch: var(--display-wdth);
   font-size: var(--fs-h2);
   line-height: var(--lh-h2);
   letter-spacing: var(--tr-h2);
@@ -24,10 +26,21 @@
 /* globals.css 의 `:lang(ko)` 가드와 특이도가 동률이라 모듈이 이긴다 — 한글 슬로건이면 자간을 되돌린다 */
 .slogan:lang(ko) {
   letter-spacing: 0;
+  line-height: 1.2;
+}
+
+.split .slogan {
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  letter-spacing: var(--tr-h1);
+}
+.split .slogan:lang(ko) {
+  letter-spacing: 0;
+  line-height: 1.18;
 }
 
 .center .slogan {
-  max-width: 22ch;
+  max-width: 20ch;
 }
 
 .body {
@@ -39,6 +52,11 @@
   color: var(--fg-muted);
 }
 
+/* 본문은 슬로건보다 늦게, 그리고 슬로건 오른쪽에서 시작한다 — 위쪽 여백을 맞춰 광학 정렬 */
+.split .body {
+  padding-top: 0.6rem;
+}
+
 .center .body {
   text-wrap: pretty;
 }
@@ -48,6 +66,7 @@
     grid-template-columns: minmax(0, 1fr);
     gap: var(--sp-7);
   }
+  .split .body { padding-top: 0; }
 }
 
 @media (max-width: 767px) {
@@ -56,5 +75,6 @@
     text-align: left;
     gap: var(--sp-6);
   }
+  .center .slogan { max-width: none; }
   .body { font-size: var(--fs-body); }
 }

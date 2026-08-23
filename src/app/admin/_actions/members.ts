@@ -95,13 +95,16 @@ export async function createMemberAction(
       // id 가 DB 에서 생성되므로 검증이 insert 뒤로 온다. 거부하면 트랜잭션째 되돌아간다.
       const attach = image ? [image] : []
       const attachable = await checkMediaAttachable(tx, attach, 'member', row.id)
-      if (!attachable.ok) throw new MediaRejected(attachable.message)
+      // 부원은 사진 입력이 하나뿐이라 원인 필드가 항상 정해져 있다.
+      if (!attachable.ok) throw new MediaRejected(attachable.message, ['imageMediaId'])
       await stampMediaEntity(tx, attach, 'member', row.id)
 
       return row.id
     })
   } catch (err) {
-    if (err instanceof MediaRejected) return fail(err.message, { imageMediaId: err.message })
+    if (err instanceof MediaRejected) {
+      return fail(err.message, Object.fromEntries(err.fields.map((f) => [f, err.message])))
+    }
     console.error('[admin] 부원 생성 실패')
     return fail('저장에 실패했습니다. 잠시 후 다시 시도해 주세요.')
   }
@@ -152,7 +155,8 @@ export async function updateMemberAction(
       if (!previous) throw new RowMissing()
 
       const attachable = await checkMediaAttachable(tx, attach, 'member', id)
-      if (!attachable.ok) throw new MediaRejected(attachable.message)
+      // 부원은 사진 입력이 하나뿐이라 원인 필드가 항상 정해져 있다.
+      if (!attachable.ok) throw new MediaRejected(attachable.message, ['imageMediaId'])
 
       const previousIds = await listAttachedMediaIds(tx, 'member', id)
 
@@ -176,7 +180,9 @@ export async function updateMemberAction(
   } catch (err) {
     if (err instanceof VersionConflict) return CONFLICT
     if (err instanceof RowMissing) return fail(MEMBER_GONE)
-    if (err instanceof MediaRejected) return fail(err.message, { imageMediaId: err.message })
+    if (err instanceof MediaRejected) {
+      return fail(err.message, Object.fromEntries(err.fields.map((f) => [f, err.message])))
+    }
     console.error('[admin] 부원 수정 실패')
     return fail('저장에 실패했습니다. 잠시 후 다시 시도해 주세요.')
   }

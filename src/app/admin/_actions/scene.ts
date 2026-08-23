@@ -722,11 +722,17 @@ export async function updateSceneModelAction(
 
   try {
     await db.transaction(async (tx) => {
+      /**
+       * 행을 **잠근 채로** 존재를 확인한다. `.limit(1)` 만 걸어 두면 이 SELECT 와 아래 UPDATE 사이에
+       * 남이 모델을 지울 수 있고, 그러면 0행이 돌아와 `VersionConflict` 로 보고된다 —
+       * "새로고침해 최신 값을 확인"하라고 해 놓고 새로고침하면 모델 자체가 없는 그 상황이다.
+       * 잠금을 걸면 0행의 원인이 버전 불일치 하나로 좁혀진다 (rockets·members 와 같은 규약).
+       */
       const before = await tx
         .select({ glbMediaId: schema.rocketModels.glbMediaId })
         .from(schema.rocketModels)
         .where(eq(schema.rocketModels.id, id))
-        .limit(1)
+        .for('update')
 
       const previous = before[0]
       // 행이 아예 없는 것과 남이 먼저 고친 것은 다른 사건이고, 사용자가 할 일도 다르다.
@@ -740,6 +746,7 @@ export async function updateSceneModelAction(
         .where(and(eq(schema.rocketModels.id, id), versionMatches(schema.rocketModels.updatedAt, version)))
         .returning({ id: schema.rocketModels.id })
 
+      // 행은 잠근 채로 확인했으므로 0행은 버전 불일치 하나뿐이다.
       if (!updated[0]) throw new VersionConflict()
 
       // 핫스팟은 통째로 갈아 끼운다. id 를 참조하는 곳이 없고, 부분 갱신은 순서 재배치에서 어긋난다.
