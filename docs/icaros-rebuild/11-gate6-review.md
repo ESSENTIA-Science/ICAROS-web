@@ -17,7 +17,7 @@
 | 항목 | 값 |
 |---|---|
 | 로컬 DB | `docker exec icaros-db psql -U icaros -d icaros` — site_settings 33 / rockets 4 / members 27 / rocket_engines 6 / page_sections 7 |
-| 프로덕션 빌드 | `HEAD + 이 트랙의 변경만` 을 격리 스냅샷에 적용해 `next build` → 통과. `next start -p 5404` 로 실측 |
+| 프로덕션 빌드 | 두 번 돌렸다. ① `HEAD + 이 트랙의 변경만` 을 격리 스냅샷에 적용 → 통과 (다른 트랙이 동시 편집 중이라 원인을 분리하기 위해서). ② 마지막에 **레포 그대로** `npm run build` → 통과. 둘 다 `next start -p 5404` 로 라우트 실측 후 종료 |
 | 개발 서버 | 사용자 소유 5174 (읽기 요청만 보냄, 종료하지 않음) |
 | 어드민 인증 | `icaros.admin_sessions` 에 세션 행을 직접 심어 쿠키로 접근. 검증 후 **전량 삭제·원복 확인** |
 | Server Action 실측 | JS 없는 progressive-enhancement 경로를 `curl` 로 재생 (`$ACTION_REF_*` 필드 그대로 전송) |
@@ -62,13 +62,14 @@ scripts/seed-from-legacy.ts        → JSON 을 읽지 않는다 (레거시 REST
 ```
 
 `public/assets/img/{rocket,member}` 는 **삭제하지 않았다** — DB `legacy_image_path` 가
-가리키고 있다 (rockets 4/4, members 4/27). 다만 아래 3장은 참조가 없다:
+가리키고 있다 (rockets 4/4, members 4/27). 다만 아래 5장은 참조가 없다 — 이번엔 손대지 않았고
+P9(S3 이전) 때 함께 처분해야 한다:
 
 | 파일 | 상태 |
 |---|---|
-| `public/assets/img/rocket/icx2.webp` · `icx2s.webp` | rockets 테이블에 `icx2`/`icx2s` 행이 없다. P9(S3 이전) 때 함께 처분할 것 |
-| `public/assets/img/member/{kimkunwoo,standhyo,sungwoo…}.webp`, `yunho.jpg` | members 4행만 경로를 갖고 있어 `yunho.jpg`·`kimkunwoo.webp`·`standhyo.webp` 는 미참조 |
-| `public/assets/img/member/profile.webp` | **참조 중** — `member/_data.ts` 의 `MEMBER_PLACEHOLDER` (E6). 지우면 안 된다 |
+| `rocket/icx2.webp` · `rocket/icx2s.webp` | rockets 테이블에 `icx2`/`icx2s` 행이 없다 |
+| `member/kimkunwoo.webp` · `member/standhyo.webp` · `member/yunho.jpg` | 경로를 가진 members 행은 kimjihoo·yeahram·parkhyunbin·sungwoo 4명뿐 |
+| `member/profile.webp` | **참조 중** — `member/_data.ts` 의 `MEMBER_PLACEHOLDER` (E6). 23명이 이걸 쓴다. 지우면 안 된다 |
 
 ### `FuzzyText` — 삭제했고, 복구 경로를 여기 남긴다
 
@@ -460,7 +461,8 @@ vite·@vitejs/plugin-react 가 `package.json` 에도 `node_modules` 에도 없�
 | 항목 | 결과 |
 |---|---|
 | 레거시 Vite 트리 삭제 | **완료** — 32 파일 + 이미지 15장 + `dist/`. 참조 0건 사전 확인 |
-| 삭제 후 `npm run build` | **통과** (격리 스냅샷 = HEAD + 이 트랙 변경. 7 라우트 생성, TypeScript 통과) |
+| 삭제 후 `npm run build` | **통과** — 격리 스냅샷과 레포 실물 양쪽에서. 7 라우트 생성, TypeScript 통과 |
+| `npx tsc --noEmit` / `npm run lint` | **둘 다 0** (레포 실물, 전 트랙 작업 반영 상태) |
 | 프로덕션 라우트 실측 | `/` `/rocket` `/rocket/icx1` `/member` `/admin` **200** · `/rocket/nope` **404** |
 | 잔존 문자열 6종 | 런타임 코드·빌드 산출물 **전부 0** (`AGENTS.md` 제외 — §4) |
 | 결함 5건 | 3건은 debt 트랙이 이미 처리(실측 확인), **2건은 이 트랙에서 실제로 수정**(갤러리 오류 필드 · 상한 이중 하드코딩) + 1건 추가 수정(scene 행 잠금) |
