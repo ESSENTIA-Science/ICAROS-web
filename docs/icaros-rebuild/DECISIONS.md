@@ -302,3 +302,39 @@ D2(별도 `icaros` 스키마)도 그대로 유효하며, `ddl-auto: validate` �
 
 `icx-2.fbx` → GLB 변환과 3D 인프라는 만들되, **홈 히어로에만** 쓴다.
 `icx2`(ICX-II) 로켓 행을 되살리는 것은 팀 판단이 필요해 하지 않는다 — `rocket_models.rocket_id` 는 null 로 둔다.
+
+
+### D17 보정 — `essentia_infra` 기술 검토 (2026-08-23). 내 제안에 구멍이 있었다
+
+#### 이미 충족돼 있던 것
+- **`rds.force_ssl = 1` 이 이미 켜져 있다.** PG16+ 부터 RDS 기본 파라미터 그룹의 기본값이다.
+  커스텀 파라미터 그룹도 재부팅도 불필요(`ApplyType: dynamic`). CA 는 `rds-ca-rsa2048-g1`.
+- **DNS 는 split-horizon** — 퍼블릭 전환 후에도 VPC 내부 조회는 사설 IP 를 받는다. EC2 앱 설정 변경 불필요.
+  단 `PubliclyAccessible` 수정 자체가 **짧은 연결 중단**을 유발할 수 있다. 트래픽 적은 시간에.
+
+#### 내가 빠뜨린 것
+| # | 항목 | 결과 |
+|---|---|---|
+| ① | `ALTER DEFAULT PRIVILEGES` 누락 | `grant ... on all tables` 는 **그 시점 테이블만** 덮는다. 다음 마이그레이션이 만든 테이블에 앱이 접근 못 해 **배포마다 깨진다.** `for role <마이그레이션_role>` 을 반드시 명시 — 빠뜨리면 실행한 사람 기준이 되어 파이프라인 산출물에 안 걸린다 |
+| ② | 시퀀스 권한 누락 | serial/identity 컬럼이 하나라도 있으면 **INSERT 가 거부된다.** `grant usage, select on all sequences` + default privileges |
+| ③ | `revoke ... from icaros_app` 이 `PUBLIC` 상속을 못 지운다 | `public` 스키마는 의사 role `PUBLIC` 에 USAGE 를 준다. `revoke ... from PUBLIC` 은 ESSENTIA 까지 영향을 줘 함부로 못 한다.<br>**내 표현을 정정한다** — "`forum_*`·`audit` 계열에 닿지 않는다"는 **데이터 기준으로는 맞고 메타데이터 기준으로는 틀리다.** `information_schema`·`pg_catalog` 를 통한 스키마 구조 열람은 막지 못한다 |
+| ④ | 🔴 **마스터 계정이 같이 인터넷에 열린다** | 최소권한 설계는 `icaros_app` **자격증명이 샜을 때**를 막는다. 그런데 퍼블릭 전환은 `essentia` **마스터 로그인도 인터넷에 노출**한다. 마스터가 뚫리면 감사로그·전자서명·탈퇴 스냅샷 전부다.<br>그 비밀번호는 SSM·EC2 `/etc/essentia/api.env`·이관 셸 이력에 있다. **오늘까지는 VPC 안에서만 쓸 수 있는 값이었지만 전환 후엔 어디서나 쓸 수 있는 값이 된다.** 이것이 이번 변경의 가장 큰 델타이고 내 제안서에 없었다.<br>**최소 조치: 전환과 동시에 마스터 비밀번호 교체.** 나아가 ESSENTIA 앱도 마스터 대신 전용 제한 role 을 쓰게 하고 마스터는 운영자만 보관 |
+| ⑤ | Postgres 에 로그인 시도 제한이 없다 | "인증·권한·SSL 이 유일한 방어선"이라 썼는데, 정확히는 **그 방어선에 시도 횟수 제한이 없다.** fail2ban 도 계정 잠금도 없다. 공개된 5432 는 무한 브루트포스 대상이다. 아주 긴 랜덤 비밀번호 + 연결 로깅·알람이 유일한 완화책 |
+
+#### SSL 은 `require` 로 부족하다
+`sslmode=require` 는 **암호화만 하고 서버 인증서를 검증하지 않는다**(MITM 방어 없음).
+인터넷 경유가 되면 ICAROS 는 **`sslmode=verify-full` + RDS CA 번들**을 써야 한다.
+
+#### 검토할 대안 2개
+1. **RDS IAM 데이터베이스 인증** — 현재 `IAMDatabaseAuthenticationEnabled: false`, **재부팅 없이 켤 수 있다.**
+   정적 비밀번호 대신 **15분 수명 토큰**. 우리는 이미 S3 용으로 Vercel OIDC 역할 수임을 채택(D5)했으므로
+   **같은 자격증명 경로를 DB 에 재사용**할 수 있다. 유출돼도 15분이면 만료, IAM 정책으로 즉시 폐기(비밀번호 교체·재배포 불필요).
+   ④의 "정적 비밀번호가 인터넷에 노출" 문제를 `icaros_app` 에 한해 제거한다. 마스터 문제는 별도로 남는다.
+   → **권장. 퍼블릭 전환을 한다면 이것과 묶어서 한다.**
+2. **Cloudflare Tunnel** (EC2 → Cloudflare, Access 서비스 토큰) — DNS 가 이미 Cloudflare 라 붙이기 쉽고
+   **5432 를 인터넷에 열지 않고도** 외부에서 닿는다. 대가는 구성요소 추가 + 커넥션 지연.
+   기각하더라도 평가했다는 기록은 남긴다.
+
+#### 상태
+**미승인.** `essentia_infra` 는 이 결정을 승인된 것으로 취급하지 않고 네트워크·role·파라미터 어느 것도 건드리지 않았다.
+④·⑤는 사용자가 결정 시점에 알고 있어야 할 내용이라 별도로 올렸다.
