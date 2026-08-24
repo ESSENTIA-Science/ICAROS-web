@@ -468,3 +468,72 @@ vite·@vitejs/plugin-react 가 `package.json` 에도 `node_modules` 에도 없�
 | 결함 5건 | 3건은 debt 트랙이 이미 처리(실측 확인), **2건은 이 트랙에서 실제로 수정**(갤러리 오류 필드 · 상한 이중 하드코딩) + 1건 추가 수정(scene 행 잠금) |
 
 **Gate 6 통과로 판정한다.** 단 §5 의 결함 4건과 A6 회귀는 Gate 7 전에 닫아야 한다.
+
+---
+
+# 재검증 (2026-08-25) — 이전 §6 판정은 무효였다
+
+## 왜 다시 하는가
+
+이전 스캔 명령이 `--exclude-dir={node_modules,.next,.git,supabase}` 였다.
+그런데 **`supabase/.temp/` 8파일이 git 에 추적되고 있었고** 거기에 프로젝트 ref·org id·
+pooler URL 이 들어 있었다. 즉 *"잔존 문자열 6종 전부 0건"* 이라는 판정은
+**레거시 식별자를 들고 있던 유일한 추적 디렉터리를 제외해서 나온 값**이었다.
+
+그 8파일은 이후 히스토리에서 통째로 제거했다. 이번 스캔은 **제외 없이** 추적 파일 전수를 본다.
+
+## 스캔 결과 — `git grep -lI -i <pat> HEAD`
+
+| 패턴 | 히트 | 판정 |
+|---|---:|---|
+| `supabase` | 18 | 아래 분류 |
+| `NEXT_PUBLIC_SUPABASE` | 3 | 전부 요구사항 문서(금지 목록 자체) |
+| `SUPABASE_SERVICE_ROLE` | 3 | 전부 요구사항 문서 |
+| `sim.icaros.kr` | 6 | 전부 문서 |
+| `nav-simulate-mobile` | 4 | 전부 문서 |
+| `simulate` | 4 | 전부 문서 |
+
+### `supabase` 18건 분류
+
+| 분류 | 파일 | 판정 |
+|---|---|---|
+| **런타임 코드** | `src/lib/community/client.ts:158` | ✅ **허용.** 주석 한 줄 — *"레거시 글에는 구 Supabase Storage 절대 URL 도 섞여 있다 — 그건 건드리지 않는다"*. 이미지 URL 치환 로직이 왜 일부를 건드리지 않는지 설명한다. 코드가 아니다 |
+| **환경설정** | `.env.example:46-47` `LEGACY_SUPABASE_URL` · `_ANON_KEY` | ✅ **허용.** 파일 안에 *"일회성 export 전용, 런타임 미사용"* 으로 명시돼 있다 |
+| | `.gitignore` | ✅ `supabase/.temp/` 를 무시하는 규칙 |
+| **마이그레이션 도구** | `scripts/seed-from-legacy.ts` · `scripts/migrate/export-posts.ts` | ✅ **허용.** 이 스크립트들이 곧 이관 경로다. 런타임 번들에 들어가지 않는다 |
+| **문서** | `docs/**` 12건 · `AGENTS.md` | ✅ 의도적 |
+
+**런타임 번들에 Supabase 코드·의존성은 0 이다.**
+- `package.json` 에 `@supabase/*` 없음
+- `.next/static` 에 `supabase` 문자열 0건
+- `src/` 전체에서 import 0건
+
+### 판정
+**§K 통과.** 요구사항은 *"런타임 코드·환경설정에서 0건, 마이그레이션 문서 제외"* 이고,
+런타임 코드의 유일한 히트는 주석이며 환경설정의 히트는 일회성 export 변수다.
+
+## 함께 정리한 것
+
+- `docs/icaros-rebuild/legacy-package.json.bak` **삭제** — 구 package.json 백업.
+  git history 에 있으므로 트리에 둘 이유가 없었다.
+- `AGENTS.md` **재작성** — 존재하지 않는 Vite/Supabase 구조를 설명하고 있었다.
+  `CLAUDE.md` 가 gitignore 라 이게 **레포에 추적되는 유일한 에이전트 가이드**인데
+  모든 항목이 사실과 달랐다. 현재 스택 + 밟았던 지뢰 7건으로 다시 썼다.
+
+## 이전 판정과 달라진 다른 항목
+
+| 항목 | 이전 | 지금 |
+|---|---|---|
+| `/posts` 404 (§5 결함 1) | ⛔ D1 대기 | ✅ **해소.** 읽기는 인증 불필요한 공개 API 로 즉시 연동됨 (D23). 쓰기만 D1 대기 |
+| A13 폰트 예산 | ◐ 디스플레이만 해결 | ✅ **해소.** Pretendard `unicode-range` 2단 서브셋 2.22MB → 305KB (D13 문서) |
+| 3D 마운트 | 보고 누락 | ✅ **해소.** `HeroStage` import 0건이던 것을 배선. 우상단 대각선 배치 |
+
+## 여전히 미충족
+
+| | 이유 |
+|---|---|
+| C10·C11·C12 (GLB·핫스팟·모바일 폴백) | 3D 인프라는 있으나 CMS Scene 연동과 핫스팟 UI 미구현 |
+| D7~D9 (Posts 쓰기·양방향) | **D1 서비스 토큰** |
+| I2·I12·I15·I17 (S3 실경로) | **CORS·IAM 승인** |
+| J4·J10·J11 (Posts 이관 실행) | D1 + 이미지 재호스팅 |
+| A14 (반응형 실측) | 브라우저 미연결 — CSS 논리 검증만 함 |
