@@ -477,3 +477,72 @@ D1(서비스 토큰) 대기 중이라 `/posts` 를 준비중 페이지로 두고
 ### 남은 것 — 쓰기
 CMS 에서 글을 쓰는 것은 여전히 **D1 서비스 토큰**이 필요하다.
 지금은 상세 하단에서 ESSENTIA 커뮤니티로 링크한다.
+
+
+---
+
+## D21 수정 (2026-08-24) — 서비스 주체에 `user` 행은 만든다, `members` 행만 안 만든다
+
+`essentia_infra` 가 코드를 읽고 **(c) 원안이 성립하지 않음**을 확인했다.
+
+```java
+public PresignImageResponse presign(...) {
+    Viewer viewer = requireSignedIn();
+    ... uploadTicket.issue(key, viewer.userId())   // ← 티켓이 userId 에 묶인다
+}
+```
+업로드 티켓이 `viewer.userId()` 로 발급·검증되는데, `user` 행도 `members` 행도 없으면
+**`userId()` 가 null 이라 presign/confirm 이 아예 동작하지 않는다.** 이미지 48장을 못 올린다.
+
+### 수정안 — `user` 행만 만든다
+| | 결과 |
+|---|---|
+| `viewer.userId()` 존재 | 업로드 티켓이 **그대로 동작.** 티켓 로직을 안 건드려도 된다 |
+| `forum_posts.author_user_id` FK | **채워진다.** "FK 양쪽 NULL" 보다 감사 추적이 낫다 |
+| 공개 회원 명단·회원 수 | `members` 테이블에서 나온다 → **명단에 안 뜨고 42 그대로.** (c) 의 이득 유지 |
+| 우회 범위 | 여전히 **`isMember()` 하나뿐.** 넓어지지 않는다 |
+
+→ **D21 을 이 형태로 확정.** 앞서 "작성자 FK 양쪽 NULL 은 의도된 것"이라 적은 절은 무효다 —
+`author_user_id` 는 채워지고, 탈퇴 익명화 논의도 서비스 계정이라 여전히 해당 없다.
+
+### 조건 8 추가 — `createdAt`
+`CreatePostRequest` 에 필드가 없고, 더 근본적으로 `TimestampedEntity` 가 `@CreationTimestamp` 라
+**엔티티에 값을 미리 넣어도 INSERT 시점에 덮어쓴다.** DTO 에 필드만 추가해서는 안 된다.
+
+권장(상대 판단): `@CreationTimestamp` → `@PrePersist` 전환(엔티티 30개 이상 영향)보다,
+**서비스 토큰 경로에서만 저장 직후 네이티브 UPDATE 로 `created_at` 을 덮는다.**
+폭발 반경이 그 경로 하나뿐이고 "여기서만 작성일을 지정한다"가 코드에 드러난다.
+(`updatable=false` 는 JPA UPDATE 만 막는다.)
+
+함께 못박을 것:
+- **과거 시각만 허용.** 미래 날짜 거부
+- 서비스 토큰이 **아닌** 요청에 이 필드가 오면 **조용히 무시가 아니라 400 으로 거부.**
+  조용히 무시하면 일반 경로에 열렸는지를 테스트로 구분할 수 없다
+
+## 🔴 D24 — ESSENTIA 게시판 이미지가 **이미 깨져 있다** (경고가 아니라 발생한 사고)
+
+`essentia_infra` 추적 결과:
+```
+supabase URL 을 가진 글   5건  (호스트 rffsax… — ESSENTIA 구 프로젝트)
+DNS                      해석 안 됨. 프로젝트 삭제됨
+HTTP                     000
+```
+그중 **2건이 ICAROS 글**이다. 지금 라이브에서 이미지가 안 뜬다.
+
+| ESSENTIA 글 | 깨진 파일 | 우리 쪽 복구 |
+|---|---|---|
+| `ICAROS ICX-IA 1st Launch` | `1784439100984-….jpg` | **가능.** 같은 사건(2026-07-18 알뜨르 발사)을 다룬 레거시 `ICX-1A Launch` 에 **이미지 10장이 살아 있다**(HTTP 200 확인) |
+| `Proj.ICAROS ICX-I Mission Patch` | `1784266697366-….png` | **불가.** 레거시에 대응 글이 없다 — 원본 소실 |
+
+파일명 체계가 다르다(`{timestamp}-{uuid}` vs 우리 `posts/{uuid}`)므로 같은 파일이 아니라
+**같은 사건의 다른 사진**이다. 그래도 ICX-IA 건은 내용상 복구된다.
+
+→ 이관 시 `ICX-1A Launch`(사람 확인 대상)는 **중복으로 버릴 게 아니라
+ESSENTIA 기존 글의 죽은 이미지를 대체할 자료**로 다뤄야 한다.
+
+### 폐기 순서 수정
+```
+4. 검증 후 ICAROS Supabase 폐기   ← ESSENTIA 쪽 복구 가능분까지 회수한 뒤
+```
+ESSENTIA 47건 중 **외부 절대 URL 을 가진 글이 11건**이고 `/api/forum/image/` 를 쓰는 글은 2건뿐이다.
+나머지 6건이 어디를 가리키는지는 미확인 — 이관과 별개로 ESSENTIA 쪽 사안이다.

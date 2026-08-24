@@ -1,20 +1,12 @@
-import localFont from 'next/font/local'
 import { Archivo, IBM_Plex_Mono } from 'next/font/google'
 
 /**
- * 본문 — Pretendard. woff2 만 로드한다 (레거시 ttf 17MB 는 이전 대상이 아니다).
- * 웨이트는 토큰이 실제로 쓰는 400/500/600 만.
+ * 본문(Pretendard)은 여기 없다 — `src/app/fonts.css` 에 손으로 쓴 @font-face 로 있다.
+ *
+ * `next/font/local` 이 **`unicode-range` 를 노출하지 않기 때문**이다.
+ * 한글 폰트는 웨이트당 ~750KB 인데 실사용 음절은 775 자뿐이라, 범위를 못 나누면
+ * 안 쓰는 글자 1만 개를 매번 같이 받는다. 3 웨이트 합 2.22MB → 305KB.
  */
-export const body = localFont({
-  src: [
-    { path: '../assets/fonts/woff2/Pretendard-Regular.woff2', weight: '400', style: 'normal' },
-    { path: '../assets/fonts/woff2/Pretendard-Medium.woff2', weight: '500', style: 'normal' },
-    { path: '../assets/fonts/woff2/Pretendard-SemiBold.woff2', weight: '600', style: 'normal' },
-  ],
-  variable: '--font-body',
-  display: 'swap',
-  preload: true,
-})
 
 /**
  * 기술 레지스터 — 아이브로/제원 라벨. next/font/google 이 빌드 타임에 셀프호스팅한다.

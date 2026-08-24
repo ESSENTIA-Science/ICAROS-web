@@ -17,7 +17,8 @@
     "db:studio": "drizzle-kit studio",
     "bootstrap:admin": "tsx scripts/bootstrap-admin.ts",
     "storage:cleanup": "tsx scripts/storage-cleanup.ts",
-    "migrate:posts": "tsx scripts/migrate/export-posts.ts"
+    "migrate:posts": "tsx scripts/migrate/export-posts.ts",
+    "fonts:subset": "tsx scripts/fonts/subset.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",
