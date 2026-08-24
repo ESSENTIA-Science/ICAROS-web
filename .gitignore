@@ -15,3 +15,6 @@ CLAUDE.md
 
 # Supabase CLI 로컬 상태 — 프로젝트 ref·org id·pooler URL 이 들어 있다
 supabase/.temp/
+
+# 실제 인프라 식별자 — 공개 레포에 올리지 않는다
+docs/.local/
