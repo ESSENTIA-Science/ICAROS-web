@@ -59,14 +59,57 @@ interface RigProps {
  * `getBoundingClientRect()` 를 프레임마다 부르는 것은 의도적이다 — 스크롤 이벤트를 모아
  * 캐시하는 것보다 정확하고, 이 프레임에서 DOM 을 쓰지 않으므로 레이아웃 스래싱이 없다.
  */
+/**
+ * 커서 위치를 −1..1 로 추적한다.
+ *
+ * 캔버스가 `pointer-events: none` 이라 캔버스 자체는 이벤트를 못 받는다 — 받으면 안 된다.
+ * 배경 레이어가 링크·버튼 클릭을 가로채는 순간 페이지가 망가진다.
+ * 그래서 **window 에서 듣고** 좌표만 ref 에 적는다. state 를 쓰면 마우스가 움직일 때마다
+ * 리렌더가 나서 60fps 로 React 트리를 다시 그리게 된다.
+ *
+ * 터치 기기에서는 붙이지 않는다 — `pointermove` 가 탭마다 한 번씩 튀어 화면이 흔들린다.
+ */
+function usePointerParallax(enabled: boolean) {
+  const pointer = useRef({ x: 0, y: 0 })
+
+  useEffect(() => {
+    if (!enabled) return
+    if (!window.matchMedia('(pointer: fine)').matches) return
+
+    const onMove = (e: PointerEvent) => {
+      pointer.current = {
+        x: (e.clientX / window.innerWidth) * 2 - 1,
+        y: (e.clientY / window.innerHeight) * 2 - 1,
+      }
+    }
+    // 커서가 창을 벗어나면 중앙으로 되돌린다. 안 하면 마지막 위치에서 굳는다.
+    const onLeave = () => {
+      pointer.current = { x: 0, y: 0 }
+    }
+
+    window.addEventListener('pointermove', onMove, { passive: true })
+    document.addEventListener('pointerleave', onLeave)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerleave', onLeave)
+    }
+  }, [enabled])
+
+  return pointer
+}
+
 function CameraRig({ target, config, reducedMotion, boxRef }: RigProps) {
+  const pointer = usePointerParallax(!reducedMotion)
+  // 목표값을 그대로 쓰면 커서를 튕길 때 카메라가 같이 튄다. 프레임마다 지수 감쇠로 따라간다.
+  const smoothed = useRef({ x: 0, y: 0 })
+
   /**
    * `useThree()` 로 카메라를 꺼내 쓰지 않는다. React Compiler 의 `react-hooks/immutability` 는
    * **훅이 돌려준 값을 렌더 이후에 변형하는 것**을 금지하는데, R3F 에서 카메라를 매 프레임
    * 고쳐 쓰는 것은 정확히 그 모양이다. `useFrame` 콜백 인자로 받은 state 는 훅 반환값이 아니라
    * 프레임 인자라 규칙에 걸리지 않고, 의미도 같다 — 오히려 최신 값이 보장된다.
    */
-  useFrame((state) => {
+  useFrame((state, delta) => {
     const box = boxRef.current
     if (box === null) return
     const camera = state.camera
@@ -80,7 +123,16 @@ function CameraRig({ target, config, reducedMotion, boxRef }: RigProps) {
       ? 0
       : MathUtils.clamp(-rect.top / Math.max(rect.height, 1), 0, 1)
 
-    applyStageCamera(camera, box, rect, state.size, config, progress)
+    // 지수 감쇠(프레임률 보정). `state.clock.getDelta()` 를 쓰면 안 된다 —
+    // R3F 가 같은 시계로 자기 delta 를 뽑으므로 시간을 훔쳐 자동회전이 멈춘다.
+    // 콜백 두 번째 인자가 이 프레임의 delta 다.
+    const k = 1 - Math.pow(0.001, Math.min(delta, 0.1) * 8)
+    smoothed.current = {
+      x: MathUtils.lerp(smoothed.current.x, pointer.current.x, k),
+      y: MathUtils.lerp(smoothed.current.y, pointer.current.y, k),
+    }
+
+    applyStageCamera(camera, box, rect, state.size, config, progress, smoothed.current)
   })
 
   return null

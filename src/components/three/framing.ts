@@ -124,10 +124,19 @@ export function applyStageCamera(
   rect: StageRect,
   canvas: CanvasSize,
   config: StageConfig,
-  progress: number
+  progress: number,
+  /**
+   * 커서 위치 −1..1 (뷰포트 중심 기준). 궤도각에 얹어 시차를 만든다.
+   * 모델을 움직이지 않고 **카메라만** 도는 이유: 모델을 돌리면 프레이밍 계산(AABB)과
+   * 실제 렌더가 어긋난다. 궤도각은 `fitDistance` 가 이미 쓰는 축이라 자동으로 일치한다.
+   */
+  pointer: { x: number; y: number } = { x: 0, y: 0 }
 ): void {
   const center = box.getCenter(new Vector3())
-  const dir = orbitDirection(config.yaw + progress * 18, config.pitch + progress * 4)
+  const dir = orbitDirection(
+    config.yaw + progress * 18 + pointer.x * config.pointerYaw,
+    config.pitch + progress * 4 + pointer.y * config.pointerPitch
+  )
   const distance = fitDistance(box, center, dir, rect.width, rect.height, config.fov, config.fit, config.roll)
   const span = box.getSize(new Vector3()).length()
 

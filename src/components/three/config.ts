@@ -26,6 +26,9 @@ export interface StageConfig {
    * 90 이면 길쭉한 기체가 화면에서 가로로 눕는다 — 넓고 납작한 히어로 박스와 축이 맞는다.
    */
   roll: number
+  /** 커서 시차 최대 각(도). 0 이면 마우스에 반응하지 않는다. */
+  pointerYaw: number
+  pointerPitch: number
 }
 
 /**
@@ -41,9 +44,13 @@ export const DEFAULT_STAGE: StageConfig = {
   yaw: -28,
   pitch: 8,
   fov: 28,
-  fit: 0.86,
+  // 0.86 → 0.95. 우상단 박스로 옮기면서 여백이 필요 이상으로 남았다.
+  fit: 0.95,
   // 45 = 코가 화면 좌상향(시계방향 315°)을 향한다. 몸통은 우하로 뻗는다.
   // 히어로에서 로켓이 1·2·3 분면을 대각선으로 가로지르고 4분면은 로고가 쓴다.
   // (0 = 코 위, 90 = 코 왼쪽. 커질수록 반시계.)
   roll: 45,
+  // 과하면 콘텐츠보다 효과가 앞선다(레퍼런스 조사의 금지 항목). 눈에 띄되 거슬리지 않는 폭.
+  pointerYaw: 14,
+  pointerPitch: 7,
 }
