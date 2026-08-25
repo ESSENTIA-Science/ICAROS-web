@@ -44,11 +44,35 @@ function loadCaBundle(): string | undefined {
  * IAM 인증 토큰을 발급한다. `pg` 는 `password` 가 함수면 **커넥션마다** 호출하므로
  * 15분 만료를 따로 관리할 필요가 없다.
  *
- * `@aws-sdk/rds-signer` 를 동적 import 하는 이유: 로컬 개발(`password` 모드)에서는
- * 이 패키지가 없어도 앱이 떠야 한다. 정적 import 면 모듈 해석 단계에서 죽는다.
+ * 동적 import 인 이유: 로컬 개발(`password` 모드)에서는 이 패키지들이 없어도 앱이 떠야 한다.
+ * 정적 import 면 모듈 해석 단계에서 죽는다.
+ *
+ * **자격증명 경로가 환경마다 다르다.**
+ *
+ * - Vercel: OIDC 토큰을 **환경변수** `VERCEL_OIDC_TOKEN` 으로 준다.
+ *   그런데 AWS SDK 기본 체인은 `AWS_WEB_IDENTITY_TOKEN_FILE`(파일)을 찾는다 —
+ *   즉 **기본 체인만으로는 절대 못 붙는다.** `@vercel/functions/oidc` 의
+ *   `awsCredentialsProvider` 가 그 환경변수를 읽어 역할을 수임해 준다.
+ * - 로컬: `AWS_PROFILE` 이 있으므로 기본 체인이 그대로 동작한다.
+ *
+ * `AWS_ROLE_ARN` 이 있으면 Vercel 경로로 간다. 없으면 기본 체인.
  */
 async function generateAuthToken(host: string, port: number, user: string, region: string): Promise<string> {
   const { Signer } = await import('@aws-sdk/rds-signer')
+  const roleArn = process.env.AWS_ROLE_ARN
+
+  if (roleArn) {
+    const { awsCredentialsProvider } = await import('@vercel/functions/oidc')
+    const signer = new Signer({
+      hostname: host,
+      port,
+      username: user,
+      region,
+      credentials: awsCredentialsProvider({ roleArn }),
+    })
+    return signer.getAuthToken()
+  }
+
   const signer = new Signer({ hostname: host, port, username: user, region })
   return signer.getAuthToken()
 }
