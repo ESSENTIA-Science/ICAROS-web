@@ -29,13 +29,13 @@ DB 도 같은 경로를 재사용한다. 이것이 D20 에서 A(정적 비밀번
   "Version": "2012-10-17",
   "Statement": [{
     "Effect": "Allow",
-    "Principal": { "Federated": "arn:aws:iam::<account>:oidc-provider/oidc.vercel.com" },
+    "Principal": { "Federated": "arn:aws:iam::<account>:oidc-provider/oidc.vercel.com/<team-slug>" },
     "Action": "sts:AssumeRoleWithWebIdentity",
     "Condition": {
       "StringEquals": {
-        "oidc.vercel.com:aud": "https://vercel.com/<team-slug>",
+        "oidc.vercel.com/<team-slug>:aud": "https://vercel.com/<team-slug>",
         // 프로젝트·환경까지 좁힌다. 이걸 빼면 같은 팀의 **다른 프로젝트**도 이 역할을 수임한다.
-        "oidc.vercel.com:sub": "owner:<team-slug>:project:icaros-web:environment:production"
+        "oidc.vercel.com/<team-slug>:sub": "owner:<team-slug>:project:icaros-web:environment:production"
       }
     }
   }]
@@ -132,3 +132,54 @@ S3 권한 없음. DB DDL 외에 할 일이 없다.
 
 → **`rds_iam` 을 가진 role 을 사람·앱 계정에 상속시키지 않는다.**
 불가피하면 부여 → 설정 → **같은 트랜잭션에서 즉시 회수**한다.
+
+
+---
+
+## 🔴 실패 기록 (2026-08-25) — 내가 두 번 틀렸고 프로덕션이 3분 죽었다
+
+이 문서의 초안이 **두 곳에서 잘못돼 있었다.** 그대로 만들어 배포한 결과 `icaros.kr` 이 다운됐다.
+
+### ① 발행자에 팀 경로가 빠졌다
+```
+초안       oidc.vercel.com
+실제 토큰   https://oidc.vercel.com/<team-slug>
+```
+**Vercel 은 팀별로 발행자 경로를 나눈다.** STS 는 발행자를 정확히 대조하므로
+`InvalidIdentityToken: The web identity token provided could not be validated` 가 난다.
+
+추측하지 말고 discovery 문서로 확인할 것:
+```
+https://oidc.vercel.com/<team-slug>/.well-known/openid-configuration
+  → issuer 가 토큰의 iss 와 일치해야 한다
+```
+
+### ② 조건 키가 호스트 기준이 아니다 — 스킴만 뺀 **전체 URL(경로 포함)** 이다
+```
+틀림   oidc.vercel.com:sub
+맞음   oidc.vercel.com/<team-slug>:sub
+```
+EKS IRSA 가 `oidc.eks.<region>.amazonaws.com/id/<ID>:sub` 를 쓰는 것과 같은 규칙이다.
+
+**이게 더 위험한 실수다.** 호스트 기준으로 두면 *존재하지 않는 키* 를 `StringEquals` 로 대조하게 되고,
+없는 키는 조건 불충족이라 **조용히 거부**된다. ①만 고쳤다면 에러가 `InvalidIdentityToken` 이 아니라
+그냥 `AccessDenied` 라 원인 찾기가 더 어려웠을 것이다.
+(`essentia_infra` 가 지시를 그대로 따르지 않고 잡아냈다.)
+
+### ③ 구조적 원인 — 신뢰 정책이 검증 경로를 막았다
+`sub` 를 `environment:production` 만 허용해서 **Preview 로 미리 확인할 방법이 없었다.**
+확인 없이 프로덕션에 넣을 수밖에 없었고, 그래서 **실패가 곧 다운타임**이 됐다.
+
+→ 런타임 역할에 `preview` `sub` 를 추가했다. 와일드카드가 아니라 **정확히 두 값**을 나열한다.
+→ **마이그레이션 역할은 production 만 유지한다.** PR 하나로 트리거되는 환경이 운영 DB 스키마를
+   바꿀 수 있으면 Preview 를 좁게 잡은 이유가 무너진다. Preview 는 읽기 검증용이다.
+
+**교훈: 좁은 권한이 검증 경로까지 막으면 안전한 게 아니라 위험을 프로덕션으로 미루는 것이다.**
+
+### 다음 배포 절차
+```
+1. vercel deploy            (Preview)
+2. Preview 에서 DB 읽기 실측
+3. 통과하면 vercel promote / --prod
+```
+2번을 건너뛰지 않는다.
