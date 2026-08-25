@@ -45,6 +45,8 @@ interface RigProps {
   config: StageConfig
   reducedMotion: boolean
   boxRef: React.RefObject<Box3 | null>
+  /** 이 프레임에서 타깃 박스로 카메라를 맞출 수 있었는지. 값이 **바뀔 때만** 부른다. */
+  onFramed: (ok: boolean) => void
 }
 
 /**
@@ -98,8 +100,20 @@ function usePointerParallax(enabled: boolean) {
   return pointer
 }
 
-function CameraRig({ target, config, reducedMotion, boxRef }: RigProps) {
+function CameraRig({ target, config, reducedMotion, boxRef, onFramed }: RigProps) {
   const pointer = usePointerParallax(!reducedMotion)
+  /**
+   * 프레이밍이 한 번이라도 실패하면 카메라는 **기본 위치 그대로**다. 캔버스는 뷰포트 전체를
+   * 덮고 있으므로 그 상태로 그리면 기체가 화면 정중앙에 뜨고, 스크롤해도 따라오지 않는다
+   * (실측: 768~900px 에서 타깃 박스 폭이 0 이 되어 정확히 이 일이 났다).
+   * 그래서 "맞출 수 없었다"는 사실을 숨기지 않고 위로 올려 캔버스를 숨기게 한다.
+   */
+  const framed = useRef(false)
+  const report = (ok: boolean): void => {
+    if (framed.current === ok) return
+    framed.current = ok
+    onFramed(ok)
+  }
   // 목표값을 그대로 쓰면 커서를 튕길 때 카메라가 같이 튄다. 프레임마다 지수 감쇠로 따라간다.
   const smoothed = useRef({ x: 0, y: 0 })
 
@@ -113,10 +127,16 @@ function CameraRig({ target, config, reducedMotion, boxRef }: RigProps) {
     const box = boxRef.current
     if (box === null) return
     const camera = state.camera
-    if (!(camera instanceof PerspectiveCamera)) return
+    if (!(camera instanceof PerspectiveCamera)) {
+      report(false)
+      return
+    }
 
     const rect = target.getBoundingClientRect()
-    if (rect.width < 1 || rect.height < 1) return
+    if (rect.width < 1 || rect.height < 1) {
+      report(false)
+      return
+    }
 
     // 스크롤 진행도. 박스가 위로 빠져나간 만큼 0→1. 모션을 끄면 항상 0 이다.
     const progress = reducedMotion
@@ -133,6 +153,7 @@ function CameraRig({ target, config, reducedMotion, boxRef }: RigProps) {
     }
 
     applyStageCamera(camera, box, rect, state.size, config, progress, smoothed.current)
+    report(true)
   })
 
   return null
@@ -163,10 +184,11 @@ interface ModelProps {
   autoRotate: boolean
   reducedMotion: boolean
   boxRef: React.RefObject<Box3 | null>
-  onReady: () => void
+  /** 실제로 두 프레임을 그렸다. 노출 여부는 `Scene` 이 프레이밍과 함께 판단한다. */
+  onDrew: () => void
 }
 
-function Model({ src, autoRotate, reducedMotion, boxRef, onReady }: ModelProps) {
+function Model({ src, autoRotate, reducedMotion, boxRef, onDrew }: ModelProps) {
   const gltf = useLoader(GLTFLoader, src, (loader) => {
     // EXT_meshopt_compression 디코더. three 에 동봉돼 있어 배포 파일이 늘지 않는다 —
     // Draco 대신 meshopt 를 고른 이유가 정확히 이것이다 (10-3d-assets.md §3.3).
@@ -192,7 +214,7 @@ function Model({ src, autoRotate, reducedMotion, boxRef, onReady }: ModelProps) 
     if (frames.current < 2) {
       frames.current += 1
       // 로드 직후가 아니라 **실제로 두 프레임 그린 뒤** 포스터를 뗀다. 빈 캔버스가 노출되지 않는다.
-      if (frames.current === 2) onReady()
+      if (frames.current === 2) onDrew()
       return
     }
     if (!autoRotate || reducedMotion) return
@@ -249,6 +271,29 @@ export default function Scene({ target, config, reducedMotion, onReady, onError 
   const envRef = useRef<WebGLRenderTarget | null>(null)
   const [visible, setVisible] = useState(true)
 
+  /**
+   * 캔버스를 **언제 보여줄지**는 두 조건이 함께 정한다: 모델을 그렸고(`drew`),
+   * 그 프레임을 타깃 박스에 맞췄고(`framed`). 둘 중 하나라도 아니면 숨긴다.
+   *
+   * 왜 `frameloop: 'never'` 만으로는 부족한가 — 루프를 멈춰도 캔버스에는 **마지막 프레임이
+   * 그대로 칠해져 있다.** 뷰포트 전체를 덮는 고정 캔버스라 그 잔상이 아래 섹션 위에 계속 남는다.
+   * 루프를 멈추는 것과 화면에서 치우는 것은 별개의 일이라 둘 다 한다.
+   */
+  const framed = useRef(false)
+  const drew = useRef(false)
+  const announced = useRef(false)
+  const [shown, setShown] = useState(false)
+
+  const settle = (): void => {
+    const ok = framed.current && drew.current
+    setShown(ok)
+    // 포스터를 떼는 신호는 되돌릴 수 없다. 실제로 보여줄 수 있게 된 뒤 한 번만 보낸다.
+    if (ok && !announced.current) {
+      announced.current = true
+      onReady()
+    }
+  }
+
   // PMREM 렌더 타깃은 R3F 의 자동 dispose 대상이 아니다. 언마운트에서 직접 반납한다.
   useEffect(
     () => () => {
@@ -276,6 +321,11 @@ export default function Scene({ target, config, reducedMotion, onReady, onError 
 
   return (
     <Canvas
+      /*
+        `shown` 을 여기 묶으면 교착이다 — 루프가 안 돌면 `useFrame` 이 없고,
+        그러면 프레이밍 보고도 없어 `shown` 이 영원히 false 다. 루프는 히어로가
+        화면에 있는지로만 정하고, 노출 여부는 아래 `visibility` 가 따로 맡는다.
+      */
       frameloop={visible ? 'always' : 'never'}
       dpr={[1, 2]}
       // 알파를 켜야 섹션 배경(테마별로 다르다)이 그대로 비친다. 캔버스가 배경색을 칠하면
@@ -300,9 +350,18 @@ export default function Scene({ target, config, reducedMotion, onReady, onError 
         state.scene.environmentIntensity = 0.85
         envRef.current = rt
       }}
-      style={{ pointerEvents: 'none' }}
+      style={{ pointerEvents: 'none', visibility: visible && shown ? 'visible' : 'hidden' }}
     >
-      <CameraRig target={target} config={config} reducedMotion={reducedMotion} boxRef={boxRef} />
+      <CameraRig
+        target={target}
+        config={config}
+        reducedMotion={reducedMotion}
+        boxRef={boxRef}
+        onFramed={(ok) => {
+          framed.current = ok
+          settle()
+        }}
+      />
       <Lighting />
       <SceneBoundary onError={onError}>
         <Suspense fallback={null}>
@@ -311,7 +370,10 @@ export default function Scene({ target, config, reducedMotion, onReady, onError 
             autoRotate={config.autoRotate}
             reducedMotion={reducedMotion}
             boxRef={boxRef}
-            onReady={onReady}
+            onDrew={() => {
+              drew.current = true
+              settle()
+            }}
           />
         </Suspense>
       </SceneBoundary>

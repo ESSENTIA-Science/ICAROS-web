@@ -238,8 +238,10 @@ html {
   color-scheme: dark;
 }
 
-@media (max-width: 991px) { :root { --page-pad: var(--sp-5); } }
-@media (max-width: 479px) { :root { --page-pad: var(--sp-4); } }
+/* 좁을수록 여백을 더 아낀다는 관성을 따르지 않는다. 손에 쥔 화면에서는 글이 화면
+   가장자리에 붙는 것이 데스크톱보다 더 답답하게 읽힌다 — 한 단계씩 넉넉하게 준다. */
+@media (max-width: 991px) { :root { --page-pad: var(--sp-6); } }
+@media (max-width: 479px) { :root { --page-pad: var(--sp-5); } }
 
 @media (prefers-reduced-motion: reduce) {
   :root { --motion: 0; --stagger: 0ms; --stagger-word: 0ms; }
