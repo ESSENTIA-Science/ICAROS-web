@@ -24,3 +24,5 @@ docs/legacy-dump/posts-payload.json
 
 # RDS CA 번들 — 공개 인증서지만 리전별로 갱신되므로 스크립트로 받는다
 certs/
+.vercel
+.env*
