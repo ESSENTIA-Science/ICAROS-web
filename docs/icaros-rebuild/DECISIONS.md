@@ -546,3 +546,66 @@ ESSENTIA 기존 글의 죽은 이미지를 대체할 자료**로 다뤄야 한�
 ```
 ESSENTIA 47건 중 **외부 절대 URL 을 가진 글이 11건**이고 `/api/forum/image/` 를 쓰는 글은 2건뿐이다.
 나머지 6건이 어디를 가리키는지는 미확인 — 이관과 별개로 ESSENTIA 쪽 사안이다.
+
+
+---
+
+## D20 실행 완료 (2026-08-25) — RDS 퍼블릭 전환 + 마이그레이션 적용
+
+### 전환
+사용자가 직접 실행. **두 에이전트 세션의 안전 장치가 모두 이 동작을 막았다** —
+내 분류기와 `essentia_infra` 의 세션 정책이 독립적으로 "사람이 눌러야 한다"고 판정했다.
+
+```
+PubliclyAccessible  false → true      status available, pending {}
+보안그룹 sg-091f…    5432 ← 0.0.0.0/0  sgr-0ef95ad2c19fb8b4b
+DNS                 퍼블릭 IP 로 해석됨
+TCP 5432            도달 확인
+```
+
+### 🔴 `icaros_migrator` 에는 데이터베이스 CREATE 권한이 없다 — 이것이 drizzle-kit 침묵의 원인
+
+`drizzle-kit migrate` 가 **stderr 한 줄 없이 exit 1** 로 끝났다.
+직접 붙어 보니 원인은 `create schema` 였다:
+
+```
+permission denied for database essentia
+```
+
+스키마는 이미 인프라가 만들어 뒀는데, drizzle-kit 은 원장 테이블을 놓기 전에
+스키마 생성을 시도한다. **`create schema if not exists` 조차 권한 검사가 먼저라 죽는다.**
+`IF NOT EXISTS` 는 존재 검사를 먼저 하지 않는다.
+
+→ `scripts/db/migrate.ts` 를 직접 썼다. `drizzle-kit` 은 `db:migrate:drizzle` 로 남겨 뒀다.
+  - 원장 스키마는 drizzle 호환(`id serial pk` · `hash text` · `created_at bigint`)이라 나중에 다시 써도 된다
+  - 파일 하나가 하나의 트랜잭션. 실패하면 그 파일만 통째로 롤백
+  - `create schema` 문은 건너뛴다 — 스키마는 인프라가 소유하고 우리는 그 안에만 만든다
+  - **적용 전후로 `public` 테이블 수를 세고 달라지면 exit 1** — ESSENTIA 가 `ddl-auto: validate` 다
+
+### 적용 결과
+```
+마이그레이션 원장   3행 (파일 3개)
+icaros 테이블      15
+public 테이블      40 → 40  (변화 없음)
+```
+
+### 권한 모델 실증 (`icaros_app` 으로 접속)
+| | |
+|---|---|
+| `icaros` SELECT·INSERT·DELETE | ✅ 동작 |
+| `public.forum_posts` 조회 | ✅ **permission denied for schema public** |
+| `create table icaros.…` | ✅ **permission denied for schema icaros** (DDL 없음) |
+
+자격증명이 유출돼도 ICAROS 데이터까지가 한계라는 D20 의 전제가 실제로 성립한다.
+
+### 시드
+`site_settings 33 · page_sections 7 · rockets 4 · rocket_engines 6 · members 27` — 로컬과 일치.
+
+### 앱 → RDS 실측
+프로덕션 빌드가 RDS 를 읽어 렌더한다. 랜딩 카피·후원 금액(2,257,445 / 3,200,000)·로켓·멤버 전부 확인.
+`/rocket/nope` 404 회귀 없음.
+
+### 남은 것
+- Vercel 환경변수 + OIDC 역할 (`12-vercel-oidc-policy.md`)
+- 운영 관리자 발급
+- D1 서비스 토큰 → Posts 쓰기·이관

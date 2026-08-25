@@ -21,3 +21,6 @@ docs/.local/
 
 # 이관 페이로드 — 레거시 본문과 Supabase 이미지 URL 이 들어 있다. 공개 레포에 올리지 않는다
 docs/legacy-dump/posts-payload.json
+
+# RDS CA 번들 — 공개 인증서지만 리전별로 갱신되므로 스크립트로 받는다
+certs/

@@ -13,12 +13,14 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "tsx scripts/db/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "bootstrap:admin": "tsx scripts/bootstrap-admin.ts",
     "storage:cleanup": "tsx scripts/storage-cleanup.ts",
     "migrate:posts": "tsx scripts/migrate/export-posts.ts",
-    "fonts:subset": "tsx scripts/fonts/subset.ts"
+    "fonts:subset": "tsx scripts/fonts/subset.ts",
+    "db:verify": "tsx scripts/db/verify.ts",
+    "db:migrate:drizzle": "drizzle-kit migrate"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",

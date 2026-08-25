@@ -8,14 +8,55 @@
  *
  *   pnpm tsx scripts/seed-from-legacy.ts
  */
+import { execFileSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
 import { Pool } from 'pg'
+
+/** Next 는 .env.local 을 자동으로 읽지만 tsx 맨몸 실행은 안 읽는다. */
+function loadEnvLocal(): void {
+  if (!existsSync('.env.local')) return
+  for (const raw of readFileSync('.env.local', 'utf8').split('\n')) {
+    const line = raw.trim()
+    if (line === '' || line.startsWith('#')) continue
+    const eq = line.indexOf('=')
+    if (eq <= 0) continue
+    const k = line.slice(0, eq).trim()
+    if (process.env[k] === undefined) process.env[k] = line.slice(eq + 1).trim()
+  }
+}
+loadEnvLocal()
+
+/**
+ * 접속 설정. 시드는 **데이터**를 넣으므로 DML 만 있는 `icaros_app` 으로 붙는다 —
+ * 마이그레이션 role 을 쓰면 DDL 권한을 안 써도 되는 작업에 굳이 쥐게 된다.
+ */
+function poolConfig(): Record<string, unknown> {
+  if (process.env.DB_AUTH !== 'iam') {
+    const url = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL
+    if (!url) throw new Error('DATABASE_URL 이 없습니다')
+    return { connectionString: url }
+  }
+  const host = process.env.PGHOST
+  const region = process.env.AWS_REGION
+  const database = process.env.PGDATABASE
+  if (!host || !region || !database) throw new Error('PGHOST · AWS_REGION · PGDATABASE 가 필요합니다')
+  const port = Number(process.env.PGPORT ?? 5432)
+  const user = process.env.PGUSER ?? 'icaros_app'
+  const caPath = process.env.RDS_CA_BUNDLE_PATH
+  const ca = process.env.RDS_CA_BUNDLE ?? (caPath && existsSync(caPath) ? readFileSync(caPath, 'utf8') : undefined)
+  if (!ca) throw new Error('RDS CA 번들이 필요합니다 — scripts/fetch-rds-ca.sh')
+  const password = execFileSync('aws', [
+    'rds', 'generate-db-auth-token',
+    '--profile', process.env.AWS_PROFILE ?? 'essentia',
+    '--region', region, '--hostname', host, '--port', String(port), '--username', user,
+  ], { encoding: 'utf8' }).trim()
+  return { host, port, user, database, password, ssl: { ca, rejectUnauthorized: true } }
+}
 
 const SB_URL = process.env.LEGACY_SUPABASE_URL
 const SB_KEY = process.env.LEGACY_SUPABASE_ANON_KEY
-const DB_URL = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL
 
 if (!SB_URL || !SB_KEY) throw new Error('LEGACY_SUPABASE_* 가 설정되지 않았습니다')
-if (!DB_URL) throw new Error('DATABASE_URL 이 설정되지 않았습니다')
 
 type Row = Record<string, unknown>
 
@@ -31,7 +72,7 @@ const num = (v: unknown) => (v === null || v === undefined || v === '' ? null : 
 const str = (v: unknown) => (typeof v === 'string' && v.length ? v : null)
 
 async function main() {
-  const pool = new Pool({ connectionString: DB_URL })
+  const pool = new Pool(poolConfig())
   const c = await pool.connect()
 
   try {
