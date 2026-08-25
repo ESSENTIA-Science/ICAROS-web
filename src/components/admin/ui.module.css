@@ -714,3 +714,11 @@
   border-bottom: 1px solid var(--rule);
 }
 .galleryItem:last-child { border-bottom: 0; }
+
+/* 패널 안의 외부 링크. 본문 흐름에 섞이므로 밑줄로만 구분한다. */
+.link {
+  color: var(--sig-ink);
+  border-bottom: 1px solid var(--rule-strong);
+  transition: var(--t-color);
+}
+.link:hover { border-bottom-color: var(--sig); }

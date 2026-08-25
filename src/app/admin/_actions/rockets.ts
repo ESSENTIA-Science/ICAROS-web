@@ -73,7 +73,16 @@ const rocketSchema = z.object({
     .regex(SLUG_SHAPE, '식별자는 영소문자·숫자·하이픈만 쓸 수 있고 2~48자여야 합니다. (예: icx2)'),
   name: z.string().trim().min(1, '이름을 입력해 주세요.').max(120, '이름은 120자 이내로 입력해 주세요.'),
   series: z.enum(['A', 'B'], '시리즈를 선택해 주세요.'),
-  sortOrder: z.string().trim().regex(/^\d{1,4}$/, '정렬순서는 0~9999 사이의 정수입니다.'),
+  /**
+   * 생성 폼은 이 필드를 보내지 않는다 — 서버가 해당 시리즈 끝에 붙인다.
+   * `(series, sort_order)` unique 제약 때문에, 폼이 미리 계산한 값을 들고 있다가
+   * 사용자가 시리즈를 바꾸면 충돌한다. 그 증상은 "로켓 추가가 안 된다" 로만 보인다.
+   */
+  sortOrder: z
+    .string()
+    .trim()
+    .regex(/^\d{1,4}$/, '정렬순서는 0~9999 사이의 정수입니다.')
+    .optional(),
   maxAltitudeM: decimalField({ precision: 10, scale: 2 }),
   sizeM: decimalField({ precision: 10, scale: 3, positive: true }),
   payloadKg: decimalField({ precision: 10, scale: 3 }),
@@ -169,7 +178,7 @@ function toRocketValues(r: ParsedRocket) {
   return {
     name: r.name,
     series: r.series,
-    sortOrder: Number(r.sortOrder),
+    sortOrder: Number(r.sortOrder ?? 0),
     maxAltitudeM: emptyToNull(r.maxAltitudeM),
     sizeM: emptyToNull(r.sizeM),
     payloadKg: emptyToNull(r.payloadKg),
@@ -256,7 +265,17 @@ export async function createRocketAction(
         )
       }
 
-      await tx.insert(schema.rockets).values({ id, ...toRocketValues(parsed.rocket) })
+      // 생성에서는 정렬순서를 사용자에게 묻지 않고 **그 시리즈의 끝**에 붙인다.
+      // 트랜잭션 안에서 계산하므로 동시 생성에도 같은 번호가 두 번 나오지 않는다.
+      const [slot] = await tx
+        .select({ next: sql<number>`coalesce(max(${schema.rockets.sortOrder}), -1) + 1` })
+        .from(schema.rockets)
+        .where(eq(schema.rockets.series, parsed.rocket.series))
+
+      await tx
+        .insert(schema.rockets)
+        .values({ id, ...toRocketValues(parsed.rocket), sortOrder: Number(slot?.next ?? 0) })
+
       const engines = toEngineValues(id, parsed.engines)
       if (engines.length > 0) await tx.insert(schema.rocketEngines).values(engines)
 

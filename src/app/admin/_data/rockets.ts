@@ -160,6 +160,29 @@ export async function getRocketForAdmin(id: string): Promise<AdminRocketDetail |
 }
 
 /** 새 로켓 폼의 기본 정렬순서 — 같은 시리즈의 마지막 뒤. `(series, sort_order)` 가 unique 라 충돌을 미리 피한다. */
+/**
+ * 시리즈별 다음 빈 정렬 슬롯을 **한 번에** 돌려준다.
+ *
+ * 하나만 미리 계산해 폼에 넣으면, 사용자가 시리즈 select 를 바꿨을 때 그 값이 그대로 남아
+ * `(series, sort_order)` unique 제약에 걸린다. 지금 데이터에서는 우연히 안 겹치지만
+ * 로켓이 늘면 반드시 충돌하고, 그때 증상은 "로켓이 추가가 안 된다"로 나타난다.
+ */
+export async function nextRocketSortOrders(): Promise<Record<'A' | 'B', number>> {
+  const rows = await db
+    .select({
+      series: schema.rockets.series,
+      next: sql<number>`coalesce(max(${schema.rockets.sortOrder}), -1) + 1`,
+    })
+    .from(schema.rockets)
+    .groupBy(schema.rockets.series)
+
+  const out: Record<'A' | 'B', number> = { A: 0, B: 0 }
+  for (const r of rows) {
+    if (r.series === 'A' || r.series === 'B') out[r.series] = Number(r.next)
+  }
+  return out
+}
+
 export async function nextRocketSortOrder(series: string): Promise<number> {
   const rows = await db
     .select({ next: sql<number>`coalesce(max(${schema.rockets.sortOrder}), -1) + 1` })

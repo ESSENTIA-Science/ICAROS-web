@@ -10,7 +10,6 @@ import { getMediaRef, listRocketGallery } from '../_data/media'
 import {
   getRocketForAdmin,
   listRocketsForAdmin,
-  nextRocketSortOrder,
   type AdminRocketListItem,
 } from '../_data/rockets'
 import { adminHref } from '../_tabs'
@@ -50,7 +49,6 @@ export default async function RocketsPanel({
   const storageReady = isStorageConfigured()
 
   if (create) {
-    const sortOrder = await nextRocketSortOrder('A')
     return (
       <>
         <div className={ui.panelHead}>
@@ -65,7 +63,7 @@ export default async function RocketsPanel({
               id: '',
               name: '',
               series: 'A',
-              sortOrder,
+              sortOrder: 0,
               published: true,
               descriptionMd: '',
               maxAltitudeM: '',

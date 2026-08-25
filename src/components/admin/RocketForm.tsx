@@ -107,16 +107,26 @@ export default function RocketForm({
           required
           error={fieldErrors['series']}
         />
-        <TextField
-          name="sortOrder"
-          label="정렬순서"
-          defaultValue={String(values.sortOrder)}
-          hint="같은 시리즈 안에서 중복될 수 없습니다. 작은 값이 먼저 나옵니다."
-          inputMode="numeric"
-          maxLength={4}
-          required
-          error={fieldErrors['sortOrder']}
-        />
+        {/*
+          생성할 때는 정렬순서를 묻지 않는다. 서버가 그 시리즈의 끝에 붙인다.
+
+          `(series, sort_order)` 에 unique 제약이 있어서, 폼이 미리 계산한 값을 넣어 두면
+          사용자가 시리즈 select 를 바꿨을 때 그 값이 그대로 남아 충돌한다.
+          그 증상은 화면에서 "로켓이 추가가 안 된다"로 나타나고 원인은 보이지 않는다.
+          순서는 만든 뒤 수정 화면에서 바꾸면 된다.
+        */}
+        {mode === 'edit' ? (
+          <TextField
+            name="sortOrder"
+            label="정렬순서"
+            defaultValue={String(values.sortOrder)}
+            hint="같은 시리즈 안에서 중복될 수 없습니다. 작은 값이 먼저 나옵니다."
+            inputMode="numeric"
+            maxLength={4}
+            required
+            error={fieldErrors['sortOrder']}
+          />
+        ) : null}
       </div>
 
       <div className={ui.grid}>
