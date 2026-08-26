@@ -30,3 +30,5 @@ certs/
 # 원본 사진·영상 작업 폴더. 공개 레포에 원본을 올리지 않는다 —
 # 웹에 나가는 것은 `npm run seed:panels` 가 정책(1600px · WebP · 2MB)에 맞춰 S3 로 올린 사본뿐이다.
 asset/
+.legacy-archive-tmp/
+.legacy-import-tmp/

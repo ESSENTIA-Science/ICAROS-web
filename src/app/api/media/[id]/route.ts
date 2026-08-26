@@ -31,7 +31,15 @@ const RESTRICTED_CACHE = 'private, no-store'
  * `member` 가 여기 없는 이유는 멤버 사진이 미성년자 얼굴이기 때문이고(요구사항 I17),
  * `entity_type` 이 null 인 행은 용도를 모르므로 같은 쪽으로 닫는다.
  */
-const CACHEABLE_ENTITY_TYPES: ReadonlySet<string> = new Set(['rocket', 'landing', 'model', 'poster'])
+const CACHEABLE_ENTITY_TYPES: ReadonlySet<string> = new Set([
+  'rocket',
+  'landing',
+  'model',
+  'poster',
+  // 레거시 게시글 이미지. 공개 기록이고 키가 UUID 라 내용이 바뀌지 않는다.
+  // `member` 가 여전히 빠져 있는 것과 대비된다 — 그쪽은 미성년자 얼굴이다.
+  'post',
+])
 
 function cacheControlFor(entityType: string | null): string {
   return entityType !== null && CACHEABLE_ENTITY_TYPES.has(entityType) ? IMMUTABLE_CACHE : RESTRICTED_CACHE

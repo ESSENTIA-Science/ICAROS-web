@@ -34,3 +34,7 @@
   border-bottom: 1px solid var(--rule-strong); padding-bottom: var(--sp-1);
 }
 .link:hover { border-bottom-color: var(--sig); }
+
+/* 원본이 어디인지 적는 한 줄. 목록(`posts/page.module.css`)의 같은 이름과 같은 조판이다 —
+   신규 상세와 레거시 상세가 이 모듈을 공유하므로 여기 한 번만 둔다. */
+.source { margin-top: var(--sp-8); font-size: var(--fs-caption); color: var(--fg-faint); }
