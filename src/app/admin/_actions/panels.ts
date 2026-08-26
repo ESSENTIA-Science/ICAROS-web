@@ -8,6 +8,7 @@
  */
 
 import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 import { and, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 
@@ -87,6 +88,7 @@ function fromPgError(err: unknown): ActionResult | null {
   return fail('저장할 수 없는 값이 있습니다. 입력을 확인해 주세요.')
 }
 
+/** 목록 전체 토큰 대조. **순서 바꾸기 전용** — 개별 저장은 행 토큰을 쓴다. */
 async function assertVersion(token: string): Promise<void> {
   const [row] = await db
     .select({ ok: versionMatches(schema.pagePanels.updatedAt, token) })
@@ -124,7 +126,9 @@ export async function createPanel(_prev: FormState, form: FormData): Promise<Act
 
   revalidatePath('/')
   revalidatePath('/admin')
-  return { ok: true, message: '패널을 만들었습니다. 내용을 확인한 뒤 공개해 주세요.' }
+  /* 폼에 머무르지 않고 목록으로 돌려보낸다. 방금 만든 것이 목록에서 어디에 앉았는지,
+     공개 여부가 어떤지 곧바로 보이는 편이 낫다. `redirect` 는 throw 로 동작하므로 마지막 줄이다. */
+  redirect(adminHref({ tab: 'panels', saved: '패널을 만들었습니다. 내용을 확인한 뒤 공개해 주세요.' }))
 }
 
 // ── 수정 ────────────────────────────────────────────────────────────────────
@@ -160,7 +164,7 @@ export async function updatePanel(_prev: FormState, form: FormData): Promise<Act
 
   revalidatePath('/')
   revalidatePath('/admin')
-  return { ok: true, message: '저장했습니다.' }
+  redirect(adminHref({ tab: 'panels', saved: '저장했습니다.' }))
 }
 
 // ── 공개 토글 ───────────────────────────────────────────────────────────────

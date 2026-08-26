@@ -19,6 +19,8 @@ import ui from './ui.module.css'
 
 export type PanelFormPanel = {
   id: string
+  /** 이 행의 낙관적 잠금 토큰. 목록 집계 토큰과 다르다. */
+  version: string
   mediaId: string
   mediaWidth: number | null
   mediaHeight: number | null
@@ -55,11 +57,9 @@ const opts = (values: readonly string[]) => values.map((v) => ({ value: v, label
  */
 export default function PanelForm({
   panel,
-  version,
   choices,
 }: {
   panel: PanelFormPanel | null
-  version: string
   choices: readonly PanelMediaChoice[]
 }) {
   const action = panel ? updatePanel : createPanel
@@ -99,8 +99,14 @@ export default function PanelForm({
     <form action={formAction} className={ui.form}>
       <ActionNotice state={state} />
 
-      {panel ? <input type="hidden" name="id" value={panel.id} /> : null}
-      <input type="hidden" name="version" value={version} />
+      {/* 개별 저장은 **그 행의** 토큰을 쓴다. 목록 집계 토큰을 쓰면 다른 패널을 한 번이라도
+          고친 뒤부터 저장이 전부 충돌로 막힌다. */}
+      {panel ? (
+        <>
+          <input type="hidden" name="id" value={panel.id} />
+          <input type="hidden" name="version" value={panel.version} />
+        </>
+      ) : null}
       <input type="hidden" name="mediaId" value={mediaId} />
       <input type="hidden" name="focalX" value={focalX} />
       <input type="hidden" name="focalY" value={focalY} />

@@ -44,7 +44,7 @@ export default async function PanelsPanel({
         <h2 className={ui.cardTitle} lang="en">
           {editing ? 'Edit Panel' : 'New Panel'}
         </h2>
-        <PanelForm panel={editing} version={version} choices={choices} />
+        <PanelForm panel={editing} choices={choices} />
       </section>
     )
   }

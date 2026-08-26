@@ -3,7 +3,7 @@ import 'server-only'
 import { asc, eq } from 'drizzle-orm'
 
 import { db, schema } from '@/lib/db'
-import { maxVersionExpr } from '../_lib/version'
+import { maxVersionExpr, versionExpr } from '../_lib/version'
 
 /**
  * 관리 화면용 패널 읽기.
@@ -32,6 +32,8 @@ export type AdminPanel = {
   readonly body: string | null
   readonly ctaLabel: string | null
   readonly ctaHref: string | null
+  /** 이 행의 낙관적 잠금 토큰. 목록 집계 토큰(`panelsVersion`)과 용도가 다르다. */
+  readonly version: string
 }
 
 export async function listPanels(): Promise<readonly AdminPanel[]> {
@@ -55,6 +57,7 @@ export async function listPanels(): Promise<readonly AdminPanel[]> {
       body: schema.pagePanels.body,
       ctaLabel: schema.pagePanels.ctaLabel,
       ctaHref: schema.pagePanels.ctaHref,
+      version: versionExpr(schema.pagePanels.updatedAt),
     })
     .from(schema.pagePanels)
     .innerJoin(schema.media, eq(schema.media.id, schema.pagePanels.mediaId))
@@ -70,8 +73,13 @@ export async function getPanel(id: string): Promise<AdminPanel | null> {
 }
 
 /**
- * 낙관적 잠금 토큰. `updated_at` 최댓값 하나로 목록 전체의 버전을 만든다 —
- * 순서 바꾸기가 여러 행을 한 번에 건드리므로 행 단위 토큰으로는 충돌을 잡지 못한다.
+ * **목록 전체**의 낙관적 잠금 토큰. `updated_at` 최댓값 하나로 만든다 —
+ * 순서 바꾸기는 여러 행을 한 번에 건드리므로 행 단위 토큰으로는 충돌을 잡지 못한다.
+ *
+ * 개별 항목 저장에는 **쓰지 않는다.** 한 패널을 고치면 최댓값이 그 행의 시각으로 옮겨가고,
+ * 그 뒤로는 다른 패널을 열 때마다 토큰이 그 행의 `updated_at` 과 어긋나 저장이 전부 막힌다.
+ * 실제로 그렇게 만들었다가 "제목을 고쳐도 저장이 안 된다"로 드러났다.
+ * 개별 저장은 `AdminPanel.version`(행 토큰)을 쓴다.
  */
 export async function panelsVersion(): Promise<string> {
   const [row] = await db
