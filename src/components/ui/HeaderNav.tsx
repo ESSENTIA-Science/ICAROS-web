@@ -28,6 +28,27 @@ export default function HeaderNav({ items }: { items: readonly HeaderNavItem[] }
 
   const close = useCallback(() => setOpenedAt(null), [])
 
+  /* 내비가 첫 화면 위에서는 투명하게 떠 있다가, 스크롤이 그 화면을 벗어나면 앉는다.
+     사진 밝기를 미리 알 수 없으니 계속 투명하게 두면 흰 글자가 언젠가 밝은 사진 위에 놓인다.
+     rAF 로 한 프레임에 한 번만 읽는다 — scroll 이벤트마다 레이아웃을 읽으면 스크롤이 끊긴다. */
+  const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    let queued = false
+    const read = () => {
+      queued = false
+      setScrolled(window.scrollY > window.innerHeight * 0.6)
+    }
+    const onScroll = () => {
+      if (queued) return
+      queued = true
+      requestAnimationFrame(read)
+    }
+    read()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
   // 열려 있는 동안: Esc 로 닫기, 배경 스크롤 잠금, 포커스를 패널 안에 가둔다
   useEffect(() => {
     if (!open) return
@@ -65,7 +86,7 @@ export default function HeaderNav({ items }: { items: readonly HeaderNavItem[] }
   }, [open])
 
   return (
-    <header className={styles.nav} data-theme="dark">
+    <header className={styles.nav} data-theme="dark" data-scrolled={scrolled ? '' : undefined}>
       <div className={styles.inner}>
         <Link href="/" className={styles.brand} onClick={close} aria-label="ICAROS 홈">
           <Image src={wordmark} alt="ICAROS" className={styles.wordmark} priority />

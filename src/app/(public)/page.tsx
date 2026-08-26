@@ -4,6 +4,8 @@ import { asc, eq } from 'drizzle-orm'
 
 import { db, schema } from '@/lib/db'
 import { getSiteContent, toList, toNumber, type SiteContent } from '@/lib/content'
+import { getLandingPanelsSafe } from '@/lib/panels'
+import Panel from '@/components/panel/Panel'
 import Hero from '@/components/landing/Hero'
 import Statement, { hasStatementContent } from '@/components/landing/Statement'
 import Research, { hasResearchContent } from '@/components/landing/Research'
@@ -220,7 +222,17 @@ function buildSection(row: SectionRow, c: SiteContent, ctx: BuildContext): Secti
 }
 
 export default async function HomePage() {
-  const [c, sections] = await Promise.all([loadContent(), loadSections()])
+  const [c, sections, panels] = await Promise.all([loadContent(), loadSections(), getLandingPanelsSafe()])
+
+  /**
+   * 패널이 하나라도 공개돼 있으면 **패널 더미가 곧 히어로**다. 그때 `hero` 섹션(3D 무대)을
+   * 같이 그리면 첫 화면이 두 개가 된다.
+   *
+   * 이 판정을 코드가 하는 이유: `page_sections` 에서 `hero` 를 끄는 것으로도 같은 결과가 되지만,
+   * 그 한 줄을 잊은 채 패널을 공개하는 순간 랜딩이 눈에 띄게 깨진다. 데이터로만 막을 수 있는
+   * 규칙을 코드가 한 번 더 잡아 준다 — 반대로 패널을 전부 내리면 3D 히어로가 저절로 돌아온다.
+   */
+  const usable = panels.length > 0 ? sections.filter((s) => s.id !== 'hero') : sections
 
   // 후원 CTA 는 alert 대신 앵커다 (B8). contact 가 꺼져 있거나 카피가 전부 비어 통째로 빠지면
   // `#contact` 는 죽은 앵커가 되므로 메일로 보낸다.
@@ -230,7 +242,7 @@ export default async function HomePage() {
     hasContactContent({ body: c['contact.body'], email, instagram: c['contact.instagram'] })
   const donateCtaHref = contactRenders ? '#contact' : email ? `mailto:${email}` : undefined
 
-  const rendered = sections.flatMap((row) => {
+  const rendered = usable.flatMap((row) => {
     const render = buildSection(row, c, { donateCtaHref })
     return render ? [{ id: row.id, render }] : []
   })
@@ -240,7 +252,7 @@ export default async function HomePage() {
   const nextAfterHero = heroPos >= 0 ? rendered[heroPos + 1]?.id : rendered[0]?.id
 
   return (
-    <>
+    <div data-palette={panels.length > 0 ? 'mono' : undefined}>
       {/* 리빌은 JS 가 살아 있을 때만 의미가 있다. 스크립트가 없으면 숨김 상태로 갇히지 않게 푼다.
           세 종류(덩어리·순차 자식·단어)를 전부 풀어야 한다 — 하나라도 빠지면 그 자리만 안 보인다.
           CSS Modules 의 해시 클래스명은 여기서 지목할 수 없어 리빌 상태를 전부 데이터 속성으로 둔다. */}
@@ -253,8 +265,13 @@ export default async function HomePage() {
         />
       </noscript>
 
+      {/* 사진 패널이 먼저다. 랜딩이 무엇을 하는 팀인지 사진으로 말하고, 자료는 하위 페이지가 진다. */}
+      {panels.map((panel, i) => (
+        <Panel key={panel.id} panel={panel} first={i === 0} />
+      ))}
+
       {/* 번호는 배열 위치가 아니라 살아남은 순서다 — 빈 섹션이 빠져도 02·03·05 로 뛰지 않는다 */}
       {rendered.map((r, i) => r.render(i + 1, nextAfterHero))}
-    </>
+    </div>
   )
 }

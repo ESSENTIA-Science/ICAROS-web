@@ -1,0 +1,275 @@
+/* ─────────────────────────────────────────────────────────────
+   패널 — 사진 한 장이 화면을 채우고 그 위에 텍스트가 얹힌다.
+
+   이 파일에 색이 거의 없다. 배경은 사진이고 글자는 흰색 하나다.
+   액센트(청록)를 여기서 쓰지 않는 것은 의도다 — 사진마다 색이 다른데
+   그 위에 고정된 액센트를 얹으면 어느 사진에서는 반드시 튄다.
+   시그널은 자료 화면(하위 페이지)에서만 쓴다.
+   ───────────────────────────────────────────────────────────── */
+
+.panel {
+  position: relative;
+  display: grid;
+  isolation: isolate;
+  background: var(--n-950);
+  color: var(--n-0);
+}
+
+/* 100dvh 를 쓴다. 모바일 브라우저의 주소창이 접힐 때 100vh 는 화면보다 커서
+   첫 패널의 아래쪽이 잘리고, 스크롤이 시작부터 어긋난 채로 출발한다. */
+.panel[data-height='full'] { min-height: 100dvh; }
+.panel[data-height='tall'] { min-height: 80dvh; }
+.panel[data-height='half'] { min-height: 56dvh; }
+
+/* ── 사진 ──────────────────────────────────────── */
+.media {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  overflow: hidden;
+}
+
+.media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* 초점은 레코드가 정한다. 가운데 크롭 기본값으로 두면 세로 화면에서 피사체가 잘린다. */
+  object-position: var(--focal-x, 50%) var(--focal-y, 50%);
+}
+
+/* ── 스크림 ────────────────────────────────────── */
+/* 흰 글자를 사진 위에 얹는 구조라 가독성이 사진 밝기에 달려 있다.
+   사진마다 다른 값을 고를 수 있게 패널 레코드가 들고 있다. */
+.scrim {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.panel[data-scrim='none'] .scrim { display: none; }
+/* 정지점이 글이 실제로 앉는 높이까지 닿아야 한다. 62% 에서 0 이 되게 뒀더니
+   헤드라인이 앉는 52~62% 구간의 그늘이 0.1 밖에 안 남아, 히어로에서 흰 글자가
+   흰 연기 기둥 위를 지나며 대비가 무너졌다. 글 영역 전체를 덮되 위쪽 하늘은 남긴다. */
+.panel[data-scrim='bottom'] .scrim {
+  background: linear-gradient(
+    to top,
+    rgb(0 0 0 / 0.80) 0%,
+    rgb(0 0 0 / 0.56) 28%,
+    rgb(0 0 0 / 0.24) 52%,
+    rgb(0 0 0 / 0.04) 72%,
+    rgb(0 0 0 / 0) 88%
+  );
+}
+.panel[data-scrim='top'] .scrim {
+  background: linear-gradient(
+    to bottom,
+    rgb(0 0 0 / 0.84) 0%,
+    rgb(0 0 0 / 0.6) 24%,
+    rgb(0 0 0 / 0.26) 46%,
+    rgb(0 0 0 / 0) 68%
+  );
+}
+.panel[data-scrim='full'] .scrim { background: rgb(0 0 0 / 0.52); }
+
+/* ── 글 자리 ───────────────────────────────────── */
+.inner {
+  width: 100%;
+  max-width: var(--container);
+  margin-inline: auto;
+  padding-inline: var(--page-pad);
+  /* 아래 여백을 크게 둔다. 글 덩어리가 화면 바닥에 붙으면 스크린샷처럼 보이고,
+     떠 있으면 조판처럼 보인다. 이 급의 차이는 대부분 여백에서 난다. */
+  padding-block: calc(var(--nav-h) + var(--sp-7)) var(--sp-10);
+  display: grid;
+}
+
+/* Reveal 이 글 덩어리를 한 겹 감싼다. 그 래퍼가 그리드 자식이 되므로 정렬은 래퍼에 걸리고,
+   래퍼 안의 `.text` 는 폭을 그대로 물려받아야 한다. */
+.inner > div { width: 100%; min-width: 0; }
+
+/* 떠오르는 것은 글뿐이다. 사진까지 페이드하면 첫 화면이 빈 채로 시작해 느려 보인다. */
+.inner > div[data-reveal='pending'] { opacity: 0; translate: 0 1.6rem; }
+.inner > div[data-reveal='in'] {
+  opacity: 1;
+  translate: none;
+  transition:
+    opacity 900ms var(--ease-out),
+    translate 900ms var(--ease-out);
+}
+
+.panel[data-anchor='bottom-left'] .inner { align-content: end; justify-items: start; }
+.panel[data-anchor='bottom-center'] .inner { align-content: end; justify-items: center; text-align: center; }
+.panel[data-anchor='center'] .inner { align-content: center; justify-items: center; text-align: center; }
+.panel[data-anchor='top-left'] .inner { align-content: start; justify-items: start; }
+
+/* 폭을 여기서 묶지 않는다. 헤드라인은 화면 폭을 다 쓰고, 줄바꿈은 레코드가 정한다.
+   글자 크기가 6.4vw 인데 글 자리를 48rem 으로 묶으면 1440px 에서 두 줄짜리 문장이
+   다섯 줄로 쪼개지고, 그 순간 이 조판이 성립하는 이유(한 호흡에 읽히는 큰 한 줄)가 사라진다.
+   폭 제한은 본문에만 건다. */
+/* 균등 gap 을 쓰지 않는다. eyebrow 는 헤드라인에 붙고, 본문은 떨어지고,
+   CTA 는 더 떨어진다 — 간격이 곧 위계다. */
+.text {
+  display: grid;
+  gap: 0;
+  width: 100%;
+}
+.panel[data-anchor='bottom-center'] .text,
+.panel[data-anchor='center'] .text { justify-items: center; }
+.panel[data-anchor='bottom-center'] .cta,
+.panel[data-anchor='center'] .cta { justify-self: center; }
+
+.eyebrow {
+  margin: 0 0 var(--sp-4);
+  font-family: var(--ff-mono);
+  font-size: 1.1rem;
+  line-height: 1.5;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.74);
+}
+
+/* 대문자 · 폭 좁힘 없이. SpaceX 계열 조판의 핵심은 크기이지 장식이 아니다. */
+/* 폭 축을 108 로 살짝 벌린다. 100 은 밋밋하고 125(본문 시스템 값)는 이 크기에서 뭉갠다.
+   자간은 조인다 — 큰 활자는 기본 자간이 이미 넓어 보인다. */
+.headline {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-weight: var(--fw-display);
+  font-stretch: 108%;
+  font-size: clamp(3.4rem, 5.8vw, 7.6rem);
+  line-height: 1.0;
+  letter-spacing: -0.028em;
+  text-transform: uppercase;
+  /* 레코드의 줄바꿈을 그대로 존중한다 — 어디서 끊을지는 사람이 정한다. */
+  white-space: pre-line;
+  /* `balance` 를 쓰지 않는다. 레코드가 이미 줄을 정했는데 브라우저가 다시 고르면
+     사람이 찍은 줄바꿈과 싸운다. */
+  max-width: 22ch;
+}
+
+.body {
+  margin: var(--sp-5) 0 0;
+  max-width: 46ch;
+  font-size: var(--fs-body-s);
+  line-height: 1.75;
+  color: rgb(255 255 255 / 0.78);
+}
+.body:lang(ko) { letter-spacing: 0; word-break: keep-all; }
+
+/* ── CTA ───────────────────────────────────────── */
+/* `.text` 가 그리드라 자식이 기본 stretch 다. 버튼이 화면 폭까지 늘어나면
+   테두리가 사진 출처 위를 지나가고, 무엇보다 그건 버튼이 아니라 띠가 된다. */
+.cta {
+  margin-top: var(--sp-7);
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: 1.4rem 3.2rem;
+  border: 1px solid rgb(255 255 255 / 0.78);
+  background: transparent;
+  color: var(--n-0);
+  font-family: var(--ff-mono);
+  font-size: 1.1rem;
+  line-height: 1;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition:
+    background var(--dur-2) var(--ease-out),
+    color var(--dur-2) var(--ease-out),
+    border-color var(--dur-2) var(--ease-out);
+}
+.cta:hover {
+  background: var(--n-0);
+  border-color: var(--n-0);
+  color: var(--n-950);
+}
+/* 화살표만 먼저 움직인다. 버튼 전체가 움직이면 값싸 보인다. */
+.ctaArrow { transition: translate var(--dur-2) var(--ease-out); }
+.cta:hover .ctaArrow { translate: 0.4rem 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ctaArrow, .cta { transition: none; }
+  .cta:hover .ctaArrow { translate: none; }
+}
+
+/* ── 사진 출처 ─────────────────────────────────── */
+/* 출처는 **스크림이 있는 쪽**에 붙는다. 아래 고정으로 두면 `scrim: top` 인 패널에서
+   그늘 없는 밝은 사진 위에 놓여 읽히지 않는다 (CREW 패널에서 실측으로 확인).
+   그림자는 그 위의 보험이다 — 스크림이 `none` 인 패널도 있을 수 있다. */
+.credit {
+  position: absolute;
+  right: var(--page-pad);
+  bottom: var(--sp-5);
+  margin: 0;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.65);
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono-s);
+  letter-spacing: var(--tr-mono);
+  font-size: 1.05rem;
+  color: rgb(255 255 255 / 0.38);
+  font-variant-numeric: tabular-nums lining-nums;
+  text-align: right;
+}
+
+/* ── 스크롤 단서 ───────────────────────────────── */
+/* 첫 패널이 화면을 꽉 채우면 아래에 뭔가 더 있다는 신호가 사라진다.
+   화살표를 튀기지 않는다 — 선이 천천히 자랐다 사라지는 쪽이 조용하고, 조용한 쪽이 비싸 보인다. */
+.scrollCue {
+  position: absolute;
+  left: 50%;
+  bottom: var(--sp-4);
+  translate: -50% 0;
+  margin: 0;
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-2);
+}
+
+.scrollWord {
+  font-family: var(--ff-mono);
+  font-size: 1rem;
+  line-height: 1;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.5);
+  /* 자간이 오른쪽에도 붙어 가운데 정렬이 왼쪽으로 밀린다. 그만큼 되돌린다. */
+  text-indent: 0.3em;
+}
+
+.scrollLine {
+  width: 1px;
+  height: 3.2rem;
+  background: linear-gradient(to bottom, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0));
+  transform-origin: top;
+  animation: scrollPulse 2.4s var(--ease-in-out, ease-in-out) infinite;
+}
+
+@keyframes scrollPulse {
+  0%   { scale: 1 0.2; opacity: 0; }
+  35%  { scale: 1 1;   opacity: 1; }
+  100% { scale: 1 1;   opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scrollLine { animation: none; opacity: 0.55; }
+}
+
+@media (max-width: 767px) {
+  .scrollCue { display: none; }
+}
+
+.panel[data-scrim='top'] .credit {
+  top: calc(var(--nav-h) + var(--sp-4));
+  bottom: auto;
+}
+
+@media (max-width: 767px) {
+  .inner { padding-block: calc(var(--nav-h) + var(--sp-6)) var(--sp-8); }
+  .panel[data-scrim='top'] .credit { top: auto; }
+  .headline { font-size: clamp(3rem, 11vw, 5.2rem); }
+  .credit { position: static; margin-top: var(--sp-6); text-align: left; }
+  .panel[data-anchor='center'] .credit,
+  .panel[data-anchor='bottom-center'] .credit { text-align: center; }
+}

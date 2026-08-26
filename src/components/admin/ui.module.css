@@ -722,3 +722,155 @@
   transition: var(--t-color);
 }
 .link:hover { border-bottom-color: var(--sig); }
+
+/* ── 랜딩 패널 ─────────────────────────────────────────────
+   사진이 행의 주인공이다. 제목이 먼저 오는 표로 만들면 운영자가 패널을
+   사진이 아니라 글로 찾게 되고, 그 순간 이 모델의 요점이 사라진다. */
+
+.panelList { margin: var(--sp-5) 0 0; padding: 0; list-style: none; display: grid; gap: var(--sp-4); }
+
+.panelRow {
+  display: grid;
+  grid-template-columns: 2.4rem 20rem minmax(0, 1fr) max-content;
+  align-items: start;
+  gap: var(--sp-5);
+  padding: var(--sp-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--plate-radius);
+  background: var(--bg-raised);
+}
+/* 비공개는 흐리게. 지우지 않는다 — 안 보이면 있는 줄 모른 채 공개를 잊는다. */
+.panelRow[data-off] { opacity: 0.58; }
+
+.panelNo {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono-s);
+  letter-spacing: var(--tr-mono);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums lining-nums;
+  padding-top: 0.4rem;
+}
+
+.panelThumb {
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--bg-sunken);
+  border: 1px solid var(--rule);
+  display: grid;
+  place-items: center;
+}
+.panelThumb img { width: 100%; height: 100%; object-fit: cover; }
+.panelThumbEmpty { font-size: var(--fs-caption); color: var(--fg-faint); letter-spacing: 0; }
+
+.panelBody { min-width: 0; display: grid; gap: var(--sp-2); }
+
+.panelEyebrow {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono-s);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.panelHeadline {
+  font-size: var(--fs-h5);
+  font-weight: var(--fw-strong);
+  line-height: 1.25;
+  /* 레코드의 줄바꿈을 목록에서도 그대로 보여 준다 — 실제 랜딩과 같은 줄에서 끊긴다. */
+  white-space: pre-line;
+}
+.panelMeta {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono-s);
+  letter-spacing: var(--tr-mono);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.panelActions { display: grid; gap: var(--sp-2); justify-items: stretch; min-width: 12rem; }
+.panelMove { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+
+/* ── 초점 고르기 ───────────────────────────────────────── */
+
+.panelPickRow { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+
+.panelPick {
+  width: 12rem;
+  aspect-ratio: 4 / 3;
+  padding: 0;
+  overflow: hidden;
+  background: var(--bg-sunken);
+  border: 1px solid var(--rule);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: var(--fs-caption);
+  color: var(--fg-faint);
+}
+.panelPick img { width: 100%; height: 100%; object-fit: cover; }
+.panelPick[aria-pressed='true'] { border-color: var(--sig); outline: 2px solid var(--sig); outline-offset: -3px; }
+
+.panelFocal {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 64rem;
+  padding: 0;
+  border: 1px solid var(--rule);
+  background: var(--bg-sunken);
+  cursor: crosshair;
+  overflow: hidden;
+}
+.panelFocal img { display: block; width: 100%; height: auto; }
+
+/* 십자선. 점 하나로 두면 밝은 사진 위에서 사라진다 — 두 색을 겹쳐 어느 배경에서도 보이게 한다. */
+.panelCross {
+  position: absolute;
+  translate: -50% -50%;
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 2px solid var(--n-0);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgb(0 0 0 / 0.6), inset 0 0 0 2px rgb(0 0 0 / 0.6);
+  pointer-events: none;
+}
+
+.panelCrops { display: flex; gap: var(--sp-4); margin-top: var(--sp-4); flex-wrap: wrap; }
+.panelCrop {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  background: var(--bg-sunken);
+}
+.panelCrop[data-ratio='wide'] { width: 32rem; aspect-ratio: 16 / 9; }
+.panelCrop[data-ratio='tall'] { width: 12rem; aspect-ratio: 9 / 16; }
+.panelCrop img { width: 100%; height: 100%; object-fit: cover; }
+.panelCrop em {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  padding: 0.4rem 0.8rem;
+  background: rgb(0 0 0 / 0.65);
+  color: var(--n-0);
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono-s);
+  letter-spacing: var(--tr-mono);
+  font-style: normal;
+}
+
+@media (max-width: 900px) {
+  .panelRow { grid-template-columns: minmax(0, 1fr); }
+  .panelActions { min-width: 0; }
+  .panelCrop[data-ratio='wide'] { width: 100%; }
+}
+
+/* 목록 머리 — 제목과 추가 버튼. `.actions` 는 폼 하단용이라 여백 규칙이 다르다. */
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+.panelHead .cardTitle { margin: 0; }

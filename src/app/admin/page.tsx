@@ -3,6 +3,7 @@ import { getAdminSession } from '@/lib/auth/guard'
 import ui from '@/components/admin/ui.module.css'
 import LandingPanel from './_panels/LandingPanel'
 import MembersPanel from './_panels/MembersPanel'
+import PanelsPanel from './_panels/PanelsPanel'
 import PostsPanel from './_panels/PostsPanel'
 import RocketsPanel from './_panels/RocketsPanel'
 import ScenePanel from './_panels/ScenePanel'
@@ -78,6 +79,9 @@ export default async function AdminPage({
         ) : (
           <>
             {tab === 'posts' ? <PostsPanel /> : null}
+            {tab === 'panels' ? (
+              <PanelsPanel create={create} editId={editId} deleteId={deleteId} saved={saved} />
+            ) : null}
             {tab === 'rockets' ? (
               <RocketsPanel create={create} editId={editId} deleteId={deleteId} saved={saved} />
             ) : null}

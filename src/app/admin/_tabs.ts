@@ -4,6 +4,7 @@
  */
 export const ADMIN_TABS = [
   { id: 'posts', label: 'Posts' },
+  { id: 'panels', label: 'Panels' },
   { id: 'rockets', label: 'Rockets' },
   { id: 'members', label: 'Members' },
   { id: 'landing', label: 'Landing' },
