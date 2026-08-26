@@ -18,8 +18,16 @@ export function getS3Client(): S3Client {
   const cached = globalThis.__icarosS3
   if (cached) return cached
 
-  const { region } = getS3Config()
-  const client = new S3Client({ region })
+  const { region, endpoint } = getS3Config()
+
+  /**
+   * `endpoint` 는 로컬 MinIO 에서만 채워진다. 그때는 **경로 스타일**이어야 한다 —
+   * MinIO 는 가상 호스트 스타일(`bucket.host`)을 기본으로 받지 않아 SDK 기본값으로는
+   * DNS 조회부터 실패한다.
+   */
+  const client = new S3Client(
+    endpoint ? { region, endpoint, forcePathStyle: true } : { region }
+  )
 
   // 개발 중 HMR 이 클라이언트를 계속 새로 만들지 않도록. 서버리스 warm 인스턴스에서도 재사용된다.
   globalThis.__icarosS3 = client

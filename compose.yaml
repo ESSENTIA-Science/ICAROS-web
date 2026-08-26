@@ -18,5 +18,27 @@ services:
       timeout: 3s
       retries: 20
 
+  # 로컬 S3. 운영은 실제 S3 를 쓰고 이 서비스는 **개발 전용**이다 —
+  # `S3_ENDPOINT` 가 설정된 환경에서만 코드가 이쪽을 본다(운영에는 그 변수가 없다).
+  # 이게 없으면 업로드·미디어 서빙·패널 랜딩을 로컬에서 한 번도 돌려 볼 수 없다.
+  minio:
+    image: minio/minio:latest
+    container_name: icaros-minio
+    command: server /data --console-address ":9011"
+    environment:
+      MINIO_ROOT_USER: icaros_local
+      MINIO_ROOT_PASSWORD: icaros_local_dev
+    ports:
+      - "9010:9000"
+      - "9011:9011"
+    volumes:
+      - icaros-minio:/data
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
 volumes:
   icaros-pgdata:
+  icaros-minio:

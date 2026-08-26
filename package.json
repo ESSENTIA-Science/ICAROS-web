@@ -20,7 +20,8 @@
     "migrate:posts": "tsx scripts/migrate/export-posts.ts",
     "fonts:subset": "tsx scripts/fonts/subset.ts",
     "db:verify": "tsx scripts/db/verify.ts",
-    "db:migrate:drizzle": "drizzle-kit migrate"
+    "db:migrate:drizzle": "drizzle-kit migrate",
+    "seed:panels": "tsx scripts/seed-panels.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",

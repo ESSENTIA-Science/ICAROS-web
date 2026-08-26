@@ -7,6 +7,13 @@ export interface S3Config {
   readonly bucket: string
   readonly prefix: string
   readonly region: string
+  /**
+   * S3 호환 엔드포인트. **로컬 개발 전용**이고 운영에서는 비어 있다.
+   *
+   * 이 값이 없으면 SDK 가 실제 AWS 로 간다 — 즉 운영 동작은 이 필드가 없던 때와 한 글자도
+   * 다르지 않다. 설정되지 않은 값이 기본값으로 스며들지 않게 `undefined` 를 그대로 둔다.
+   */
+  readonly endpoint: string | undefined
 }
 
 /**
@@ -39,7 +46,16 @@ export function getS3Config(): S3Config {
 
   const region = process.env.AWS_REGION?.trim() || 'ap-northeast-2'
 
-  return { bucket, prefix, region }
+  /**
+   * 로컬 MinIO 를 붙일 자리 (09 §4 P4 "로컬은 MinIO 또는 실제 버킷 read-only").
+   *
+   * 이것이 없어서 지금까지 스토리지가 걸린 화면은 로컬에서 **한 번도 돌려 볼 수 없었다** —
+   * 업로드·미디어 서빙·패널 랜딩이 전부 운영 버킷 승인에 묶여 있었다.
+   * 운영에서는 이 환경변수가 없으므로 경로가 바뀌지 않는다.
+   */
+  const endpoint = process.env.S3_ENDPOINT?.trim() || undefined
+
+  return { bucket, prefix, region, endpoint }
 }
 
 /** 구성 여부만 알고 싶을 때. 관리 UI 가 업로드 버튼을 감추는 데 쓴다. */
