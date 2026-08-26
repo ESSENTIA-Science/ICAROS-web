@@ -31,7 +31,9 @@ export default async function MemberPage() {
     // 생기면 Next 가 fallback 셸을 먼저 흘려보내고 본문은 문서 끝의 hidden 조각으로 붙는다.
     // 실측: 그 상태에서 /member 의 HTML 은 스켈레톤이 3.8KB 지점, 본문은 hidden 안에 있었다 —
     // JS 없는 클라이언트·크롤러에게는 명단이 통째로 사라진다.
-    <section className={styles.page} data-section-theme="paper">
+    /* `paper`(밝은 면)가 mono 아래에서 검정으로 뒤집힌다 — 멤버 사진이 어두운 면 위에서
+       더 또렷하고, 랜딩·기체 페이지와 면이 이어진다. */
+    <section className={styles.page} data-section-theme="paper" data-palette="mono">
       <RevealNoScript />
       <div className="container">
         <header className={styles.head}>

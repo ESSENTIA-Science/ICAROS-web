@@ -74,7 +74,9 @@ export default async function RocketDetailPage({ params }: { params: Promise<Par
   const backHref = rocket.series === 'A' ? '/rocket' : `/rocket?series=${rocket.series}`
 
   return (
-    <article>
+    /* 섹션이 둘(어두운 히어로 + 밝은 상세)이라 바깥에서 한 번에 잠근다.
+       `mono` 아래에서는 두 면이 모두 검정이 되고 경계는 색이 아니라 괘선이 만든다. */
+    <article data-palette="mono">
       <RevealNoScript />
 
       <section className={styles.hero} data-section-theme="ink">

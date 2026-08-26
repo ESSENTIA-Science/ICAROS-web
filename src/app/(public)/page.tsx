@@ -232,7 +232,18 @@ export default async function HomePage() {
    * 그 한 줄을 잊은 채 패널을 공개하는 순간 랜딩이 눈에 띄게 깨진다. 데이터로만 막을 수 있는
    * 규칙을 코드가 한 번 더 잡아 준다 — 반대로 패널을 전부 내리면 3D 히어로가 저절로 돌아온다.
    */
-  const usable = panels.length > 0 ? sections.filter((s) => s.id !== 'hero') : sections
+  /**
+   * 패널이 대체하는 섹션 목록. 히어로(3D 무대)와 **소개 글 넷**이다.
+   *
+   * 패널 다섯 장이 이미 "무엇을 하는 팀인가"를 말하므로 그 아래에 같은 이야기를 문단으로
+   * 다시 적으면 랜딩이 사진 페이지와 소개 문서를 겹쳐 놓은 것이 된다 —
+   * 하위 페이지로 밀어낸 밀도가 랜딩 하단으로 되돌아오는 셈이다.
+   *
+   * `donate` 와 `contact` 는 남긴다. 패널 CTA 가 `#support`·`#contact` 로 내려가는 착지점이고,
+   * 모금 현황·연락처는 패널이 대신할 수 없는 **기능**이다.
+   */
+  const REPLACED_BY_PANELS = new Set(['hero', 'about', 'vision', 'research', 'mission'])
+  const usable = panels.length > 0 ? sections.filter((s) => !REPLACED_BY_PANELS.has(s.id)) : sections
 
   // 후원 CTA 는 alert 대신 앵커다 (B8). contact 가 꺼져 있거나 카피가 전부 비어 통째로 빠지면
   // `#contact` 는 죽은 앵커가 되므로 메일로 보낸다.

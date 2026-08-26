@@ -36,7 +36,9 @@ export default async function RocketIndexPage({ searchParams }: { searchParams: 
   return (
     // 기체 렌더가 밝은 회색 실루엣이라 어두운 면 위에서만 형태가 선다.
     // `ink` 는 tokens.css 의 섹션 테마 5값 중 어두운 앵커다.
-    <section className={styles.page} data-section-theme="ink">
+    /* `mono` 는 이 트리 전체를 검정·흰색으로 잠근다. 랜딩이 사진 패널로 바뀐 뒤
+       하위 페이지만 시그널(청록)을 쓰면 링크 하나 눌렀을 뿐인데 다른 사이트로 넘어간 것처럼 읽힌다. */
+    <section className={styles.page} data-section-theme="ink" data-palette="mono">
       <RevealNoScript />
       <div className="container">
         <header className={styles.head}>
