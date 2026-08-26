@@ -21,7 +21,9 @@
     "fonts:subset": "tsx scripts/fonts/subset.ts",
     "db:verify": "tsx scripts/db/verify.ts",
     "db:migrate:drizzle": "drizzle-kit migrate",
-    "seed:panels": "tsx scripts/seed-panels.ts"
+    "seed:panels": "tsx scripts/seed-panels.ts",
+    "panels:publish": "tsx scripts/db/publish-panels.ts",
+    "db:inspect-public": "tsx scripts/db/inspect-public.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",
