@@ -57,7 +57,28 @@ function loadCaBundle(): string | undefined {
  *
  * `AWS_ROLE_ARN` 이 있으면 Vercel 경로로 간다. 없으면 기본 체인.
  */
-async function generateAuthToken(host: string, port: number, user: string, region: string): Promise<string> {
+/**
+ * 발급한 토큰을 재사용한다.
+ *
+ * `pg` 는 **커넥션마다** password 함수를 부른다. 캐시가 없으면 커넥션 하나가 열릴 때마다
+ * OIDC 자격증명 수임 + RDS 서명이 한 번씩 돈다 — 랜딩은 쿼리 셋을 병렬로 던지므로
+ * 첫 요청에서만 그 왕복이 세 번 겹친다. 실측 TTFB 0.5초의 상당 부분이 여기였다.
+ *
+ * RDS IAM 토큰은 서명 시각부터 **15분** 유효하다. 10분만 재사용해 5분을 여유로 남긴다 —
+ * 만료 직전 토큰으로 커넥션을 열다 실패하는 쪽이, 몇 번 더 서명하는 것보다 나쁘다.
+ *
+ * 캐시는 모듈 스코프다. 서버리스 인스턴스 하나의 수명 동안만 살고, 인스턴스가 죽으면 같이 죽는다.
+ */
+const TOKEN_TTL_MS = 10 * 60 * 1000
+
+let cachedToken: { key: string; token: string; expiresAt: number } | undefined
+
+async function signAuthToken(
+  host: string,
+  port: number,
+  user: string,
+  region: string
+): Promise<string> {
   const { Signer } = await import('@aws-sdk/rds-signer')
   const roleArn = process.env.AWS_ROLE_ARN
 
@@ -75,6 +96,18 @@ async function generateAuthToken(host: string, port: number, user: string, regio
 
   const signer = new Signer({ hostname: host, port, username: user, region })
   return signer.getAuthToken()
+}
+
+async function generateAuthToken(host: string, port: number, user: string, region: string): Promise<string> {
+  const key = `${host}:${port}:${user}:${region}`
+  const now = Date.now()
+  if (cachedToken && cachedToken.key === key && cachedToken.expiresAt > now) {
+    return cachedToken.token
+  }
+
+  const token = await signAuthToken(host, port, user, region)
+  cachedToken = { key, token, expiresAt: now + TOKEN_TTL_MS }
+  return token
 }
 
 export function buildPoolConfig(): PoolConfig {
@@ -110,12 +143,18 @@ export function buildPoolConfig(): PoolConfig {
     port,
     database,
     user,
-    // 함수로 넘기면 pg 가 커넥션마다 호출한다 → 15분 만료를 우리가 관리하지 않아도 된다.
+    // 함수로 넘기면 pg 가 커넥션마다 호출한다. 그 안에서 10분 캐시가 서명 왕복을 걷어낸다.
     password: () => generateAuthToken(host, port, user, region),
     ssl: { ca, rejectUnauthorized: true, servername: host },
     // 서버리스는 인스턴스마다 풀이 생긴다. 인스턴스당 상한을 낮게 잡는다.
     max: 3,
-    idleTimeoutMillis: 10_000,
+    /**
+     * 10초는 너무 짧았다. Fluid Compute 는 인스턴스를 재사용하는데, 방문이 뜸한 사이트에서는
+     * 다음 요청이 오기 전에 커넥션이 매번 닫혀 **요청마다 새 TLS 핸드셰이크**를 다시 했다.
+     * 60초면 연속 탐색(랜딩 → 기체 → 부원)이 커넥션 하나를 그대로 쓴다.
+     * `max: 3` 이 인스턴스당 상한을 잡고 있어 RDS 쪽 커넥션 수는 그대로다.
+     */
+    idleTimeoutMillis: 60_000,
     connectionTimeoutMillis: 10_000,
     options: '-c search_path=icaros',
   }

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { display, mono } from '@/lib/fonts'
 import { getSeo, getSiteContentSafe } from '@/lib/content'
 import Loader from '@/components/landing/Loader'
+import QueryProvider from '@/components/providers/QueryProvider'
 import './globals.css'
 
 /**
@@ -49,7 +50,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           커버는 pointer-events: none 이고 CSS 백스톱으로 스크립트 없이도 걷힌다.
         */}
         <Loader />
-        {children}
+        {/*
+          TanStack Query 프로바이더는 루트에 한 번만 둔다. `children` 은 prop 으로 전달된
+          이미 렌더된 엘리먼트라 **서버 컴포넌트로 남는다** — 클라이언트 경계가 아래로 번지지 않는다.
+        */}
+        <QueryProvider>{children}</QueryProvider>
       </body>
     </html>
   )
