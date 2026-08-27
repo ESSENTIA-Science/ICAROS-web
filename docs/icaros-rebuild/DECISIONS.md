@@ -609,3 +609,132 @@ public 테이블      40 → 40  (변화 없음)
 - Vercel 환경변수 + OIDC 역할 (`12-vercel-oidc-policy.md`)
 - 운영 관리자 발급
 - D1 서비스 토큰 → Posts 쓰기·이관
+
+
+---
+
+## D25 — Posts **쓰기** 계약 확정 (2026-08-27). 벽은 우리 쪽이 아니다
+
+D1 서비스 토큰이 **ESSENTIA main 에 머지돼 배포 파이프라인을 탔다** (커밋 `95eae77`,
+`V20__icaros_service_account.sql`). D23 §남은 것에 "토큰 대기"로 적어 둔 항목이 열렸다.
+
+계약 전체를 `essentia_infra` 에게 받아 여기 박아 둔다. **붙일 때 이 문서만 보면 된다.**
+
+### 우리가 막혀 있던 진짜 질문 — D14 가 남긴 것
+
+> `author_role=outsider` 인 서비스 계정이 `자유` 아닌 **프로젝트 카테고리**에 쓸 수 있는가?
+
+D14 부수 사항이 "D1 착수 시 같이 정할 것"으로 남겨 둔 항목이다. 우리 글은 전부 프로젝트
+카테고리로 가야 하므로 **여기가 막히면 쓰기 자체가 성립하지 않는다.**
+
+**답: 열려 있다.** `ForumService.resolveProjectTag()` 가 서비스 주체를 회원 판정 **앞에서** 가른다.
+
+```java
+if (viewer.isServicePrincipal()) {
+    requireServiceProjectAllowed(projectId);   // 설정된 UUID 하나만
+} else if (role == Role.OUTSIDER) {
+    throw ApiException.forbidden(PROJECT_TAG_MEMBER_ONLY);
+}
+```
+
+D14 의 "프로젝트 카테고리는 회원 전용" 규칙은 **살아 있다.** 서비스 주체만 예외이고, 그 예외도
+**프로젝트 UUID 하나로 묶인다**(카테고리 이름이 아니라 — 제목이 바뀌어도 안 뚫린다).
+`isServicePrincipal()` 이 여는 문은 정확히 둘: 프로젝트 작성 자격, 그에 딸린 레이트리밋.
+임원 판정·소유권·관리자 경로에는 쓰이지 않는다.
+
+**부수 효과 — 작성자 배지가 "외부인"으로 뜬다.** `role()` 은 여전히 `OUTSIDER` 를 반환하므로
+`forum_posts.author_role` 에 outsider 로 스냅샷된다. 기능은 되고 표시만 그렇다.
+바꾸려면 별도 논의다 — 우리가 임의로 요청할 것이 아니다.
+
+### 인증 — `X-Service-Token`, Bearer 가 아니다
+
+```
+X-Service-Token: <원문 토큰>
+```
+
+| | |
+|---|---|
+| `Authorization` 를 쓰지 않는 이유 | 그쪽은 사람 로그인(JWT 쿠키) 경로다. 섞지 않는다 |
+| 유효 범위 | **`/api/forum/` 접두사 안에서만** 읽힌다. 관리자 경로에 실어도 익명으로 떨어진다 |
+| 비교 | `MessageDigest.isEqual` (상수시간) |
+| 쿠키와 동시 전송 | **금지.** 이미 인증된 요청이면 필터가 건너뛴다 |
+
+### 쓰기
+
+```
+POST /api/forum/posts
+{
+  "category":  "…",            // projectId 를 주면 무시된다
+  "title":     "…",
+  "content":   "…",            // Markdown + LaTeX
+  "projectId": "<ICAROS UUID>",
+  "pinned":    false,          // 임원 아니면 조용히 무시
+  "createdAt": "…Z"            // 서비스 토큰 전용 백데이트. 과거만, 미래는 400
+}
+→ { id }
+```
+
+`projectId` 가 있으면 고정 카테고리 검사를 건너뛴다 — `category` 를 따로 맞출 필요가 없다.
+레이트리밋은 비회원 24시간 3건이 아니라 **시간당 `hourlyLimit`건**(기본 60), `author_user_id` 기준.
+
+`createdAt` 백데이트는 **쓰지 않는다.** 레거시는 `icaros.legacy_posts` 에 있다(D23 개정).
+있다는 것만 적어 둔다 — 나중에 누가 "왜 안 썼지"를 묻지 않도록.
+
+### 이미지 — `svc-icaros` 로 티켓이 발급된다
+
+`ForumImageService.requireSignedIn()` 은 `viewer.isAuthenticated()`, 즉 **`user` 행 존재만** 본다.
+`members` 행은 보지 않는다. **D21 수정에서 `user` 행만 만들기로 한 것이 정확히 이 경로 때문이다** —
+그 판단이 실증됐다.
+
+```
+POST /api/forum/images/presign   {fileName, contentType, size}
+  → {url, key, contentType, ticket}
+PUT  <url>                        ← Content-Type 은 응답의 contentType 과 정확히 동일하게
+POST /api/forum/images/confirm   {key, fileName, ticket}
+  → {url}   // 본문에 심을 앱 경로. 만료되는 서명 URL 이 아니다
+```
+
+- **`contentType` 한 글자만 달라도 S3 가 403.** 서명에 `content-type;host` 가 들어간다.
+  우리 `/api/upload/presign` 과 같은 함정이다(D12) — 브라우저가 추측한 MIME 을 쓰지 말 것.
+- `ticket` 은 `(key, userId)` 에 묶인다. 안 맞으면 403이고 **그 전에 S3 를 건드리지 않는다.**
+- 신규 글 이미지는 그쪽 `forum/` 으로 간다. 우리 `icaros-web/` 과 섞이지 않는다.
+
+### 토큰 보관
+
+| ICAROS | Vercel 환경변수 `ESSENTIA_SERVICE_TOKEN` |
+|---|---|
+| ESSENTIA | `/etc/essentia/api.env` 또는 SSM `/essentia/prod/SERVICE_TOKEN` |
+
+**`NEXT_PUBLIC_` 접두사 절대 금지.** 이 레포는 PUBLIC 이고 D22(서버 사이드 전용)가 이걸 위해 있다.
+값은 커밋·세션 간 채팅을 타지 않는다 — 사람끼리 전달한다.
+
+토큰이 새면 **그 프로젝트 카테고리에 아무나 글을 쓸 수 있다.** 그 이상은 안 열린다 —
+경로(`/api/forum/`)·프로젝트(UUID 하나)·상한(시간당) 셋으로 좁혀져 있다.
+
+### 🔴 남은 블로커는 우리 쪽이 아니다
+
+`essentia_infra` 가 **"지금도 쓸 수 있다"를 스스로 정정했다.** 코드는 나갔지만 **실서버 환경변수가
+들어갔는지 확인하지 못했다** — EC2 `/etc/essentia/api.env` 읽기가 자기 세션 권한에 막혔고,
+SSM 파라미터 목록에 해당 항목이 없다.
+
+**이게 조용히 실패한다는 점이 중요하다.** 토큰이 비었거나 32자 미만이면 `configured()` 가 false 라
+**필터가 에러도 로그도 없이 꺼지고 익명으로 떨어진다.** 우리는 401 이 아니라
+"프로젝트 카테고리는 회원 전용"(403)을 보게 된다 — 원인과 증상이 어긋난다.
+
+붙이기 전에 상대 쪽에서 확인되어야 하는 값:
+
+```
+SERVICE_TOKEN=<32자 이상>
+SERVICE_TOKEN_USER_ID=svc-icaros
+SERVICE_TOKEN_PROJECT_ID=<ICAROS 프로젝트 UUID>
+SERVICE_TOKEN_HOURLY_LIMIT=60
+```
+
+**우리가 할 수 있는 것이 없다.** 상대 사용자에게 올라가 있다. 확인되기 전에 구현을 시작하면
+첫 실패의 원인이 우리 코드인지 상대 환경변수인지 구분되지 않는다 — **확인 후 착수한다.**
+
+### 방법론으로 남길 것
+
+오늘 우리는 상대 스키마·상대 코드가 필요했고, **권한을 넓히는 대신 물어봤다.** 두 번 다 그게 더
+나은 답을 냈다 — `public` 감시는 개수가 아니라 소유자로 바뀌었고(더 정확해졌다),
+쓰기 계약은 추측 없이 확정됐다. 격리가 진단을 막은 것이 아니라 **더 정확한 검증으로 밀어냈다.**
