@@ -16,6 +16,23 @@ import styles from './page.module.css'
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
 /**
+ * **빌드가 DB 도달성을 요구하지 않게 한다.**
+ *
+ * 이 선언이 없으면 Next 가 빌드 시점에 이 페이지를 한 번 프리렌더해 보고, 그 안의 DB 조회가
+ * 그대로 나간다. 실측: `DATABASE_URL` 을 죽은 포트로 두면 `next build` 가
+ * `Error occurred prerendering page "/rocket"` → `ECONNREFUSED` 로 죽는다.
+ *
+ * 프리렌더 결과는 어차피 버려진다 — 이 페이지는 `searchParams` 를 읽어 요청마다 내용이 달라진다.
+ * 즉 **아무 이득 없이 배포 빌드가 DB 를 필수 의존성으로 갖게 된다.** 빌드 환경에서 RDS 에
+ * 닿지 못하는 순간(네트워크·자격증명·정책 어느 것이든) 배포 자체가 실패한다.
+ *
+ * `[slug]/page.tsx` 에는 같은 이유로 이미 이 선언이 있다. 여기 70번째 줄 주석은
+ * "이 페이지는 force-dynamic 이고"라고 **단정하고 있었지만 실제 선언은 없었다** —
+ * 옆 라우트의 사실을 이 파일에 옮겨 적은 것이었고, 그래서 아무도 눈치채지 못했다.
+ */
+export const dynamic = 'force-dynamic'
+
+/**
  * 시리즈는 쿼리스트링에 있고 목록 내용이 통째로 달라진다 — 두 시리즈가 같은 title·canonical 을
  * 들고 있으면 검색엔진이 한쪽을 중복으로 접는다. 기본 시리즈만 `/rocket` 을 canonical 로 쓴다.
  */
