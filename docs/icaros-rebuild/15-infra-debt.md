@@ -154,6 +154,16 @@
 **이번 DB incident 와 무관하다.** 조사 중 발견됐을 뿐이고 별도로 관리한다.
 상세는 §3.
 
+#### B5. 개발자 IAM 계정이 `AdministratorAccess` · MFA 없음 🟠
+
+| | |
+|---|---|
+| **현재 영향** | `--profile essentia` 로 쓰는 IAM 주체가 `Executives` 그룹의 `AdministratorAccess` 를 갖고 있고 MFA 가 없다. 자격증명 하나가 새면 **양쪽 계정 전체**가 열린다 |
+| **경위** | §C4 복구 경로를 찾다가 ESSENTIA 가 `ssm:StartSession` 권한을 시뮬레이션하면서 함께 확인됐다. 지금 우리 작업을 막고 있지는 않다 |
+| **다음 액션** | MFA 활성화. 최소권한 분리는 그다음 |
+| **변경 시 위험** | MFA 는 CLI 흐름에 세션 토큰 단계를 추가한다. 스크립트가 그걸 처리해야 한다 |
+| **소관** | ESSENTIA 계정이지만 **주체는 ICAROS 개발자 본인**이다. 사용자 결정 |
+
 #### B4. CloudTrail · GuardDuty 부재 🟠 (ESSENTIA 소관)
 
 | | |
@@ -198,9 +208,66 @@
 | **원인** | 08-27 보안그룹 축소로 5432 인바운드가 **us-east-1 EC2 대역**으로 한정됐다. 개발자 머신 egress 는 그 안에 없다 |
 | **왜 지금까지 몰랐나** | 축소 **이전에** 마이그레이션을 적용했고, 이후 검증은 배포된 앱(us-east-1)으로만 했다 |
 | **🔴 이게 왜 심각한가** | **다음 마이그레이션을 적용할 경로가 없다.** 그리고 관리자 계정에서 잠기면 `bootstrap:admin` 이 유일한 복구 수단인데 그것도 못 돈다 |
-| **다음 액션 (후보)** | ① ESSENTIA EC2 를 SSM 포트포워딩 경유 — 그 EC2 는 DB SG 참조로 이미 허용됨 · ② 개발자 egress CIDR 추가 — **규칙 60개가 꽉 차 불가** · ③ GitHub Actions(us-east-1)에서 마이그레이션 실행 |
-| **변경 시 위험** | ①은 ESSENTIA AWS 접근 필요 · ③은 CI 에 DB 자격증명 경로가 생긴다 |
-| **상태** | ESSENTIA 에 통보 필요. **사용자 결정 사항** |
+| **복구 경로** | **① SSM 포트포워딩 — 네트워크 경로 검증 완료 (2026-08-28).** 아래 참조 |
+| **상태** | **경로 확보.** 다만 끝까지 쓰려면 아래 함정 둘을 처리해야 하고 그건 사용자 승인 사항 |
+
+#### ① SSM 포트포워딩 — 검증된 복구 경로
+
+ESSENTIA EC2 는 DB SG 를 **웹 SG 참조**로 통과한다. 그 EC2 를 경유하면
+**보안그룹 규칙을 하나도 늘리지 않고** 붙을 수 있다 — 60개 만석 문제와 무관하다.
+
+전제는 **전부 이미 충족돼 있다** (2026-08-28 확인):
+
+| 전제 | 상태 |
+|---|---|
+| `AWS-StartPortForwardingSessionToRemoteHost` 문서 | Active ✅ |
+| 대상 EC2 SSM 에이전트 | Online 3.3.4624.0 ✅ |
+| 로컬 `session-manager-plugin` | 1.2.835.0 설치됨 ✅ |
+| `ssm:StartSession` 권한 | 이미 allowed ✅ (§B5 참조) |
+
+```bash
+aws ssm start-session --profile essentia --region ap-northeast-2 \
+  --target <EC2-INSTANCE-ID> \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters '{"host":["<RDS-ENDPOINT>"],"portNumber":["5432"],"localPortNumber":["15432"]}'
+```
+
+인스턴스 id·엔드포인트는 `--profile essentia` 로 조회한다. **이 문서에 적지 않는다**(공개 레포).
+
+**네트워크 경로 검증 결과** — 터널을 열고 원시 소켓으로 확인했다(인증 시도 없음):
+
+```
+✓ 127.0.0.1:15432 연결됨 — SSM → EC2 → RDS 경로 성립
+✓ Postgres 응답: "S"        (SSLRequest 에 SSL 지원 응답)
+```
+
+#### ⚠️ 함정 둘 — 터널이 붙어도 인증은 실패한다
+
+| | |
+|---|---|
+| **1. IAM 토큰은 호스트명에 서명된다** | `generate-db-auth-token --hostname` 에 `localhost` 를 넣으면 거부된다. **실제 엔드포인트로 발급**해야 한다 |
+| **2. `verify-full` 은 접속 호스트명을 인증서와 대조한다** | `localhost:15432` 로 붙으면 CN/SAN 불일치로 실패한다 |
+
+**둘 다 한 번에 푸는 방법** — `/etc/hosts` 에 `127.0.0.1 <rds-endpoint-hostname>` 매핑.
+토큰도 실제 엔드포인트로 발급되고, `verify-full` 도 같은 이름을 보고, 트래픽은 터널로 간다.
+
+> **`/etc/hosts` 수정은 시스템 설정 변경이라 사용자가 직접 한다.**
+> 대안으로 *이 경로에 한해* `sslmode=require` 로 낮추는 것도 방어상 수용 가능하다 —
+> SSM 터널 자체가 AWS 인증 + TLS 다. 다만 **운영 앱 설정은 `verify-full` 그대로 두고
+> 스크립트 전용 경로만 갈라야 한다.** 이것도 보안 태세 변경이라 승인 사항이다.
+
+#### 지금 해 둘 것 — 잠기기 전에 한 번 돌려 볼 것
+
+`bootstrap:admin` 은 **관리자 계정에서 잠겼을 때 유일한 복구 수단**이다.
+잠금은 예고 없이 온다. **필요할 때 처음 시도하면 그때 위 함정을 발견하게 된다.**
+지금 한 번 끝까지 돌려서 되는 것을 확인해 둘 것.
+
+#### 기각된 대안
+
+| | |
+|---|---|
+| ② 개발자 egress CIDR 추가 | **불가.** 규칙 60개 만석이고, 가정 회선 IP 는 표류한다. 쿼터 상향(`L-0EA8095F`)은 신청 가능하나 **표류를 해결하지 못한다** |
+| ③ GitHub Actions(us-east-1)에서 마이그레이션 | **유효하나 급하지 않다.** 마이그레이션이 CI 에서 도는 것은 정석이고 ESSENTIA Flyway 도 사람 노트북이 아니라 앱 기동 시점에 돈다. ①이 되면 다음 마이그레이션 전까지 미뤄도 된다. 대가는 **CI 에 DB 자격증명 경로가 새로 생기는 것** |
 
 ---
 
