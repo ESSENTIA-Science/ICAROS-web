@@ -4,7 +4,7 @@ import { useActionState } from 'react'
 import Link from 'next/link'
 import { createRocketAction, updateRocketAction } from '@/app/admin/_actions/rockets'
 import type { FormState } from '@/app/admin/_actions/result'
-import { SERIES } from '@/components/rocket/series'
+import type { RocketSeriesOption } from '@/components/rocket/series'
 // 상한은 브라우저·서버가 같은 파일을 본다. 여기에 숫자를 다시 적으면 두 벌이 갈라진다.
 import { MAX_GALLERY_IMAGES } from '@/lib/image/policy'
 import EngineEditor, { type EngineInit } from './EngineEditor'
@@ -34,8 +34,6 @@ export type RocketFormValues = {
   engines: readonly EngineInit[]
 }
 
-const SERIES_OPTIONS = SERIES.map((s) => ({ value: s.id, label: `${s.id} — ${s.label}` }))
-
 const NO_ERRORS: Readonly<Record<string, string>> = {}
 
 /**
@@ -53,6 +51,8 @@ export default function RocketForm({
   version,
   storageReady,
   cancelHref,
+  seriesOptions,
+  seriesHref,
 }: {
   mode: 'create' | 'edit'
   values: RocketFormValues
@@ -61,6 +61,13 @@ export default function RocketForm({
   /** `S3_BUCKET` 설정 여부. 업로드 필드가 미리 안내하는 데만 쓴다. */
   storageReady: boolean
   cancelHref: string
+  /**
+   * 카테고리 목록. **서버가 그 요청에서 읽어 넘긴다** — 예전에는 이 파일이
+   * `SERIES` 상수를 import 했고, 그래서 카테고리를 늘리려면 배포가 필요했다.
+   */
+  seriesOptions: readonly RocketSeriesOption[]
+  /** 카테고리 관리 화면 주소. select 밑에 링크로 붙는다. */
+  seriesHref: string
 }) {
   const action = mode === 'create' ? createRocketAction : updateRocketAction
   const [state, formAction] = useActionState<FormState, FormData>(action, null)
@@ -99,14 +106,26 @@ export default function RocketForm({
       </div>
 
       <div className={ui.grid}>
-        <SelectField
-          name="series"
-          label="시리즈"
-          defaultValue={values.series}
-          options={SERIES_OPTIONS}
-          required
-          error={fieldErrors['series']}
-        />
+        <div className={ui.field}>
+          <SelectField
+            name="series"
+            label="카테고리"
+            defaultValue={values.series}
+            options={seriesOptions.map((s) => ({ value: s.id, label: `${s.id} — ${s.label}` }))}
+            required
+            error={fieldErrors['series']}
+          />
+          {/*
+            카테고리 추가·수정·삭제는 별도 화면이다. 폼은 중첩할 수 없어서 여기에 인라인으로
+            넣으려면 제출을 JS 로 가로채야 하고, 그러면 이 콘솔에서 유일하게 JS 없이는
+            동작하지 않는 화면이 된다.
+            떠나면 입력이 날아가므로 그 사실을 링크 옆에 적는다 — 눌러 본 뒤에 알게 되면 늦다.
+          */}
+          <p className={ui.hint}>
+            <Link href={seriesHref}>카테고리 관리</Link> — 추가·이름 수정·삭제. 이동하면 지금
+            입력한 내용은 저장되지 않습니다.
+          </p>
+        </div>
         {/*
           생성할 때는 정렬순서를 묻지 않는다. 서버가 그 시리즈의 끝에 붙인다.
 

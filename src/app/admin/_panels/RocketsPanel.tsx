@@ -2,23 +2,21 @@ import Link from 'next/link'
 import DeleteConfirm from '@/components/admin/DeleteConfirm'
 import Notice from '@/components/admin/Notice'
 import RocketForm from '@/components/admin/RocketForm'
-import { seriesLabel, type RocketSeries } from '@/components/rocket/series'
 import ui from '@/components/admin/ui.module.css'
 import { isStorageConfigured } from '@/lib/s3/config'
 import { deleteRocketAction } from '../_actions/rockets'
 import { getMediaRef, listRocketGallery } from '../_data/media'
 import {
   getRocketForAdmin,
+  listRocketSeriesOptions,
   listRocketsForAdmin,
   type AdminRocketListItem,
 } from '../_data/rockets'
-import { adminHref } from '../_tabs'
+import { adminHref, type AdminSubview } from '../_tabs'
+import RocketSeriesPanel from './RocketSeriesPanel'
 
 const LIST_HREF = adminHref({ tab: 'rockets' })
-
-function narrowSeries(raw: string): RocketSeries {
-  return raw === 'B' ? 'B' : 'A'
-}
+const SERIES_HREF = adminHref({ tab: 'rockets', sub: 'series' })
 
 /** 목록 한 줄에 붙는 요약. 값이 없는 항목은 아예 넣지 않는다 — `— m` 같은 빈 단위를 보여 주지 않는다. */
 function specSummary(r: AdminRocketListItem): string {
@@ -35,20 +33,45 @@ function trim(v: string): string {
 }
 
 export default async function RocketsPanel({
+  sub,
   create,
   editId,
   deleteId,
   saved,
 }: {
+  sub: AdminSubview | undefined
   create: boolean
   editId: string | undefined
   deleteId: string | undefined
   saved: string | undefined
 }) {
+  // 카테고리 관리는 같은 탭의 하위 화면이다. 판정을 맨 앞에 두어 아래 분기가 섞이지 않게 한다.
+  if (sub === 'series') {
+    return (
+      <RocketSeriesPanel create={create} editId={editId} deleteId={deleteId} saved={saved} />
+    )
+  }
+
   // 설정 여부만 읽는다. 버킷 이름·리전은 화면에 절대 나가지 않는다.
   const storageReady = isStorageConfigured()
 
   if (create) {
+    const seriesOptions = await listRocketSeriesOptions()
+    // 카테고리가 없으면 로켓을 만들 수 없다. 폼을 띄워 놓고 저장에서 막는 것보다
+    // 여기서 할 일을 알려 주는 편이 낫다 — 저장 실패 문구로는 무엇을 해야 할지 안 보인다.
+    if (seriesOptions.length === 0) {
+      return (
+        <>
+          <Notice tone="error">
+            등록된 카테고리가 없어 로켓을 만들 수 없습니다. 카테고리를 먼저 하나 추가해 주세요.
+          </Notice>
+          <Link className={`${ui.btn} ${ui.btnPrimary}`} href={SERIES_HREF}>
+            카테고리 관리
+          </Link>
+        </>
+      )
+    }
+    const firstSeries = seriesOptions[0]?.id ?? ''
     return (
       <>
         <div className={ui.panelHead}>
@@ -59,10 +82,12 @@ export default async function RocketsPanel({
             mode="create"
             cancelHref={LIST_HREF}
             storageReady={storageReady}
+            seriesOptions={seriesOptions}
+            seriesHref={SERIES_HREF}
             values={{
               id: '',
               name: '',
-              series: 'A',
+              series: firstSeries,
               sortOrder: 0,
               published: true,
               descriptionMd: '',
@@ -81,7 +106,10 @@ export default async function RocketsPanel({
   }
 
   if (editId !== undefined) {
-    const rocket = await getRocketForAdmin(editId)
+    const [rocket, seriesOptions] = await Promise.all([
+      getRocketForAdmin(editId),
+      listRocketSeriesOptions(),
+    ])
     if (!rocket) {
       return (
         <>
@@ -117,6 +145,8 @@ export default async function RocketsPanel({
             cancelHref={LIST_HREF}
             version={rocket.version}
             storageReady={storageReady}
+            seriesOptions={seriesOptions}
+            seriesHref={SERIES_HREF}
             values={{
               id: rocket.id,
               name: rocket.name,
@@ -159,9 +189,17 @@ export default async function RocketsPanel({
             양쪽에서 보이지 않습니다.
           </p>
         </div>
-        <Link className={`${ui.btn} ${ui.btnPrimary}`} href={adminHref({ tab: 'rockets', create: true })}>
-          새 로켓
-        </Link>
+        <div className={ui.rowActions}>
+          <Link className={ui.btn} href={SERIES_HREF}>
+            카테고리 관리
+          </Link>
+          <Link
+            className={`${ui.btn} ${ui.btnPrimary}`}
+            href={adminHref({ tab: 'rockets', create: true })}
+          >
+            새 로켓
+          </Link>
+        </div>
       </div>
 
       {saved === 'deleted' ? <Notice tone="ok">로켓을 삭제했습니다.</Notice> : null}
@@ -193,7 +231,7 @@ export default async function RocketsPanel({
                 <p className={ui.rowName}>
                   {r.name}
                   <span className={`${ui.badge} ${ui.badgeSeries}`} lang="en">
-                    {seriesLabel(narrowSeries(r.series))}
+                    {r.seriesLabel}
                   </span>
                   {r.published ? null : (
                     <span className={`${ui.badge} ${ui.badgeOff}`}>비공개</span>

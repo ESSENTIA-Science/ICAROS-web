@@ -3,8 +3,14 @@ import InView from '@/components/rocket/InView'
 import RevealNoScript from '@/components/rocket/RevealNoScript'
 import RocketCard from '@/components/rocket/RocketCard'
 import SeriesTabs from '@/components/rocket/SeriesTabs'
-import { DEFAULT_SERIES, parseSeries, seriesLabel, type RocketSeries } from '@/components/rocket/series'
-import { countRocketsBySeries, listRocketsBySeries } from './_data'
+import {
+  parseSeries,
+  seriesHref,
+  seriesLabel,
+  type RocketSeries,
+  type RocketSeriesOption,
+} from '@/components/rocket/series'
+import { countRocketsBySeries, listRocketSeries, listRocketsBySeries } from './_data'
 import styles from './page.module.css'
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
@@ -18,9 +24,14 @@ export async function generateMetadata({
 }: {
   searchParams: SearchParams
 }): Promise<Metadata> {
-  const series = parseSeries((await searchParams).series)
-  const label = seriesLabel(series)
-  const canonical = series === DEFAULT_SERIES ? '/rocket' : `/rocket?series=${series}`
+  const all = await listRocketSeries()
+  const series = parseSeries((await searchParams).series, all)
+  // 카테고리가 하나도 없으면 목록 자체가 빈 화면이다. 그때는 시리즈 없는 메타데이터를 낸다.
+  if (series === null) {
+    return { title: 'Rockets', description: 'ICAROS가 설계·제작한 발사체.', alternates: { canonical: '/rocket' } }
+  }
+  const label = seriesLabel(series, all)
+  const canonical = seriesHref(series, all)
 
   return {
     title: `Rockets · ${label}`,
@@ -31,7 +42,8 @@ export async function generateMetadata({
 }
 
 export default async function RocketIndexPage({ searchParams }: { searchParams: SearchParams }) {
-  const series = parseSeries((await searchParams).series)
+  const all = await listRocketSeries()
+  const series = parseSeries((await searchParams).series, all)
 
   return (
     // 기체 렌더가 밝은 회색 실루엣이라 어두운 면 위에서만 형태가 선다.
@@ -56,13 +68,23 @@ export default async function RocketIndexPage({ searchParams }: { searchParams: 
             더 나쁜 건 SeriesTabs 가 경계 안에 있으면 **시리즈 B 로 가는 유일한 내비게이션**까지
             사라진다는 것이다 — 방금 generateMetadata 로 시리즈별 canonical 을 나눠 놓은 것과 모순된다.
             이 페이지는 force-dynamic 이고 로켓 4기짜리 쿼리 2개라 스트리밍으로 얻을 게 없다. */}
-        <RocketFleet series={series} />
+        {series === null ? (
+          <p className={styles.empty}>등록된 카테고리가 없습니다.</p>
+        ) : (
+          <RocketFleet series={series} all={all} />
+        )}
       </div>
     </section>
   )
 }
 
-async function RocketFleet({ series }: { series: RocketSeries }) {
+async function RocketFleet({
+  series,
+  all,
+}: {
+  series: RocketSeries
+  all: readonly RocketSeriesOption[]
+}) {
   const [rockets, counts] = await Promise.all([
     listRocketsBySeries(series),
     countRocketsBySeries(),
@@ -70,11 +92,11 @@ async function RocketFleet({ series }: { series: RocketSeries }) {
 
   return (
     <>
-      <SeriesTabs active={series} counts={counts} />
+      <SeriesTabs active={series} all={all} counts={counts} />
 
       {rockets.length === 0 ? (
         <p className={styles.empty}>
-          {seriesLabel(series)}에 공개된 기체가 아직 없습니다.
+          {seriesLabel(series, all)}에 공개된 기체가 아직 없습니다.
         </p>
       ) : (
         // 리빌은 격자에만 건다 — 탭은 내비게이션이라 어떤 조건에서도 즉시 보여야 한다.

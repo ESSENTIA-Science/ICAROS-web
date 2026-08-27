@@ -2,6 +2,7 @@ import 'server-only'
 
 import { asc, eq, sql } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
+import type { RocketSeriesOption } from '@/components/rocket/series'
 import { versionExpr } from '../_lib/version'
 
 /**
@@ -21,10 +22,21 @@ export type AdminEngineRow = {
   mode: string
 }
 
+export type AdminSeriesRow = {
+  id: string
+  label: string
+  sortOrder: number
+  /** 이 카테고리에 붙은 로켓 수 — 공개·비공개를 모두 센다. 삭제 가능 여부를 이 값이 정한다. */
+  rocketCount: number
+  /** 낙관적 잠금 토큰 (F12). */
+  version: string
+}
+
 export type AdminRocketListItem = {
   id: string
   name: string
   series: string
+  seriesLabel: string
   sortOrder: number
   published: boolean
   maxAltitudeM: string | null
@@ -77,6 +89,7 @@ export async function listRocketsForAdmin(): Promise<AdminRocketListItem[]> {
         id: schema.rockets.id,
         name: schema.rockets.name,
         series: schema.rockets.series,
+        seriesLabel: schema.rocketSeries.label,
         sortOrder: schema.rockets.sortOrder,
         published: schema.rockets.published,
         maxAltitudeM: schema.rockets.maxAltitudeM,
@@ -84,7 +97,13 @@ export async function listRocketsForAdmin(): Promise<AdminRocketListItem[]> {
         payloadKg: schema.rockets.payloadKg,
       })
       .from(schema.rockets)
-      .orderBy(asc(schema.rockets.series), asc(schema.rockets.sortOrder), asc(schema.rockets.id)),
+      .leftJoin(schema.rocketSeries, eq(schema.rocketSeries.id, schema.rockets.series))
+      .orderBy(
+        asc(schema.rocketSeries.sortOrder),
+        asc(schema.rockets.series),
+        asc(schema.rockets.sortOrder),
+        asc(schema.rockets.id)
+      ),
     db
       .select({
         rocketId: schema.rocketEngines.rocketId,
@@ -96,7 +115,12 @@ export async function listRocketsForAdmin(): Promise<AdminRocketListItem[]> {
 
   const byRocket = new Map(counts.map((c) => [c.rocketId, c.engineCount]))
 
-  return rows.map((r) => ({ ...r, engineCount: byRocket.get(r.id) ?? 0 }))
+  // left join 이라 타입은 null 가능이다. FK 가 있으니 실제로는 항상 채워진다.
+  return rows.map((r) => ({
+    ...r,
+    seriesLabel: r.seriesLabel ?? r.series,
+    engineCount: byRocket.get(r.id) ?? 0,
+  }))
 }
 
 export async function getRocketForAdmin(id: string): Promise<AdminRocketDetail | null> {
@@ -159,34 +183,46 @@ export async function getRocketForAdmin(id: string): Promise<AdminRocketDetail |
   }
 }
 
-/** 새 로켓 폼의 기본 정렬순서 — 같은 시리즈의 마지막 뒤. `(series, sort_order)` 가 unique 라 충돌을 미리 피한다. */
 /**
- * 시리즈별 다음 빈 정렬 슬롯을 **한 번에** 돌려준다.
+ * 카테고리 목록 + 각 카테고리에 붙은 로켓 수.
  *
- * 하나만 미리 계산해 폼에 넣으면, 사용자가 시리즈 select 를 바꿨을 때 그 값이 그대로 남아
- * `(series, sort_order)` unique 제약에 걸린다. 지금 데이터에서는 우연히 안 겹치지만
- * 로켓이 늘면 반드시 충돌하고, 그때 증상은 "로켓이 추가가 안 된다"로 나타난다.
+ * 로켓 수를 같이 세는 이유는 **삭제 버튼을 미리 막기 위해서**다. FK 가 `restrict` 라
+ * 로켓이 남아 있으면 DB 가 어차피 거부하지만, 눌러 보고 나서 거부당하는 것과
+ * 처음부터 못 누르는 것은 다르다.
  */
-export async function nextRocketSortOrders(): Promise<Record<'A' | 'B', number>> {
-  const rows = await db
-    .select({
-      series: schema.rockets.series,
-      next: sql<number>`coalesce(max(${schema.rockets.sortOrder}), -1) + 1`,
-    })
-    .from(schema.rockets)
-    .groupBy(schema.rockets.series)
+export async function listRocketSeriesForAdmin(): Promise<AdminSeriesRow[]> {
+  const [rows, counts] = await Promise.all([
+    db
+      .select({
+        id: schema.rocketSeries.id,
+        label: schema.rocketSeries.label,
+        sortOrder: schema.rocketSeries.sortOrder,
+        version: versionExpr(schema.rocketSeries.updatedAt),
+      })
+      .from(schema.rocketSeries)
+      .orderBy(asc(schema.rocketSeries.sortOrder), asc(schema.rocketSeries.id)),
+    db
+      .select({ series: schema.rockets.series, n: sql<number>`count(*)::int` })
+      .from(schema.rockets)
+      .groupBy(schema.rockets.series),
+  ])
 
-  const out: Record<'A' | 'B', number> = { A: 0, B: 0 }
-  for (const r of rows) {
-    if (r.series === 'A' || r.series === 'B') out[r.series] = Number(r.next)
-  }
-  return out
+  const bySeries = new Map(counts.map((c) => [c.series, c.n]))
+  return rows.map((r) => ({ ...r, rocketCount: bySeries.get(r.id) ?? 0 }))
 }
 
-export async function nextRocketSortOrder(series: string): Promise<number> {
+/** 폼의 시리즈 select 용. 라벨만 있으면 되므로 개수는 세지 않는다. */
+export async function listRocketSeriesOptions(): Promise<RocketSeriesOption[]> {
+  return db
+    .select({ id: schema.rocketSeries.id, label: schema.rocketSeries.label })
+    .from(schema.rocketSeries)
+    .orderBy(asc(schema.rocketSeries.sortOrder), asc(schema.rocketSeries.id))
+}
+
+/** 새 카테고리의 기본 정렬순서 — 마지막 뒤. 중복이 허용되므로 편의값일 뿐이다. */
+export async function nextRocketSeriesSortOrder(): Promise<number> {
   const rows = await db
-    .select({ next: sql<number>`coalesce(max(${schema.rockets.sortOrder}), -1) + 1` })
-    .from(schema.rockets)
-    .where(eq(schema.rockets.series, series))
+    .select({ next: sql<number>`coalesce(max(${schema.rocketSeries.sortOrder}), -1) + 1` })
+    .from(schema.rocketSeries)
   return rows[0]?.next ?? 0
 }

@@ -7,9 +7,9 @@ import InView from '@/components/rocket/InView'
 import RevealNoScript from '@/components/rocket/RevealNoScript'
 import RocketDescription from '@/components/rocket/RocketDescription'
 import SpecList from '@/components/rocket/SpecList'
-import { seriesLabel } from '@/components/rocket/series'
+import { seriesHref } from '@/components/rocket/series'
 import { textLang } from '@/components/landing/text-lang'
-import { getRocket } from '../_data'
+import { getRocket, listRocketSeries } from '../_data'
 import styles from './page.module.css'
 
 type Params = { slug: string }
@@ -46,8 +46,8 @@ export async function generateMetadata({
 
   const description =
     facts.length > 0
-      ? `${rocket.name} — ${facts.join(' · ')}. ICAROS ${seriesLabel(rocket.series)}.`
-      : `${rocket.name} — ICAROS ${seriesLabel(rocket.series)}.`
+      ? `${rocket.name} — ${facts.join(' · ')}. ICAROS ${rocket.seriesLabel}.`
+      : `${rocket.name} — ICAROS ${rocket.seriesLabel}.`
 
   return {
     title: rocket.name,
@@ -71,7 +71,8 @@ export default async function RocketDetailPage({ params }: { params: Promise<Par
   // 이 라우트에 loading.tsx 를 만들거나 이 호출을 Suspense 로 감싸지 말 것.
   if (!rocket) notFound()
 
-  const backHref = rocket.series === 'A' ? '/rocket' : `/rocket?series=${rocket.series}`
+  // 기본 카테고리는 `?series=` 없이 `/rocket` 으로 돌아간다 — 목록 페이지의 canonical 과 같은 규칙.
+  const backHref = seriesHref(rocket.series, await listRocketSeries())
 
   return (
     /* 섹션이 둘(어두운 히어로 + 밝은 상세)이라 바깥에서 한 번에 잠근다.
@@ -107,7 +108,7 @@ export default async function RocketDetailPage({ params }: { params: Promise<Par
             </div>
 
             <div className={styles.heroBody}>
-              <p className="eyebrow" lang="en">{seriesLabel(rocket.series)}</p>
+              <p className="eyebrow" lang="en">{rocket.seriesLabel}</p>
               {/* 기체명은 CMS 자유 텍스트다 — 언어를 값에서 판별한다 */}
               <h1 className={styles.title} lang={textLang(rocket.name)}>{rocket.name}</h1>
               <SpecList

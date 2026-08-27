@@ -4,7 +4,7 @@ import { cache } from 'react'
 import { and, asc, eq, isNull } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
 import { mediaUrl } from '@/lib/image/contract'
-import type { RocketSeries } from '@/components/rocket/series'
+import type { RocketSeries, RocketSeriesOption } from '@/components/rocket/series'
 
 /**
  * 공개 로켓 DAL. 라우트 밖으로 원본 행을 내보내지 않고 DTO 만 돌려준다.
@@ -28,6 +28,8 @@ export type RocketListItem = {
   slug: string
   name: string
   series: RocketSeries
+  /** 조인해서 같이 들고 온다. 라벨을 쓰려고 화면에서 시리즈 목록을 또 읽지 않도록. */
+  seriesLabel: string
   imageSrc: string | null
   maxAltitudeM: string | null
   sizeM: string | null
@@ -57,11 +59,6 @@ function resolveImageSrc(coverMediaId: string | null, legacyPath: string | null)
   return v ? v : null
 }
 
-/** `series` 는 text + CHECK 라 드라이버 타입이 string 이다. 유니온으로 좁혀서 내보낸다. */
-function narrowSeries(raw: string): RocketSeries {
-  return raw === 'B' ? 'B' : 'A'
-}
-
 /**
  * 이미지 소스는 두 세대가 공존한다.
  *   신규: `cover_media_id` → `/api/media/{id}` (S3, 스트리밍 프록시)
@@ -75,6 +72,7 @@ const listColumns = {
   slug: schema.rockets.id,
   name: schema.rockets.name,
   series: schema.rockets.series,
+  seriesLabel: schema.rocketSeries.label,
   coverMediaId: schema.media.id,
   legacyImagePath: schema.rockets.legacyImagePath,
   maxAltitudeM: schema.rockets.maxAltitudeM,
@@ -86,6 +84,7 @@ type RawListRow = {
   slug: string
   name: string
   series: string
+  seriesLabel: string | null
   coverMediaId: string | null
   legacyImagePath: string | null
   maxAltitudeM: string | null
@@ -97,7 +96,9 @@ function toListItem(row: RawListRow): RocketListItem {
   return {
     slug: row.slug,
     name: row.name,
-    series: narrowSeries(row.series),
+    series: row.series,
+    // FK 가 있으니 조인은 항상 맞지만, left join 이라 타입은 null 가능이다.
+    seriesLabel: row.seriesLabel ?? row.series,
     imageSrc: resolveImageSrc(row.coverMediaId, row.legacyImagePath),
     maxAltitudeM: trimNumeric(row.maxAltitudeM),
     sizeM: trimNumeric(row.sizeM),
@@ -122,21 +123,47 @@ export async function listRocketsBySeries(series: RocketSeries): Promise<RocketL
         isNull(schema.media.deletedAt)
       )
     )
+    .leftJoin(
+      schema.rocketSeries,
+      eq(schema.rocketSeries.id, schema.rockets.series)
+    )
     .where(and(isPublic, eq(schema.rockets.series, series)))
     .orderBy(asc(schema.rockets.sortOrder), asc(schema.rockets.id))
 
   return rows.map(toListItem)
 }
 
-/** 시리즈별 공개 개수 — 탭에 표기해 빈 탭을 눌러 보게 만들지 않는다. */
-export async function countRocketsBySeries(): Promise<Record<RocketSeries, number>> {
+/**
+ * 카테고리 목록. **`/rocket` 탭의 원본**이다.
+ *
+ * `cache()` 로 감싼 이유는 한 요청 안에서 여러 곳이 부르기 때문이다 —
+ * `generateMetadata` 가 canonical 을 정하려고, 페이지가 탭을 그리려고, 상세가 뒤로가기
+ * 링크를 만들려고 각각 부른다. 요청 단위 캐시라 관리 화면 수정이 늦게 반영되지는 않는다.
+ */
+export const listRocketSeries = cache(async (): Promise<RocketSeriesOption[]> => {
   const rows = await db
-    .select({ series: schema.rockets.series })
-    .from(schema.rockets)
-    .where(isPublic)
+    .select({ id: schema.rocketSeries.id, label: schema.rocketSeries.label })
+    .from(schema.rocketSeries)
+    .orderBy(asc(schema.rocketSeries.sortOrder), asc(schema.rocketSeries.id))
 
-  const out: Record<RocketSeries, number> = { A: 0, B: 0 }
-  for (const r of rows) out[narrowSeries(r.series)] += 1
+  return rows
+})
+
+/**
+ * 시리즈별 공개 개수 — 탭에 표기해 빈 탭을 눌러 보게 만들지 않는다.
+ *
+ * 로켓이 하나도 없는 카테고리도 **키가 있어야 한다.** 없으면 탭이 개수 자리에 아무것도
+ * 못 그리고, 그게 "0" 과 다르게 보인다. 그래서 목록을 먼저 0 으로 채운 뒤 센다.
+ */
+export async function countRocketsBySeries(): Promise<Record<string, number>> {
+  const [series, rows] = await Promise.all([
+    listRocketSeries(),
+    db.select({ series: schema.rockets.series }).from(schema.rockets).where(isPublic),
+  ])
+
+  const out: Record<string, number> = {}
+  for (const s of series) out[s.id] = 0
+  for (const r of rows) out[r.series] = (out[r.series] ?? 0) + 1
   return out
 }
 
@@ -157,6 +184,10 @@ export const getRocket = cache(async (slug: string): Promise<RocketDetail | null
         eq(schema.media.status, 'ready'),
         isNull(schema.media.deletedAt)
       )
+    )
+    .leftJoin(
+      schema.rocketSeries,
+      eq(schema.rocketSeries.id, schema.rockets.series)
     )
     .where(and(isPublic, eq(schema.rockets.id, slug)))
     .limit(1)

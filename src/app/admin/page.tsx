@@ -8,7 +8,7 @@ import PostsPanel from './_panels/PostsPanel'
 import RocketsPanel from './_panels/RocketsPanel'
 import ScenePanel from './_panels/ScenePanel'
 import { SCENE_TAB, sceneHref } from '@/components/admin/scene/href'
-import { ADMIN_TABS, adminHref, firstParam, parseTab } from './_tabs'
+import { ADMIN_TABS, adminHref, firstParam, parseSubview, parseTab } from './_tabs'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -42,6 +42,7 @@ export default async function AdminPage({
    */
   const scene = firstParam(sp['tab']) === SCENE_TAB
   const tab = parseTab(sp['tab'])
+  const sub = parseSubview(sp['sub'])
   const create = firstParam(sp['new']) === '1'
   const editId = firstParam(sp['edit'])
   const deleteId = firstParam(sp['delete'])
@@ -83,7 +84,13 @@ export default async function AdminPage({
               <PanelsPanel create={create} editId={editId} deleteId={deleteId} saved={saved} />
             ) : null}
             {tab === 'rockets' ? (
-              <RocketsPanel create={create} editId={editId} deleteId={deleteId} saved={saved} />
+              <RocketsPanel
+                sub={sub}
+                create={create}
+                editId={editId}
+                deleteId={deleteId}
+                saved={saved}
+              />
             ) : null}
             {tab === 'members' ? (
               <MembersPanel create={create} editId={editId} deleteId={deleteId} saved={saved} />

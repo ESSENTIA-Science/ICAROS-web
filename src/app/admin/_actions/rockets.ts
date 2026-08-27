@@ -26,6 +26,7 @@ import {
   type FormState,
 } from './result'
 import {
+  PG_FOREIGN_KEY_VIOLATION,
   PG_UNIQUE_VIOLATION,
   decimalField,
   emptyToNull,
@@ -72,7 +73,15 @@ const rocketSchema = z.object({
     .trim()
     .regex(SLUG_SHAPE, '식별자는 영소문자·숫자·하이픈만 쓸 수 있고 2~48자여야 합니다. (예: icx2)'),
   name: z.string().trim().min(1, '이름을 입력해 주세요.').max(120, '이름은 120자 이내로 입력해 주세요.'),
-  series: z.enum(['A', 'B'], '시리즈를 선택해 주세요.'),
+  /**
+   * 카테고리. 예전에는 `z.enum(['A','B'])` 였다 — 값 집합이 `icaros.rocket_series` 행으로
+   * 내려간 지금 그 목록을 여기 다시 적으면 **카테고리를 추가한 순간 저장이 막힌다.**
+   * 그래서 여기서는 형태만 보고, 존재 여부는 FK 가 판정한다 (`describeWriteError`).
+   */
+  series: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9][A-Za-z0-9-]{0,31}$/, '카테고리를 선택해 주세요.'),
   /**
    * 생성 폼은 이 필드를 보내지 않는다 — 서버가 해당 시리즈 끝에 붙인다.
    * `(series, sort_order)` unique 제약 때문에, 폼이 미리 계산한 값을 들고 있다가
@@ -220,6 +229,13 @@ function describeWriteError(err: unknown): ActionResult {
   }
 
   const { code, constraint } = pgError(err)
+  // 존재하지 않는 카테고리. select 는 서버가 그린 목록이라 정상 조작으로는 안 나오지만,
+  // 폼을 열어 둔 사이에 다른 탭에서 그 카테고리를 지우면 도달한다.
+  if (code === PG_FOREIGN_KEY_VIOLATION && constraint === 'rockets_series_rocket_series_id_fk') {
+    return fail('선택한 카테고리가 더 이상 존재하지 않습니다. 새로고침한 뒤 다시 선택해 주세요.', {
+      series: '없는 카테고리입니다.',
+    })
+  }
   if (code === PG_UNIQUE_VIOLATION) {
     if (constraint === 'rockets_series_order_uq') {
       return fail('같은 시리즈에 동일한 정렬순서가 이미 있습니다. 다른 번호를 사용해 주세요.', {
