@@ -154,7 +154,7 @@
 **이번 DB incident 와 무관하다.** 조사 중 발견됐을 뿐이고 별도로 관리한다.
 상세는 §3.
 
-#### B5. 개발자 IAM 계정이 `AdministratorAccess` · MFA 없음 🟠
+#### B4. 개발자 IAM 계정이 `AdministratorAccess` · MFA 없음 🟠
 
 | | |
 |---|---|
@@ -164,7 +164,7 @@
 | **변경 시 위험** | MFA 는 CLI 흐름에 세션 토큰 단계를 추가한다. 스크립트가 그걸 처리해야 한다 |
 | **소관** | ESSENTIA 계정이지만 **주체는 ICAROS 개발자 본인**이다. 사용자 결정 |
 
-#### B4. CloudTrail · GuardDuty 부재 🟠 (ESSENTIA 소관)
+#### B5. CloudTrail · GuardDuty 부재 🟠 (ESSENTIA 소관)
 
 | | |
 |---|---|
@@ -223,7 +223,7 @@ ESSENTIA EC2 는 DB SG 를 **웹 SG 참조**로 통과한다. 그 EC2 를 경유
 | `AWS-StartPortForwardingSessionToRemoteHost` 문서 | Active ✅ |
 | 대상 EC2 SSM 에이전트 | Online 3.3.4624.0 ✅ |
 | 로컬 `session-manager-plugin` | 1.2.835.0 설치됨 ✅ |
-| `ssm:StartSession` 권한 | 이미 allowed ✅ (§B5 참조) |
+| `ssm:StartSession` 권한 | 이미 allowed ✅ (§B4 참조) |
 
 ```bash
 aws ssm start-session --profile essentia --region ap-northeast-2 \
