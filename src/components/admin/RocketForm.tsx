@@ -1,0 +1,227 @@
+'use client'
+
+import { useActionState } from 'react'
+import Link from 'next/link'
+import { createRocketAction, updateRocketAction } from '@/app/admin/_actions/rockets'
+import type { FormState } from '@/app/admin/_actions/result'
+import type { RocketSeriesOption } from '@/components/rocket/series'
+// 상한은 브라우저·서버가 같은 파일을 본다. 여기에 숫자를 다시 적으면 두 벌이 갈라진다.
+import { MAX_GALLERY_IMAGES } from '@/lib/image/policy'
+import EngineEditor, { type EngineInit } from './EngineEditor'
+import { SelectField, TextField, ToggleField } from './Fields'
+import GalleryField from './GalleryField'
+import MarkdownField from './MarkdownField'
+import MediaField from './MediaField'
+import type { MediaPreview } from './media-upload'
+import { ActionNotice } from './Notice'
+import SubmitButton from './SubmitButton'
+import ui from './ui.module.css'
+
+export type RocketFormValues = {
+  id: string
+  name: string
+  series: string
+  sortOrder: number
+  published: boolean
+  descriptionMd: string
+  maxAltitudeM: string
+  sizeM: string
+  payloadKg: string
+  /** 대표 이미지. null 이면 legacyImagePath 가, 그것도 없으면 빈 자리가 보인다. */
+  cover: MediaPreview | null
+  legacyImagePath: string | null
+  gallery: readonly MediaPreview[]
+  engines: readonly EngineInit[]
+}
+
+const NO_ERRORS: Readonly<Record<string, string>> = {}
+
+/**
+ * 로켓 생성·수정 폼.
+ *
+ * `<form action={…}>` 에 서버 액션을 직접 물린다 — JS 가 없어도 제출이 되고,
+ * JS 가 있으면 `useActionState` 가 결과를 같은 자리에 그린다. 성공하면 액션이 redirect 하므로
+ * 상태가 갱신되지 않고 목록으로 넘어간다: 저장 성공 후 이전 오류가 남을 자리가 없다 (결함 #7).
+ *
+ * 3D 뷰어는 넣지 않는다 (F13) — 관리 화면은 생산성·안정성이 먼저다.
+ */
+export default function RocketForm({
+  mode,
+  values,
+  version,
+  storageReady,
+  cancelHref,
+  seriesOptions,
+  seriesHref,
+}: {
+  mode: 'create' | 'edit'
+  values: RocketFormValues
+  /** 수정일 때만 존재하는 낙관적 잠금 토큰 (F12). */
+  version?: string
+  /** `S3_BUCKET` 설정 여부. 업로드 필드가 미리 안내하는 데만 쓴다. */
+  storageReady: boolean
+  cancelHref: string
+  /**
+   * 카테고리 목록. **서버가 그 요청에서 읽어 넘긴다** — 예전에는 이 파일이
+   * `SERIES` 상수를 import 했고, 그래서 카테고리를 늘리려면 배포가 필요했다.
+   */
+  seriesOptions: readonly RocketSeriesOption[]
+  /** 카테고리 관리 화면 주소. select 밑에 링크로 붙는다. */
+  seriesHref: string
+}) {
+  const action = mode === 'create' ? createRocketAction : updateRocketAction
+  const [state, formAction] = useActionState<FormState, FormData>(action, null)
+  const fieldErrors = state && !state.ok ? (state.fieldErrors ?? NO_ERRORS) : NO_ERRORS
+
+  return (
+    <form action={formAction} noValidate>
+      <ActionNotice state={state} />
+
+      {version ? <input type="hidden" name="version" value={version} /> : null}
+
+      <div className={ui.grid}>
+        <TextField
+          name="id"
+          label="식별자 (URL slug)"
+          defaultValue={values.id}
+          hint={
+            mode === 'edit'
+              ? '주소가 되는 값이라 수정할 수 없습니다. 바꾸려면 새로 만들고 기존 항목을 삭제해 주세요.'
+              : '공개 주소 /rocket/<식별자> 에 그대로 쓰입니다. 영소문자·숫자·하이픈, 2~48자.'
+          }
+          readOnly={mode === 'edit'}
+          mono
+          required
+          maxLength={48}
+          error={fieldErrors['id']}
+        />
+        <TextField
+          name="name"
+          label="이름"
+          defaultValue={values.name}
+          required
+          maxLength={120}
+          error={fieldErrors['name']}
+        />
+      </div>
+
+      <div className={ui.grid}>
+        <div className={ui.field}>
+          <SelectField
+            name="series"
+            label="카테고리"
+            defaultValue={values.series}
+            options={seriesOptions.map((s) => ({ value: s.id, label: `${s.id} — ${s.label}` }))}
+            required
+            error={fieldErrors['series']}
+          />
+          {/*
+            카테고리 추가·수정·삭제는 별도 화면이다. 폼은 중첩할 수 없어서 여기에 인라인으로
+            넣으려면 제출을 JS 로 가로채야 하고, 그러면 이 콘솔에서 유일하게 JS 없이는
+            동작하지 않는 화면이 된다.
+            떠나면 입력이 날아가므로 그 사실을 링크 옆에 적는다 — 눌러 본 뒤에 알게 되면 늦다.
+          */}
+          <p className={ui.hint}>
+            <Link href={seriesHref}>카테고리 관리</Link> — 추가·이름 수정·삭제. 이동하면 지금
+            입력한 내용은 저장되지 않습니다.
+          </p>
+        </div>
+        {/*
+          생성할 때는 정렬순서를 묻지 않는다. 서버가 그 시리즈의 끝에 붙인다.
+
+          `(series, sort_order)` 에 unique 제약이 있어서, 폼이 미리 계산한 값을 넣어 두면
+          사용자가 시리즈 select 를 바꿨을 때 그 값이 그대로 남아 충돌한다.
+          그 증상은 화면에서 "로켓이 추가가 안 된다"로 나타나고 원인은 보이지 않는다.
+          순서는 만든 뒤 수정 화면에서 바꾸면 된다.
+        */}
+        {mode === 'edit' ? (
+          <TextField
+            name="sortOrder"
+            label="정렬순서"
+            defaultValue={String(values.sortOrder)}
+            hint="같은 시리즈 안에서 중복될 수 없습니다. 작은 값이 먼저 나옵니다."
+            inputMode="numeric"
+            maxLength={4}
+            required
+            error={fieldErrors['sortOrder']}
+          />
+        ) : null}
+      </div>
+
+      <div className={ui.grid}>
+        <TextField
+          name="maxAltitudeM"
+          label="최대 고도 (m)"
+          defaultValue={values.maxAltitudeM}
+          inputMode="decimal"
+          maxLength={13}
+          error={fieldErrors['maxAltitudeM']}
+        />
+        <TextField
+          name="sizeM"
+          label="전장 (m)"
+          defaultValue={values.sizeM}
+          inputMode="decimal"
+          maxLength={13}
+          error={fieldErrors['sizeM']}
+        />
+        <TextField
+          name="payloadKg"
+          label="페이로드 (kg)"
+          defaultValue={values.payloadKg}
+          inputMode="decimal"
+          maxLength={13}
+          error={fieldErrors['payloadKg']}
+        />
+      </div>
+
+      <ToggleField
+        name="published"
+        label="공개"
+        defaultChecked={values.published}
+        hint="끄면 목록과 직접 URL 양쪽에서 보이지 않습니다."
+      />
+
+      <MediaField
+        name="coverMediaId"
+        label="대표 이미지"
+        hint="목록 카드와 상세 페이지 상단에 쓰입니다. 긴 변 1600px · 2MB 이하 WebP 로 자동 변환됩니다."
+        kind="hero"
+        entityType="rocket"
+        initial={values.cover}
+        legacyPath={values.legacyImagePath}
+        storageReady={storageReady}
+        error={fieldErrors['coverMediaId']}
+      />
+
+      <GalleryField
+        name="galleryMediaIds"
+        label="Gallery"
+        hint={`대표 이미지 외 추가 사진입니다. 위에서 아래 순서대로 표시됩니다. 최대 ${MAX_GALLERY_IMAGES}장, 긴 변 512px · 1MB 이하로 변환됩니다.`}
+        kind="media"
+        entityType="rocket"
+        initial={values.gallery}
+        storageReady={storageReady}
+        max={MAX_GALLERY_IMAGES}
+        error={fieldErrors['galleryMediaIds']}
+      />
+
+      <MarkdownField
+        name="descriptionMd"
+        label="설명 (Markdown)"
+        defaultValue={values.descriptionMd}
+        maxLength={20000}
+        error={fieldErrors['descriptionMd']}
+      />
+
+      <EngineEditor initial={values.engines} fieldErrors={fieldErrors} />
+
+      <div className={ui.actions}>
+        <SubmitButton>{mode === 'create' ? '로켓 추가' : '변경사항 저장'}</SubmitButton>
+        <Link className={ui.btn} href={cancelHref}>
+          취소
+        </Link>
+      </div>
+    </form>
+  )
+}

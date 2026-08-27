@@ -1,0 +1,105 @@
+.hero { padding-block: var(--section-pad-l) var(--section-pad-xl); }
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--tr-mono);
+  color: var(--fg-muted);
+  transition: var(--t-color);
+}
+.back:hover { color: var(--fg); }
+
+/**
+ * 그림 열의 폭을 비율(5fr)이 아니라 상한값으로 잡는다. 1:2 프레임은 폭이 커지는 만큼 두 배로
+ * 높아져서, 비율로 두면 1920 에서 히어로 높이가 900px 을 넘고 제원이 화면 밖으로 밀린다.
+ */
+.heroGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 30rem) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--sp-9);
+  margin-top: var(--sp-7);
+}
+
+/**
+ * 3D 트랙의 마운트 지점(`[data-rocket-viewer]`). 여기에 캔버스를 만들지 않는다.
+ * 박스 크기는 이 CSS 가 정하므로 나중에 캔버스가 붙어도 레이아웃이 흔들리지 않고,
+ * 포스터(`[data-viewer-poster]`)는 WebGL 을 쓸 수 없는 클라이언트의 폴백으로 남는다 (C12).
+ */
+.stage {
+  position: relative;
+  /* 3:5 프레임 + contain. 원본 1:2 보다 살짝 넓어 좌우 여백이 22px 남는데,
+     그 여백이 코너 마크가 앉을 자리다 */
+  aspect-ratio: 3 / 5;
+  background: var(--bg-sunken);
+  border: 1px solid var(--rule);
+}
+
+/* 측정된 영역이라는 표시 — 1px L 자 코너 마크 둘. 시그널 컬러의 허용 용법(작은 마크) */
+.stage::before,
+.stage::after {
+  content: '';
+  position: absolute;
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 0 solid var(--sig);
+  pointer-events: none;
+}
+.stage::before {
+  top: var(--sp-3);
+  left: var(--sp-3);
+  border-top-width: 1px;
+  border-left-width: 1px;
+}
+.stage::after {
+  right: var(--sp-3);
+  bottom: var(--sp-3);
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+}
+
+.poster { position: absolute; inset: 0; }
+
+.img { object-fit: contain; padding: var(--sp-6); }
+
+.noImage {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(135deg, transparent 0 8px, var(--rule) 8px 9px);
+}
+
+.heroBody { display: grid; gap: var(--sp-5); }
+
+.title { margin-block: var(--sp-2) var(--sp-5); }
+
+.detail { padding-block: var(--section-pad-xl); }
+
+.block + .block { margin-top: var(--section-pad-l); }
+
+.blockTitle {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  font-weight: 400;
+  line-height: var(--lh-mono);
+  letter-spacing: var(--tr-mono);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  padding-bottom: var(--sp-4);
+  margin-bottom: var(--sp-5);
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+@media (max-width: 899px) {
+  .heroGrid { grid-template-columns: minmax(0, 1fr); gap: var(--sp-7); }
+  /* 한 열이 되면 그림이 폭을 다 먹어 높이가 두 배가 된다 — 폭을 눌러 화면 안에 붙잡는다 */
+  .stage { width: min(26rem, 62%); }
+}
+
+@media (max-width: 599px) {
+  .hero { padding-block: var(--sp-7) var(--section-pad); }
+  .detail { padding-block: var(--section-pad); }
+  .img { padding: var(--sp-4); }
+}

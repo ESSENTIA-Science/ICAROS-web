@@ -1,0 +1,62 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: var(--sp-9) var(--sp-10);
+  align-items: start;
+}
+
+.body {
+  white-space: pre-line;
+  max-width: var(--measure);
+  font-size: var(--fs-body-l);
+  line-height: var(--lh-body);
+  color: var(--fg-muted);
+}
+
+.listIntro {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  margin-bottom: var(--sp-5);
+}
+
+/* 제원표 행 — 모노 번호 + 항목, 사이는 10~20% 알파 괘선 하나뿐 (03 §6c) */
+.item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-5);
+  padding: var(--sp-4) 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body-s);
+}
+.list > .item:first-child {
+  border-top: 1px solid var(--rule);
+}
+
+.no {
+  flex: none;
+  /* 자릿수가 달라져도 항목 시작 위치가 흔들리지 않게 em 으로 폭을 고정한다 */
+  width: 2.5em;
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--tr-mono);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.text {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 991px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-7);
+  }
+}
+
+@media (max-width: 767px) {
+  .body { font-size: var(--fs-body); }
+  .item { gap: var(--sp-4); }
+  .no { width: 2.2em; }
+}

@@ -1,0 +1,221 @@
+.layout {
+  display: grid;
+  gap: var(--sp-10);
+}
+
+/* ---- 모금 현황 밴드 ---- */
+
+.band {
+  display: grid;
+  gap: var(--sp-5);
+}
+
+.figures {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-5);
+  flex-wrap: wrap;
+}
+
+/* 03 §3 의 big-number treatment: 디스플레이 서체 · Expanded · 음수 자간 · tabular-nums.
+   행 높이를 1 아래로 내려 숫자가 캡 라인 위에 앉게 한다. */
+.current {
+  font-family: var(--ff-display);
+  font-weight: var(--fw-display);
+  font-stretch: var(--display-wdth);
+  font-size: clamp(4rem, 10.5vw, 14rem);
+  line-height: 0.84;
+  letter-spacing: var(--tr-stat);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.goal {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--tr-mono);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.meterRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+.meter {
+  position: relative;
+  flex: 1 1 auto;
+  height: 2px;
+  background: var(--rule-strong);
+}
+
+/* 시그널의 "진행률 채움" 용례 */
+.fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--mark);
+}
+
+.percent {
+  flex: none;
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--tr-mono);
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* ---- 안내 + 패널 ---- */
+
+.cols {
+  display: grid;
+  grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
+  gap: var(--sp-9) var(--sp-10);
+  align-items: start;
+}
+
+/* 한쪽 열이 통째로 비면(CMS 에서 카피를 지운 경우) 남은 열이 6fr/5fr 에 갇히지 않게 한 열로 편다 */
+.cols[data-single] {
+  grid-template-columns: minmax(0, 1fr);
+}
+/* 혼자 남은 패널이 컨테이너 폭(150rem)까지 늘어나지 않도록 본문 측정폭에 맞춘다 */
+.cols[data-single] > .panel {
+  max-width: var(--measure);
+}
+
+.text {
+  display: grid;
+  align-content: start;
+  gap: var(--sp-6);
+}
+
+.intro {
+  white-space: pre-line;
+  font-size: var(--fs-body-l);
+  line-height: var(--lh-body);
+  color: var(--fg-muted);
+}
+
+.usageTitle {
+  font-size: var(--fs-h5);
+  font-weight: var(--fw-medium);
+}
+
+/* 제원표 행 문법 — 알파 괘선 하나로만 나눈다 */
+.usageItem {
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body-s);
+  color: var(--fg-muted);
+}
+.usageList > .usageItem:first-child {
+  border-top: 1px solid var(--rule);
+}
+
+/* 후원 안내 패널 — 모서리 없는 1px 프레임 + 좌상단 시그널 마크 하나 */
+.panel {
+  position: relative;
+  display: grid;
+  gap: var(--sp-5);
+  justify-items: start;
+  padding: var(--sp-7);
+  border: 1px solid var(--rule-strong);
+  background: var(--bg-raised);
+}
+
+.corner {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 8px;
+  height: 8px;
+  background: var(--mark);
+}
+
+.quote {
+  font-family: var(--ff-display);
+  font-weight: var(--fw-display);
+  font-stretch: var(--display-wdth);
+  font-size: var(--fs-h4);
+  line-height: var(--lh-h4);
+  letter-spacing: var(--tr-h4);
+  text-wrap: balance;
+}
+.quote:lang(ko) {
+  font-family: var(--ff-body);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0;
+}
+
+/* 버튼 — 채움이 아래에서 위로 닦여 올라오고, 나갈 때도 같은 방향으로 빠진다 (03 §9) */
+.cta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: var(--sp-4) var(--sp-6);
+  border: 1px solid var(--fg);
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--tr-mono);
+  text-transform: uppercase;
+}
+.cta:lang(ko) {
+  font-family: var(--ff-body);
+  font-size: var(--fs-body-s);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.ctaWipe {
+  position: absolute;
+  inset: 0;
+  background: var(--fg);
+  transform: scaleY(0);
+  /* 들어올 때 위에서 아래로 자라고, 나갈 때는 아래로 빠진다 — 방향 연속성 */
+  transform-origin: top left;
+  transition: transform var(--dur-4) var(--ease-primary);
+}
+.cta:hover .ctaWipe,
+.cta:focus-visible .ctaWipe {
+  transform: scaleY(1);
+  transform-origin: bottom left;
+}
+
+.ctaText {
+  position: relative;
+  transition: color var(--dur-4) var(--ease-primary);
+}
+.cta:hover .ctaText,
+.cta:focus-visible .ctaText {
+  color: var(--bg-raised);
+}
+
+/* 호버가 없는 기기에서는 닦임 자체를 지운다 — 유령 호버를 남기지 않는다 (03 §7) */
+@media (hover: none) {
+  .ctaWipe { display: none; }
+}
+
+.outro {
+  white-space: pre-line;
+  font-size: var(--fs-body-s);
+  line-height: var(--lh-body-s);
+  color: var(--fg-muted);
+}
+
+@media (max-width: 991px) {
+  .layout { gap: var(--sp-9); }
+  .cols {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-7);
+  }
+}
+
+@media (max-width: 767px) {
+  .panel { padding: var(--sp-5); }
+  .intro { font-size: var(--fs-body); }
+}

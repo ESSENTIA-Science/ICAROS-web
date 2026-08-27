@@ -1,0 +1,17 @@
+/* 푸터는 조용해야 한다. 이 페이지에서 마지막으로 남는 인상이 저작권 한 줄이면
+   그 한 줄이라도 조판돼 있어야 한다 — 작게, 넓게 벌려서, 위아래로 충분히 띄운다. */
+.footer {
+  background: var(--n-950);
+  color: var(--fg-muted);
+  padding-block: var(--sp-9);
+  border-top: 1px solid var(--rule);
+}
+.copy {
+  margin: 0;
+  font-family: var(--ff-mono);
+  font-size: 1.05rem;
+  line-height: 1;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.34);
+}

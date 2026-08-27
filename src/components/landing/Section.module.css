@@ -1,0 +1,86 @@
+.section {
+  padding-block: var(--section-pad-xl);
+  /* 스티키 헤더가 앵커 대상 제목을 가리지 않게 한다 */
+  scroll-margin-top: var(--nav-h);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+}
+
+/* h2 지만 디스플레이 타입이 아니라 아이브로로 조판한다 — 큰 글씨 자리는 카피가 갖는다.
+   globals.css 의 h2 규칙(0,0,1)을 클래스(0,1,0)로 덮는다. */
+.label {
+  flex: none;
+  margin: 0;
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  font-weight: 400;
+  font-stretch: normal;
+  line-height: var(--lh-mono);
+  letter-spacing: var(--tr-mono);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+/* globals.css 의 `:lang(ko)` 가드(0,1,0)와 `.label`(0,1,0)이 동률이라 모듈이 뒤에 실려 이긴다.
+   한글 라벨이 들어오면 자간·uppercase 를 여기서 다시 되돌린다 (`.label:lang(ko)` = 0,2,0). */
+.label:lang(ko) {
+  font-family: var(--ff-body);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.index {
+  flex: none;
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  line-height: var(--lh-mono);
+  letter-spacing: var(--tr-mono);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* 끝단에 눈금이 선 제도 치수선. 1px 괘선 + 24px 세로 눈금 2개 */
+.rule {
+  flex: 1 1 auto;
+  position: relative;
+  height: 1px;
+  color: var(--rule-strong);
+  background: currentColor;
+}
+.rule::before,
+.rule::after {
+  content: '';
+  position: absolute;
+  top: -1.15rem;
+  width: 1px;
+  height: 2.4rem;
+  background: currentColor;
+}
+.rule::before { left: 1.2rem; }
+.rule::after { right: 1.2rem; }
+
+/* 시그널 컬러의 마크 용례 — 6px 사각형 하나. 면으로도 텍스트로도 쓰지 않는다 (03 §4) */
+.tick {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  background: var(--mark);
+}
+
+.content {
+  margin-top: var(--sp-10);
+}
+
+/* Vast 와 동일하게 모바일에서는 L/XL/XXL 구분을 버리고 한 값으로 접는다 (03 §7) */
+@media (max-width: 767px) {
+  .section { padding-block: var(--section-pad); }
+  .head { gap: var(--sp-4); }
+  .content { margin-top: var(--sp-7); }
+  .rule::before { left: 0.8rem; }
+  .rule::after { right: 0.8rem; }
+}

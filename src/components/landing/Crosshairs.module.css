@@ -1,0 +1,26 @@
+.wrap {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: var(--fg-faint);
+}
+
+/* 십자는 모서리 "위"에 놓인다 — 상자 안쪽으로 밀면 프레임이 아니라 아이콘으로 읽힌다 */
+.mark {
+  position: absolute;
+  width: 1.2rem;
+  height: 1.2rem;
+}
+.mark::before,
+.mark::after {
+  content: '';
+  position: absolute;
+  background: currentColor;
+}
+.mark::before { inset: 50% 0 auto 0; height: 1px; }
+.mark::after  { inset: 0 auto 0 50%; width: 1px; }
+
+.tl { top: -0.6rem; left: -0.6rem; }
+.tr { top: -0.6rem; right: -0.6rem; }
+.bl { bottom: -0.6rem; left: -0.6rem; }
+.br { bottom: -0.6rem; right: -0.6rem; }

@@ -1,0 +1,56 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* 열 간격은 좁게, 행 간격은 넓게 — 한 줄이 하나의 띠로 읽히게 하는 비율 (03 §8) */
+  column-gap: var(--grid-gap-x);
+  row-gap: var(--grid-gap-y);
+}
+
+/* 제원표와 같은 문법: 각 블록을 1px 괘선으로 열어 준다 */
+.block {
+  display: grid;
+  align-content: start;
+  gap: var(--sp-4);
+  padding: var(--sp-5) var(--sp-5) 0 0;
+  border-top: 1px solid var(--rule-strong);
+}
+
+/* 번호는 작은 아이브로가 아니라 블록을 여는 큰 기술 숫자다 */
+.no {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-h4);
+  line-height: 1;
+  letter-spacing: var(--tr-mono);
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.title {
+  font-family: var(--ff-display);
+  font-weight: var(--fw-display);
+  font-stretch: var(--display-wdth);
+  font-size: var(--fs-h4);
+  line-height: var(--lh-h4);
+  letter-spacing: var(--tr-h4);
+  text-wrap: balance;
+}
+.title:lang(ko) {
+  font-family: var(--ff-body);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0;
+}
+
+.body {
+  white-space: pre-line;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--fg-muted);
+}
+
+@media (max-width: 991px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--sp-9);
+  }
+  .block { padding-right: 0; }
+}

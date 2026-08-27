@@ -1,0 +1,170 @@
+.hero {
+  /* 헤더가 sticky 라 그 높이만큼 뺀다. svh 를 쓰면 모바일 URL 바 개폐로 리플로우가 나지 않는다 */
+  min-height: calc(100svh - var(--nav-h));
+  position: relative;
+  display: grid;
+  /* 카피가 아래 왼쪽(4분면)을 차지하고, 3D 는 그 위에 겹쳐 우상단을 쓴다. */
+  grid-template-rows: 1fr auto auto;
+  row-gap: var(--sp-9);
+  padding-block: var(--sp-9) var(--sp-7);
+  scroll-margin-top: var(--nav-h);
+  overflow: clip;
+}
+
+/**
+ * 3D 타깃을 **우상단 오버레이**로 둔다.
+ *
+ * 화면을 시계방향 4분면(1=좌상 2=우상 3=우하 4=좌하)으로 보면
+ * 로고·태그라인이 4분면을 쓰고, 로켓은 코가 315°(좌상향)를 향한 채
+ * 1·2·3 을 대각선으로 가로지른다.
+ *
+ * 문서 흐름에서 빼는 이유: 위쪽 띠로 두면 박스가 납작해져(실측 1360×239)
+ * 길쭉한 기체가 세로 구속에 걸려 머리카락처럼 보였다. 대각선은 가로·세로를 둘 다 써야 한다.
+ * `pointer-events: none` — 캔버스 자체도 그렇지만 타깃 박스가 카피를 덮으면 안 된다.
+ */
+.stageRow {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 64%;
+  height: 74%;
+  display: flex;
+  min-height: 0;
+  pointer-events: none;
+}
+
+/* 3D 가 오기 전에도 "측정된 영역"으로 읽히도록 네 모서리 십자만 남긴다.
+   면도 테두리도 두지 않는다 — 빈 상자를 그리면 콘텐츠가 없다는 사실이 더 크게 보인다. */
+.stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 14rem;
+}
+
+/*
+  좁은 화면에서는 겹치면 카피를 가린다. 문서 흐름으로 되돌려 위쪽 띠로 쓴다.
+
+  `width` 를 `auto` 로 두면 안 된다. 이 요소는 `.container` 를 겸하고 있어
+  `margin-inline: auto` 를 갖는데, 그리드 아이템에 축 방향 auto 마진이 있으면
+  기본 `stretch` 가 무효가 되고 **shrink-to-fit** 으로 폭이 정해진다. 안에 든 것이
+  빈 타깃 박스뿐이라 폭이 좌우 패딩만 남고(실측 390px 뷰포트에서 32px), `.stage` 는
+  0px 이 됐다. 그 결과가 두 가지였다:
+    - 모바일: 포스터가 폭 0 이라 로켓이 아예 안 보인다.
+    - 태블릿(768~900px): `CameraRig` 의 `rect.width < 1` 가드에 매 프레임 걸려
+      카메라가 한 번도 세팅되지 않는다 → 기본 카메라 그대로 화면 정중앙에 로켓이
+      그려지고, 스크롤해도 따라오지 않아 본문 위에 박제된다.
+  `.container` 의 `width: 100%` 를 되살려 두 증상을 함께 없앤다.
+*/
+@media (max-width: 900px) {
+  .stageRow {
+    position: static;
+    width: 100%;
+    height: auto;
+  }
+}
+
+.copy {
+  display: grid;
+  justify-items: start;
+  gap: var(--sp-7);
+}
+
+.brand {
+  margin: 0;
+  line-height: 0;
+}
+
+.logo {
+  width: min(38rem, 62vw);
+  height: auto;
+}
+
+/* 랜딩에서 가장 큰 활자. 디스플레이 서체 + Expanded 폭 + 단일 웨이트 */
+.tagline {
+  max-width: 108rem;
+  font-family: var(--ff-display);
+  font-weight: var(--fw-display);
+  font-stretch: var(--display-wdth);
+  font-size: clamp(2.6rem, 4.4vw, 6rem);
+  line-height: 0.98;
+  letter-spacing: var(--tr-h2);
+  text-wrap: balance;
+}
+
+/* 태그라인은 CMS 값이다. 한글이 들어오면 라틴용 음수 자간을 되돌린다
+   (globals 의 `:lang(ko)` 가드와 특이도 동률이라 모듈이 이긴다) */
+.tagline:lang(ko) {
+  letter-spacing: 0;
+  line-height: 1.15;
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+}
+
+/* 발밑 제도 치수선 — 섹션 헤더의 괘선과 같은 문법 */
+.footRule {
+  flex: 1 1 auto;
+  position: relative;
+  height: 1px;
+  color: var(--rule-strong);
+  background: currentColor;
+}
+.footRule::after {
+  content: '';
+  position: absolute;
+  top: -1.15rem;
+  right: 1.2rem;
+  width: 1px;
+  height: 2.4rem;
+  background: currentColor;
+}
+
+.scroll {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  color: var(--fg-faint);
+  transition: var(--t-color);
+}
+.scroll:hover { color: var(--fg); }
+
+.scrollLabel {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono-s);
+  line-height: var(--lh-mono);
+  letter-spacing: var(--tr-mono);
+  text-transform: uppercase;
+}
+
+.scrollTrack {
+  display: block;
+  width: 1.2rem;
+}
+
+.chevron {
+  width: 1.2rem;
+  height: 2.4rem;
+  /* 4분의 3은 정지, 나머지에서만 한 번 밀린다 — 레퍼런스의 chevron 루프와 같은 비율.
+     --motion 이 0 이면 지속시간이 0 이 되어 애니메이션 자체가 사라진다. */
+  animation: nudge calc(2400ms * var(--motion)) var(--ease-out) infinite;
+}
+
+@keyframes nudge {
+  0%, 75%, 100% { transform: none; }
+  87% { transform: translateY(0.4rem); }
+}
+
+@media (max-width: 767px) {
+  .hero {
+    row-gap: var(--sp-7);
+    padding-block: var(--sp-7) var(--sp-6);
+  }
+  .stage { min-height: 10rem; }
+  .copy { gap: var(--sp-5); }
+  .logo { width: min(30rem, 74vw); }
+  .tagline { line-height: 1.02; }
+}
