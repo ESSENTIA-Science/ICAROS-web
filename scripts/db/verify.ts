@@ -5,8 +5,16 @@
  * 로컬 셋업에서 실제로 겪었고, 원장 행수를 세고 나서야 알았다.
  * exit code 가 아니라 상태를 본다.
  *
- * `public` 테이블 수가 특히 중요하다. ESSENTIA 는 `ddl-auto: validate` 로 기동하므로
- * 그 숫자가 한 칸이라도 어긋나면 **우리 배포가 상대 API 를 죽인다.**
+ * `public` 은 **소유자로** 본다. ESSENTIA 는 `ddl-auto: validate` 로 기동하므로
+ * 우리가 거기에 뭔가 만들면 상대 API 가 죽는다 — 그게 우리가 막아야 할 유일한 사고다.
+ *
+ * 예전에는 `public` **테이블 수**를 상수와 대조했다. 그건 우리 사고가 아니라 **상대의 정상
+ * 배포**에도 걸린다. 실제로 그랬다 — ESSENTIA 가 `V19__application_bans.sql` 로 테이블
+ * 하나를 늘리자(2026-08-25) 우리 검증이 빨간불이 됐고, 원인을 알아내는 데 양쪽이 붙었다.
+ * 상대는 `public` 에서 계속 마이그레이션을 돌린다(현재 V20). 상수를 올려도 다음 배포에 또 깨진다.
+ *
+ * 그래서 질문을 바꾼다: "public 이 몇 개인가"가 아니라 **"public 에 우리 것이 있는가"**.
+ * 이건 상대 배포와 무관하게 안정적이고, 애초에 우리가 알고 싶었던 것이다.
  *
  * `src/lib/db` 를 import 하지 않는다 — 그쪽은 `server-only` 라 CLI 에서 throw 한다.
  * 운영 도구가 앱 번들 제약에 묶이면 정작 급할 때 못 쓴다. 커넥션을 직접 만든다.
@@ -30,7 +38,11 @@ function loadEnvLocal(): void {
 }
 loadEnvLocal()
 
-const EXPECTED_PUBLIC_TABLES = Number(process.env.EXPECT_PUBLIC_TABLES ?? '40')
+/**
+ * `public` 에 있으면 안 되는 소유자. 우리 role 이 만든 것이 하나라도 있으면 사고다.
+ * 상대가 무엇을 몇 개 만들든 이 목록은 바뀌지 않는다.
+ */
+const OUR_ROLES = ['icaros_migrator', 'icaros_app'] as const
 
 function clientConfig() {
   if (process.env.DB_AUTH !== 'iam') {
@@ -59,7 +71,8 @@ function clientConfig() {
 async function main(): Promise<void> {
   const c = new Client(clientConfig())
   await c.connect()
-  const one = async (t: string): Promise<string> => String((await c.query(t)).rows[0]?.v ?? '?')
+  const one = async (t: string, params?: unknown[]): Promise<string> =>
+    String((await c.query(t, params)).rows[0]?.v ?? '?')
 
   const whoami = await one('select current_user v')
   const schemaExists = await one("select count(*)::text v from information_schema.schemata where schema_name='icaros'")
@@ -71,22 +84,29 @@ async function main(): Promise<void> {
   console.log(`  원장 테이블       ${ledgerExists === '0' ? '없음' : '있음'}`)
   const icarosTables = await one("select count(*)::text v from pg_tables where schemaname='icaros'")
   const publicTables = await one("select count(*)::text v from pg_tables where schemaname='public'")
+  // 소유자로 본다. 상대가 만든 것은 세되 판정하지 않고, 우리 것만 판정한다.
+  const oursInPublic = await one(
+    `select count(*)::text v from pg_tables
+      where schemaname = 'public' and tableowner = any($1)`,
+    [OUR_ROLES as unknown as string[]]
+  )
   const files = readdirSync('drizzle').filter((f) => f.endsWith('.sql')).length
   await c.end()
 
   console.log(`  접속 role        ${whoami}`)
   console.log(`  마이그레이션 원장  ${migrations}행 (파일 ${files}개)`)
   console.log(`  icaros 테이블     ${icarosTables}`)
-  console.log(`  public 테이블     ${publicTables}  (기대 ${EXPECTED_PUBLIC_TABLES})`)
+  console.log(`  public 테이블     ${publicTables}  (ESSENTIA 소유 — 참고용)`)
+  console.log(`  그중 우리 것      ${oursInPublic}  (0 이어야 한다)`)
 
   let ok = true
   if (Number(migrations) !== files) {
     console.error(`\n  ✗ 원장 ${migrations} ≠ 파일 ${files} — 일부가 적용되지 않았다`)
     ok = false
   }
-  if (Number(publicTables) !== EXPECTED_PUBLIC_TABLES) {
-    console.error(`\n  ✗ public 테이블 수가 ${EXPECTED_PUBLIC_TABLES} → ${publicTables} 로 바뀌었다`)
-    console.error('    ESSENTIA 가 ddl-auto: validate 로 기동한다 — 즉시 확인할 것')
+  if (Number(oursInPublic) !== 0) {
+    console.error(`\n  ✗ public 스키마에 우리 role 이 만든 테이블이 ${oursInPublic}개 있다`)
+    console.error('    ESSENTIA 가 ddl-auto: validate 로 기동한다 — 상대 API 가 죽는다. 즉시 제거할 것')
     ok = false
   }
   if (ok) console.log('\n  ✓ 정상')

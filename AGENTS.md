@@ -36,7 +36,7 @@ npm run storage:cleanup  # S3 정리 큐 수동 실행
 npm run migrate:posts    # 레거시 → Community 이관 페이로드
 npm run seed:panels      # 사진 → S3 업로드 + media·page_panels 시드 (--dry 로 대상 확인)
 npm run panels:publish   # 패널 일괄 공개(--on) · 내림(--off) · 상태만(무인자)
-npm run db:inspect-public # public 스키마 변화 진단 (읽기 전용)
+npm run db:inspect-public # public 스키마 진단 (읽기 전용)
 ```
 
 로컬: `docker compose up -d` 가 **postgres:17(5435)** 과 **MinIO(9010)** 를 함께 띄운다.
@@ -88,6 +88,7 @@ Next peer(`^19.0.0`)는 19.3 을 통과시킨다. `package.json` 의 정확한 �
 | **커넥션 유휴 시간을 늘리지 말 것** | `idleTimeoutMillis` 를 10초→60초로 올렸다가 프로덕션이 죽었다. `max: 3` 은 **인스턴스당** 상한이고 Fluid Compute 는 인스턴스를 여러 개 띄운다. RDS 는 ESSENTIA 와 공유다 — `53300 remaining connection slots are reserved` |
 | **집계 버전 토큰을 행 저장에 쓰지 말 것** | `maxVersionExpr` 는 목록 전체용이다. 개별 저장 `WHERE` 에 쓰면 한 행을 고친 뒤부터 나머지가 영원히 충돌로 막힌다 |
 | **`vercel.json` 에 `outputDirectory` 를 넣지 말 것** | `framework: "nextjs"` 와 같이 두면 함수 배치가 어긋나 `/_next/image` 가 번들에서 빠진다 |
+| **상대 스키마를 수치로 감시하지 말 것** | `public` 테이블 수를 상수와 대조했더니 ESSENTIA 의 **정상 배포**(`V19__application_bans`)에 빨간불이 났다. 상대는 계속 마이그레이션을 돌린다 — 우리가 볼 것은 개수가 아니라 **소유자**다 |
 | **`drizzle-kit migrate` 의 exit code 를 믿지 말 것** | 실패한 마이그레이션을 삼키고 **exit 0** 으로 끝난다. 원장 행수와 테이블 수를 직접 셀 것 |
 | **`next/font` 의 `preload`** | Turbopack 이 `<link rel=preload as=font>` 를 안 내보낸다. 현재 no-op |
 | **`openGraph` 는 키 단위로 치환된다** | 페이지에서 `{ description }` 만 주면 루트의 `og:image` 가 그 페이지에서만 사라진다 |
