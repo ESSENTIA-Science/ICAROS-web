@@ -37,7 +37,21 @@ export interface PgConfig {
   database?: string
   password?: string
   ssl?: { ca: string; rejectUnauthorized: true }
+  max?: number
 }
+
+/**
+ * 스크립트 풀 상한.
+ *
+ * **`pg` 의 기본값은 10 이다.** 그대로 두면 운영 스크립트를 하나 돌릴 때마다 RDS 슬롯 10개를
+ * 잡을 수 있는 풀이 열린다. 실제로 동시에 쓰는 건 1~2개뿐인데(전 스크립트를 통틀어 동시 쿼리는
+ * `export-posts.ts` 의 `Promise.all` 하나가 전부다) 상한만 크게 열려 있는 셈이다.
+ *
+ * 이 RDS 는 **ESSENTIA 와 공유**이고 `db.t4g.micro` 라 `max_connections` 가 ~112 다.
+ * 2026-08-27 실측에서 5분 최대 커넥션이 **77** 까지 올라갔다 — 슬롯은 아껴야 하는 공유 자원이다.
+ * 앱 쪽은 이미 인스턴스당 3으로 묶여 있다(`src/lib/db/connection.ts`). 스크립트만 예외일 이유가 없다.
+ */
+const SCRIPT_POOL_MAX = 3
 
 /**
  * @param role  `app` = DML 만 (`icaros_app`) · `migrate` = DDL 포함 (`icaros_migrator`)
@@ -51,7 +65,7 @@ export function pgConfig(role: Role = 'app'): PgConfig {
   if (process.env.DB_AUTH !== 'iam') {
     const connectionString = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL
     if (!connectionString) throw new Error('DATABASE_URL 이 없습니다')
-    return { connectionString }
+    return { connectionString, max: SCRIPT_POOL_MAX }
   }
 
   const host = process.env.PGHOST
@@ -78,7 +92,7 @@ export function pgConfig(role: Role = 'app'): PgConfig {
     '--region', region, '--hostname', host, '--port', String(port), '--username', user,
   ], { encoding: 'utf8' }).trim()
 
-  return { host, port, user, database, password, ssl: { ca, rejectUnauthorized: true } }
+  return { host, port, user, database, password, ssl: { ca, rejectUnauthorized: true }, max: SCRIPT_POOL_MAX }
 }
 
 /** 사람에게 보여줄 접속 대상. **비밀번호나 토큰을 절대 포함하지 않는다.** */
