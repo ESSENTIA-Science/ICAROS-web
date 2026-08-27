@@ -41,6 +41,7 @@ npm run migrate:posts    # 레거시 → Community 이관 페이로드
 npm run seed:panels      # 사진 → S3 업로드 + media·page_panels 시드 (--dry 로 대상 확인)
 npm run panels:publish   # 패널 일괄 공개(--on) · 내림(--off) · 상태만(무인자)
 npm run db:inspect-public # public 스키마 진단 (읽기 전용)
+npm run smoke            # 프로덕션 스모크 (읽기 전용). DB 의존/비의존을 갈라 원인을 좁힌다
 ```
 
 로컬: `docker compose up -d` 가 **postgres:17(5435)** 과 **MinIO(9010)** 를 함께 띄운다.
