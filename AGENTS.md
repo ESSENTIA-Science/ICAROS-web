@@ -89,7 +89,7 @@ Next peer(`^19.0.0`)는 19.3 을 통과시킨다. `package.json` 의 정확한 �
 | **Suspense 경계 안에 내비게이션을 넣지 말 것** | JS 없는 클라이언트에게 그 링크가 사라진다 |
 | **JSX 반환 익명 화살표 금지** | `react/display-name` 이 컴포넌트로 오인해 lint 를 깬다 |
 | **ISR 로 공개 여부를 감싸지 말 것** | `revalidate` 를 걸면 `published=false` 가 최대 그 시간만큼 계속 보인다 |
-| **커넥션 유휴 시간을 늘리지 말 것** | `idleTimeoutMillis` 를 10초→60초로 올렸다가 프로덕션이 죽었다. `max: 3` 은 **인스턴스당** 상한이고 Fluid Compute 는 인스턴스를 여러 개 띄운다. RDS 는 ESSENTIA 와 공유다 — `53300 remaining connection slots are reserved` |
+| **커넥션 유휴 시간을 늘리지 말 것** | `idleTimeoutMillis` 를 10초→60초로 올렸다가 프로덕션이 죽었다. `max: 3` 은 **인스턴스당** 상한이고 Fluid Compute 는 인스턴스를 여러 개 띄운다. RDS 는 ESSENTIA 와 공유다 — `53300 remaining connection slots are reserved`. **2026-08-27 에 같은 종류가 재발해 ESSENTIA 백엔드까지 밀어냈다** (D26) |
 | **집계 버전 토큰을 행 저장에 쓰지 말 것** | `maxVersionExpr` 는 목록 전체용이다. 개별 저장 `WHERE` 에 쓰면 한 행을 고친 뒤부터 나머지가 영원히 충돌로 막힌다 |
 | **`vercel.json` 에 `outputDirectory` 를 넣지 말 것** | `framework: "nextjs"` 와 같이 두면 함수 배치가 어긋나 `/_next/image` 가 번들에서 빠진다 |
 | **상대 스키마를 수치로 감시하지 말 것** | `public` 테이블 수를 상수와 대조했더니 ESSENTIA 의 **정상 배포**(`V19__application_bans`)에 빨간불이 났다. 상대는 계속 마이그레이션을 돌린다 — 우리가 볼 것은 개수가 아니라 **소유자**다 |
@@ -101,6 +101,7 @@ Next peer(`^19.0.0`)는 19.3 을 통과시킨다. `package.json` 의 정확한 �
 | **순간값 지표를 일 단위로 보지 말 것** | 같은 커넥션 데이터가 창 크기만 바꿔서 **28 → 77** 이 됐다. `--period 86400` 이 5분 스파이크를 평균으로 눌렀다. 양쪽 세션이 각각 한 번씩 밟았다 — 도구 기본값이 만드는 함정이다 |
 | **간헐적 DB 타임아웃을 코드에서 찾지 말 것** | RDS 5432 인바운드가 us-east-1 EC2 **일부 대역 29개**로만 열려 있다(상한 60 때문에 294개 중 29개). 목록 밖 인스턴스는 **조용히** 타임아웃 나고 **RDS 로그에도 안 남는다**. `essentia_infra` 에 먼저 물을 것 (D27) |
 | **Fluid Compute 의 IP 를 관측으로 고정하지 말 것** | RDS 인바운드를 그날 관측된 우리 IP 124개에서 역산한 대역 29개로 좁혔더니 **몇 분 만에** 목록 밖 인스턴스(`35.153.176.161`)가 나왔다. 어제 쓴 대역이 오늘의 대역이 아니다 (D27) |
+| **로컬에서 RDS 에 붙지 못한다** | 5432 인바운드가 **us-east-1 EC2 대역**으로 한정돼 개발자 머신 egress 가 막힌다. `db:migrate`·`db:verify`·`bootstrap:admin` 전부 `ETIMEDOUT`. 증상이 타임아웃이라 코드를 의심하게 된다 — 경로를 먼저 볼 것 (`15-infra-debt.md` §C4) |
 
 ## 하지 말 것
 
