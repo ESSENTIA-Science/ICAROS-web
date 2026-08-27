@@ -167,9 +167,104 @@ export interface ServableMedia {
   readonly entityType: string | null
 }
 
-/** `/api/media/{id}` 가 서빙해도 되는 행인가. `ready` + 미삭제만 통과한다. */
+/**
+ * 공유 캐시에 올려도 되는 entity 종류 — **허용 목록**이고 이 파일이 유일한 원본이다.
+ *
+ * 두 곳이 이 집합을 본다: `/api/media/[id]` 가 캐시 헤더를 고를 때, 그리고 아래 메모리 캐시가
+ * 적격을 판정할 때. **한 벌로 두는 이유가 그것이다** — 두 벌이면 한쪽만 넓혔을 때
+ * 접근 통제가 필요한 미디어가 조용히 캐시에 남는다.
+ *
+ * 차단 목록으로 뒤집지 말 것. 그러면 나중에 추가되는 종류가 **기본적으로** 공개 캐시에 올라간다.
+ * `member` 가 여기 없는 이유는 멤버 사진이 미성년자 얼굴이기 때문이고(요구사항 I17),
+ * `entity_type` 이 null 인 행은 용도를 모르므로 같은 쪽으로 닫는다.
+ */
+export const CACHEABLE_ENTITY_TYPES: ReadonlySet<string> = new Set([
+  'rocket',
+  'landing',
+  'model',
+  'poster',
+  // 레거시 게시글 이미지. 공개 기록이고 키가 UUID 라 내용이 바뀌지 않는다.
+  // `member` 가 여전히 빠져 있는 것과 대비된다 — 그쪽은 미성년자 얼굴이다.
+  'post',
+])
+
+/** 이 미디어를 공유 캐시·메모리 캐시에 올려도 되는가. 두 판정의 유일한 기준이다. */
+export function isCacheableEntityType(entityType: string | null): boolean {
+  return entityType !== null && CACHEABLE_ENTITY_TYPES.has(entityType)
+}
+
+/**
+ * 인스턴스 로컬 메타데이터 캐시 (DECISIONS D26).
+ *
+ * ## 왜 필요한가
+ *
+ * 랜딩 1회가 만드는 `/api/media` 함수 호출이 **58개**다 — 사진 한 장이
+ * `_next/image` → `/api/media/<id>` 두 겹이고 안쪽이 DB 를 친다. 그 호출들이 Fluid Compute
+ * 인스턴스에 흩어지고, 인스턴스마다 풀이 열린다. 2026-08-27 에 **동시 인스턴스 63개**가
+ * 관측됐고 ESSENTIA 백엔드가 커넥션을 거부당했다. RDS 는 공유 `t4g.micro` 다.
+ *
+ * `max` 를 낮추는 것은 이 문제를 지연 문제로 바꿀 뿐이다(인스턴스 수가 앱 손에 없다).
+ * **커넥션을 아예 안 만드는 것**이 유일하게 총량을 줄인다.
+ *
+ * ## 왜 이만큼만 캐시하는가
+ *
+ * 캐시 대상을 `CACHEABLE_ENTITY_TYPES` 로 **한정한다**. 그 종류들은 이미
+ * `public, max-age=31536000, immutable` 로 나가고 있다 — CDN 이 1년을 들고 있는 값에
+ * 인스턴스가 60초를 더 들고 있는 것은 **새로운 노출이 아니다.**
+ *
+ * 반대로 `member`(미성년자 얼굴, I17)와 `entity_type` 이 null 인 행은 캐시하지 않는다.
+ * 그쪽은 `private, no-store` 라 CDN 사본이 없고, 여기서 캐시하면 **우리가 처음으로**
+ * 사본을 만드는 셈이 된다. 삭제도 그 종류에는 즉시 반영돼야 한다.
+ *
+ * 실패(행 없음·`pending`·삭제됨)는 캐시하지 않는다 — 방금 올린 이미지가 `pending` 에서
+ * `ready` 로 넘어가는 순간을 404 로 굳혀 버린다.
+ *
+ * ## 무엇이 낡을 수 있는가
+ *
+ * `bucket`·`key`·`mime`·`etag` 는 `ready` 이후 변하지 않는다. 변할 수 있는 것은
+ * `entityType` 하나이고(`stampMediaEntity`), 그 결과는 최대 TTL 동안 옛 캐시 정책이 적용되는 것이다.
+ * 삭제는 TTL 만큼 늦게 반영된다 — 위에서 적었듯 그 종류는 CDN 이 이미 1년을 들고 있다.
+ *
+ * 캐시는 **인스턴스 로컬**이다. 다른 인스턴스로 전파되지 않으므로 무효화 경로를 만들지 않는다.
+ * TTL 이 유일한 경계다.
+ */
+const MEDIA_TTL_MS = 60_000
+
+/** 상한. 실제 미디어 수는 수십 개지만, 상한 없는 Map 은 그 자체로 사고 경로다. */
+const MEDIA_CACHE_MAX = 256
+
+const mediaCache = new Map<string, { value: ServableMedia; expiresAt: number }>()
+
+function cacheGet(id: string): ServableMedia | null {
+  const hit = mediaCache.get(id)
+  if (!hit) return null
+  if (hit.expiresAt <= Date.now()) {
+    mediaCache.delete(id)
+    return null
+  }
+  return hit.value
+}
+
+function cachePut(id: string, value: ServableMedia): void {
+  if (!isCacheableEntityType(value.entityType)) return
+  // 가장 오래된 것부터 버린다. Map 은 삽입 순서를 유지한다.
+  if (mediaCache.size >= MEDIA_CACHE_MAX) {
+    const oldest = mediaCache.keys().next()
+    if (!oldest.done) mediaCache.delete(oldest.value)
+  }
+  mediaCache.set(id, { value, expiresAt: Date.now() + MEDIA_TTL_MS })
+}
+
+/**
+ * `/api/media/{id}` 가 서빙해도 되는 행인가. `ready` + 미삭제만 통과한다.
+ *
+ * 적격인 종류는 인스턴스 로컬 캐시에서 답한다 — 그 경우 **DB 커넥션이 생기지 않는다** (D26).
+ */
 export async function getServableMedia(mediaId: string): Promise<ServableMedia | null> {
   if (!isUuid(mediaId)) return null
+
+  const cached = cacheGet(mediaId)
+  if (cached) return cached
 
   const rows = await db
     .select({
@@ -185,7 +280,11 @@ export async function getServableMedia(mediaId: string): Promise<ServableMedia |
     .where(and(eq(media.id, mediaId), eq(media.status, 'ready'), isNull(media.deletedAt)))
     .limit(1)
 
-  return rows[0] ?? null
+  const row = rows[0]
+  if (!row) return null
+
+  cachePut(mediaId, row)
+  return row
 }
 
 async function markFailed(mediaId: string): Promise<void> {

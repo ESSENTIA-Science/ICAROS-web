@@ -1,5 +1,5 @@
 import { contentDisposition, toErrorResponse } from '@/lib/s3/http'
-import { getServableMedia } from '@/lib/s3/media'
+import { getServableMedia, isCacheableEntityType } from '@/lib/s3/media'
 import { getObjectStream } from '@/lib/s3/objects'
 import { etagMatches, quoteEtag } from '@/lib/s3/predicates'
 
@@ -25,24 +25,11 @@ const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable'
 const RESTRICTED_CACHE = 'private, no-store'
 
 /**
- * 공유 캐시에 올려도 되는 entity 종류 — **허용 목록**이다.
- *
- * 차단 목록으로 두면 나중에 추가되는 종류가 기본적으로 공개 캐시에 올라간다.
- * `member` 가 여기 없는 이유는 멤버 사진이 미성년자 얼굴이기 때문이고(요구사항 I17),
- * `entity_type` 이 null 인 행은 용도를 모르므로 같은 쪽으로 닫는다.
+ * 허용 목록은 `lib/s3/media.ts` 가 갖는다 — 캐시 헤더와 메모리 캐시 적격이 **같은 판정**이라
+ * 두 벌로 두면 한쪽만 넓혔을 때 접근 통제가 필요한 미디어가 조용히 캐시에 남는다.
  */
-const CACHEABLE_ENTITY_TYPES: ReadonlySet<string> = new Set([
-  'rocket',
-  'landing',
-  'model',
-  'poster',
-  // 레거시 게시글 이미지. 공개 기록이고 키가 UUID 라 내용이 바뀌지 않는다.
-  // `member` 가 여전히 빠져 있는 것과 대비된다 — 그쪽은 미성년자 얼굴이다.
-  'post',
-])
-
 function cacheControlFor(entityType: string | null): string {
-  return entityType !== null && CACHEABLE_ENTITY_TYPES.has(entityType) ? IMMUTABLE_CACHE : RESTRICTED_CACHE
+  return isCacheableEntityType(entityType) ? IMMUTABLE_CACHE : RESTRICTED_CACHE
 }
 
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
