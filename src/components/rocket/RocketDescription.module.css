@@ -5,6 +5,9 @@
 }
 
 .prose > * + * { margin-top: var(--sp-5); }
+/* 첫 줄이 제목이면 아래 :is(h2,h3,h4) 규칙이 위 여백을 준다 — 스크롤 상자 맨 위에
+   빈 줄로 남으므로 첫 자식만 되돌린다 */
+.prose > :first-child { margin-top: 0; }
 
 .prose :is(h2, h3, h4) {
   color: var(--fg);

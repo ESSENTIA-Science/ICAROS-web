@@ -17,7 +17,8 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   gap: var(--sp-4);
-  padding-block: var(--sp-4);
+  /* 상세가 한 화면에 드는 조판이라 행 높이를 한 단계 조인다 — 값 세 줄이 그림 옆에 선다 */
+  padding-block: var(--sp-3);
   border-bottom: 1px solid var(--rule);
 }
 

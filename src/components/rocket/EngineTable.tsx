@@ -49,7 +49,7 @@ export default function EngineTable({
             <tr key={e.id}>
               {/* 엔진 형식은 CMS 자유 텍스트다 — 언어를 값에서 판별한다 */}
               <th scope="row" className={styles.type} lang={textLang(e.type)}>{e.type}</th>
-              <Measure value={e.thrustN} unit="N" />
+              <Measure value={e.thrustN} unit="Ns" />
               <Measure value={e.burnTimeS} unit="s" />
               <Measure value={String(e.count)} unit={null} />
               {hasMode ? <td>{e.mode ?? <Dash />}</td> : null}
@@ -62,7 +62,7 @@ export default function EngineTable({
 }
 
 /**
- * 숫자 폭을 문자수로 고정한 셀. 값을 오른쪽 정렬만 하면 '146 N' 과 '6.8 N' 의 단위는 붙지만
+ * 숫자 폭을 문자수로 고정한 셀. 값을 오른쪽 정렬만 하면 '146 Ns' 와 '6.8 Ns' 의 단위는 붙지만
  * 자릿수가 어긋나 소수점이 흩어진다. 숫자만 고정폭 상자에 넣고 단위를 그 밖에 두면 둘 다 선다.
  */
 function Measure({ value, unit }: { value: string | null; unit: string | null }) {

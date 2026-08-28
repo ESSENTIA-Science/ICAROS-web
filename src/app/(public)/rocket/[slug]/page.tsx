@@ -6,6 +6,7 @@ import EngineTable from '@/components/rocket/EngineTable'
 import InView from '@/components/rocket/InView'
 import RevealNoScript from '@/components/rocket/RevealNoScript'
 import RocketDescription from '@/components/rocket/RocketDescription'
+import ScrollRegion from '@/components/rocket/ScrollRegion'
 import SpecList from '@/components/rocket/SpecList'
 import { seriesHref } from '@/components/rocket/series'
 import { textLang } from '@/components/landing/text-lang'
@@ -73,68 +74,92 @@ export default async function RocketDetailPage({ params }: { params: Promise<Par
 
   // 기본 카테고리는 `?series=` 없이 `/rocket` 으로 돌아간다 — 목록 페이지의 canonical 과 같은 규칙.
   const backHref = seriesHref(rocket.series, await listRocketSeries())
+  // 설명 스크롤 영역의 이름을 제목에서 빌려 온다. slug 는 PK 라 한 문서에서 유일하다
+  // (EngineTable 의 scopeId 와 같은 사정 — 서버 컴포넌트라 useId() 를 쓸 수 없다).
+  const overviewId = `rocket-${rocket.slug}-overview`
 
   return (
-    /* 섹션이 둘(어두운 히어로 + 밝은 상세)이라 바깥에서 한 번에 잠근다.
-       `mono` 아래에서는 두 면이 모두 검정이 되고 경계는 색이 아니라 괘선이 만든다. */
+    /* 섹션은 하나다. 예전엔 히어로(ink) + 상세(paper) 둘이었지만 `mono` 아래에서는
+       두 면이 같은 검정이라 경계가 색으로 생기지 않았다 — 그 한 줄 괘선을 위해
+       화면 하나를 더 쓰고 있었을 뿐이다. */
     <article data-palette="mono">
       <RevealNoScript />
 
-      <section className={styles.hero} data-section-theme="ink">
-        <div className="container">
+      <section className={styles.sheet} data-section-theme="ink">
+        <div className={`container ${styles.shell}`}>
           <Link href={backHref} className={styles.back}>
             <span aria-hidden="true">←</span> 기체 목록
           </Link>
 
-          <div className={styles.heroGrid}>
-            {/* 3D 뷰어 마운트 지점. 캔버스는 여기서 만들지 않는다 — 3d 트랙이 이 박스 안에
-                붙이고 [data-viewer-poster] 를 감춘다. 박스 크기는 CSS 가 고정하므로
-                캔버스가 나중에 들어와도 히어로 높이가 바뀌지 않는다. */}
-            <div className={styles.stage} data-rocket-viewer={rocket.slug}>
-              <div className={styles.poster} data-viewer-poster="">
-                {rocket.imageSrc ? (
-                  <Image
-                    src={rocket.imageSrc}
-                    alt={`${rocket.name} 기체 외형`}
-                    fill
-                    sizes="(max-width: 899px) 62vw, 30rem"
-                    className={styles.img}
-                    priority
-                  />
-                ) : (
-                  <span className={styles.noImage} aria-hidden="true" />
-                )}
-              </div>
-            </div>
-
-            <div className={styles.heroBody}>
+          {/* DOM 순서 = 읽는 순서다: 기체 이름 → 그림·제원 → 설명·엔진.
+              그림 열을 왼쪽에 세우는 것은 CSS 의 명시 배치가 하고 마크업은 건드리지 않는다.
+              (제원이 h1 보다 먼저 읽히면 리더 모드·스크린리더에서 이름 없는 숫자가 먼저 온다.) */}
+          <div className={styles.grid}>
+            <header className={styles.head}>
               <p className="eyebrow" lang="en">{rocket.seriesLabel}</p>
               {/* 기체명은 CMS 자유 텍스트다 — 언어를 값에서 판별한다 */}
               <h1 className={styles.title} lang={textLang(rocket.name)}>{rocket.name}</h1>
-              <SpecList
-                maxAltitudeM={rocket.maxAltitudeM}
-                sizeM={rocket.sizeM}
-                payloadKg={rocket.payloadKg}
-              />
+            </header>
+
+            <div className={styles.aside}>
+              {/* 3D 뷰어 마운트 지점. 캔버스는 여기서 만들지 않는다 — 3d 트랙이 이 박스 안에
+                  붙이고 [data-viewer-poster] 를 감춘다. 박스 크기는 CSS 가 정하므로
+                  캔버스가 나중에 들어와도 열 높이가 바뀌지 않는다. */}
+              <div className={styles.stage} data-rocket-viewer={rocket.slug}>
+                <div className={styles.poster} data-viewer-poster="">
+                  {rocket.imageSrc ? (
+                    <Image
+                      src={rocket.imageSrc}
+                      alt={`${rocket.name} 기체 외형`}
+                      fill
+                      sizes="(max-width: 899px) 62vw, 26rem"
+                      className={styles.img}
+                      priority
+                    />
+                  ) : (
+                    <span className={styles.noImage} aria-hidden="true" />
+                  )}
+                </div>
+              </div>
+
+              <div className={styles.specs}>
+                <SpecList
+                  maxAltitudeM={rocket.maxAltitudeM}
+                  sizeM={rocket.sizeM}
+                  payloadKg={rocket.payloadKg}
+                />
+              </div>
+            </div>
+
+            <div className={styles.main}>
+              {rocket.descriptionMd ? (
+                /* `.block` 을 함께 걸지 않는다 — 둘 다 `flex` 단축을 같은 특이도로 선언한다 */
+                <InView block className={styles.flowBlock}>
+                  <h2 id={overviewId} className={styles.blockTitle} lang="en">Overview</h2>
+                  {/* 데스크톱에서는 이 상자만 스크롤한다. 스크롤이 **실제로 있을 때만**
+                      포커스 가능해야 한다 — 데스크톱에서는 키보드로 잘린 본문에 도달할 수
+                      있어야 하고(WCAG 2.1.1), 모바일 1열에서는 overflow 가 visible 이라
+                      같은 tabIndex 가 아무것도 하지 않는 정지점이 된다. 뷰포트를 아는 쪽은
+                      브라우저뿐이라 이 래퍼만 클라이언트다. */}
+                  <ScrollRegion
+                    className={styles.flow}
+                    wrapClassName={styles.flowWrap}
+                    hintClassName={styles.hint}
+                    labelledBy={overviewId}
+                    hint="↓ 아래로 더 있습니다"
+                  >
+                    <RocketDescription markdown={rocket.descriptionMd} />
+                  </ScrollRegion>
+                </InView>
+              ) : null}
+
+              <InView block className={styles.block}>
+                <h2 className={styles.blockTitle} lang="en">Propulsion</h2>
+                {/* slug 는 PK 라 한 문서에 같은 값이 두 번 나올 수 없다 — 캡션 id 를 여기서 유일하게 만든다 */}
+                <EngineTable engines={rocket.engines} scopeId={rocket.slug} />
+              </InView>
             </div>
           </div>
-        </div>
-      </section>
-
-      <section className={styles.detail} data-section-theme="paper">
-        <div className="container">
-          {rocket.descriptionMd ? (
-            <InView block className={styles.block}>
-              <h2 className={styles.blockTitle} lang="en">Overview</h2>
-              <RocketDescription markdown={rocket.descriptionMd} />
-            </InView>
-          ) : null}
-
-          <InView block className={styles.block}>
-            <h2 className={styles.blockTitle} lang="en">Propulsion</h2>
-            {/* slug 는 PK 라 한 문서에 같은 값이 두 번 나올 수 없다 — 캡션 id 를 여기서 유일하게 만든다 */}
-            <EngineTable engines={rocket.engines} scopeId={rocket.slug} />
-          </InView>
         </div>
       </section>
     </article>

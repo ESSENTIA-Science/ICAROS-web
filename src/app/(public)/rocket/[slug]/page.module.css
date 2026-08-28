@@ -1,4 +1,45 @@
-.hero { padding-block: var(--section-pad-l) var(--section-pad-xl); }
+/**
+ * 상세는 **한 화면**이다.
+ *
+ * 예전에는 히어로(3:5 그림 + 제원)가 화면을 통째로 먹고 설명·엔진표가 그 아래 별도 섹션으로
+ * 쌓여 있었다 — 기체에서 가장 자주 찾는 값(엔진)을 보려면 한 화면을 통째로 지나쳐야 했다.
+ * 이제 그리드 하나에 그림·제원(왼쪽)과 제목·설명·엔진(오른쪽)을 함께 세운다.
+ * 길이를 감당하는 쪽은 페이지가 아니라 설명 블록 자신이다(`.flow` 가 자체 스크롤).
+ *
+ * 섹션도 하나로 합쳤다. mono 팔레트에서는 ink 든 paper 든 같은 검정이라 두 면을 나눠도
+ * 경계가 생기지 않았고, 그 경계선 하나를 위해 화면 하나를 더 쓰고 있었다.
+ *
+ * ── 높이 예산 ── (헤드리스 크롬 실측. 1rem = 10px, 폭 1440/1366, 설명 있음)
+ * 한 화면에 들기 위해 필요한 **최소 뷰포트 높이**:
+ *
+ *                       엔진 3개   5개    12개
+ *   기본(높이 ≥ 900)      708px   819px  1209px
+ *   ≤899 (1단)            604px   699px
+ *   ≤767 (2단)            504px   583px   861px
+ *
+ * 기본값만 있던 시절 707/819 는 1366×768 노트북(브라우저 크롬 제외 뷰포트 ≈650px)에서
+ * 엔진 3개조차 넘쳤다. 그래서 `max-height` 2단을 두고 여백·표 행간·제목을 단계적으로 줄인다.
+ * 이제 1366×768·1366×650·1440×900·1440×782·1280×720 전부에서 3~5개가 한 화면에 든다.
+ * 엔진 7개 이상은 계속 넘친다 — 의도한 것이다(아래 `.grid` 주석).
+ */
+.sheet {
+  display: grid;
+  /* 헤더는 fixed 라 자리를 차지하지 않는다 — 위 여백에서 직접 비워 준다.
+     예전 값(--section-pad-l = 6.4rem)은 --nav-h(7.2rem)보다 작아 '기체 목록'이 내비에 깔렸다. */
+  padding-block: calc(var(--nav-h) + var(--sp-5)) var(--sp-8);
+  min-height: 100svh;
+}
+
+/**
+ * 1행 = 돌아가기, 2행 = 본문. 본문 행이 남는 높이를 전부 가져간다.
+ * 2행의 min 을 `auto` 로 남겨 두는 것이 중요하다 — 엔진은 12개까지 들어올 수 있고,
+ * 그때는 한 화면을 억지로 지키다 푸터를 덮는 것보다 페이지가 길어지는 편이 옳다.
+ */
+.shell {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: var(--sp-6);
+}
 
 .back {
   display: inline-flex;
@@ -9,31 +50,76 @@
   letter-spacing: var(--tr-mono);
   color: var(--fg-muted);
   transition: var(--t-color);
+  justify-self: start;
 }
 .back:hover { color: var(--fg); }
 
 /**
- * 그림 열의 폭을 비율(5fr)이 아니라 상한값으로 잡는다. 1:2 프레임은 폭이 커지는 만큼 두 배로
- * 높아져서, 비율로 두면 1920 에서 히어로 높이가 900px 을 넘고 제원이 화면 밖으로 밀린다.
+ * 2열 × 2행. **DOM 순서와 시각 배치를 분리한다.**
+ * 마크업은 읽는 순서대로다 — 제목(h1) → 그림·제원 → 설명·엔진.
+ * 배치는 그림·제원을 왼쪽 열에 통째로 세우고, 제목과 본문을 오른쪽 열 위아래로 나눈다.
+ *
+ * `order` 가 아니라 명시 배치(grid-column/grid-row)를 쓴 이유:
+ *  ① `order` 로는 `.head` 와 `.main` 을 오른쪽 한 열의 두 행으로 쪼개면서
+ *     `.aside` 를 그 두 행에 걸치게 할 수 없다. 이건 1차원 재정렬이 아니라 2차원 배치다.
+ *  ② 명시 배치는 소스 순서를 바꿔도 그대로다.
+ *  ③ 탭 순서 문제가 없다 — 왼쪽 열(`.aside`)에는 포커스 가능한 요소가 **0개**라
+ *     DOM 순서(=탭 순서)와 시각 순서가 어긋나는 지점 자체가 생기지 않는다.
+ *     (탭 정지점은 back → 설명 스크롤 영역 → 엔진표 스크롤 영역, 전부 오른쪽 열이다.)
+ *
+ * 그림 열의 폭은 비율(5fr)이 아니라 상한값이다. 3:5 프레임은 폭이 커지는 만큼
+ * 두 배로 높아져서, 비율로 두면 1920 에서 그림 하나가 화면 높이를 다 먹는다.
  */
-.heroGrid {
+.grid {
   display: grid;
-  grid-template-columns: minmax(0, 30rem) minmax(0, 1fr);
-  align-items: center;
-  gap: var(--sp-9);
-  margin-top: var(--sp-7);
+  grid-template-columns: minmax(0, 26rem) minmax(0, 1fr);
+  /* 2행의 최소값은 `auto`(= .main 의 min-content)다. `minmax(0, 1fr)` 로 바꾸지 말 것 —
+     엔진 12개짜리 표가 행 밖으로 흘러 푸터를 덮는다. 그때는 페이지가 길어지는 편이 옳다. */
+  grid-template-rows: auto 1fr;
+  column-gap: var(--sp-8);
+  row-gap: var(--sp-6);
+}
+
+.head {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  gap: var(--sp-2);
+}
+
+/**
+ * 왼쪽 열 — 그림 + 제원. 두 행에 걸친다. 이 열은 **높이의 종속 변수**여야 한다:
+ * 남는 높이를 받아 쓸 뿐, 행의 높이를 정하지 않는다. `min-height: 0` 이 그 절반이고
+ * 나머지 절반은 `.stage` 의 `flex-basis: 0` 이다(아래 참고).
+ */
+.aside {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  min-height: 0;
 }
 
 /**
  * 3D 트랙의 마운트 지점(`[data-rocket-viewer]`). 여기에 캔버스를 만들지 않는다.
  * 박스 크기는 이 CSS 가 정하므로 나중에 캔버스가 붙어도 레이아웃이 흔들리지 않고,
  * 포스터(`[data-viewer-poster]`)는 WebGL 을 쓸 수 없는 클라이언트의 폴백으로 남는다 (C12).
+ *
+ * 3:5 는 이제 고정값이 아니라 시작값이다 — 열 높이에 맞춰 늘고 준다.
+ * 기체가 세로로 긴 물건이라 프레임이 더 길어져도 조판이 깨지지 않고, 그림은 contain 이다.
+ *
+ * **`flex-basis` 는 `auto` 가 아니라 `0` 이다.** `auto` 면 이 상자의 기본 크기가
+ * 비율에서 나온 자연 높이(폭 26rem → 43.3rem)가 되고, 그 값이 왼쪽 열의 max-content 로
+ * 올라가 행의 바닥이 된다 — 불확정 높이에서 fr 트랙은 max-content 로 풀리므로
+ * `min-height: 0` 으로는 못 막는다. 실측: 1440×782·엔진 3개에서 페이지가 792px 이 됐다.
+ * 그림 하나가 페이지 길이를 정하면 안 된다. `0` 이면 이 상자는 남는 높이만 받는다.
  */
 .stage {
   position: relative;
-  /* 3:5 프레임 + contain. 원본 1:2 보다 살짝 넓어 좌우 여백이 22px 남는데,
-     그 여백이 코너 마크가 앉을 자리다 */
+  flex: 1 1 0;
   aspect-ratio: 3 / 5;
+  min-height: 0;
   background: var(--bg-sunken);
   border: 1px solid var(--rule);
 }
@@ -63,7 +149,7 @@
 
 .poster { position: absolute; inset: 0; }
 
-.img { object-fit: contain; padding: var(--sp-6); }
+.img { object-fit: contain; padding: var(--sp-5); }
 
 .noImage {
   position: absolute;
@@ -71,13 +157,136 @@
   background: repeating-linear-gradient(135deg, transparent 0 8px, var(--rule) 8px 9px);
 }
 
-.heroBody { display: grid; gap: var(--sp-5); }
+/* 제원 세 줄은 이 페이지의 최소 단위다 — 줄이지 않는다 */
+.specs { flex: 0 0 auto; }
 
-.title { margin-block: var(--sp-2) var(--sp-5); }
+/**
+ * 오른쪽 열 아래 — 설명 · 엔진.
+ * 여기는 `min-height` 를 0 으로 누르지 않는다. 표가 길어지면 행이, 그리고 페이지가 자라야 한다.
+ */
+.main {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
 
-.detail { padding-block: var(--section-pad-xl); }
+/* h1 기본값(--fs-h1, 최대 7.2rem)은 한 화면 안에서 제목 하나가 가져가기엔 너무 큰 높이다 */
+.title {
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  letter-spacing: var(--tr-h2);
+}
+/* globals 의 `:lang(ko)` 가드와 특이도가 동률이라 모듈이 이긴다 — 한글 이름이면 되돌린다 */
+.title:lang(ko) { letter-spacing: 0; }
 
-.block + .block { margin-top: var(--section-pad-l); }
+/**
+ * 표는 줄지 않는다 — 남는 높이를 조절하는 쪽은 설명 블록이다.
+ * **`.flowBlock` 과 같은 요소에 함께 걸지 말 것.** 둘 다 `flex` 단축을 같은 특이도로
+ * 선언하므로 승자가 소스 순서로만 정해진다 — 블록을 재배열하면 조용히 뒤집힌다.
+ */
+.block { flex: 0 0 auto; }
+
+/**
+ * 설명이 길면 페이지가 아니라 **이 블록 안에서** 스크롤한다.
+ * 본문 길이는 CMS 가 정하는 값이라 페이지 높이를 그 값에 맡길 수 없다.
+ *
+ * **스크롤 상자를 흐름 안에 두면 이게 성립하지 않는다.** 헤드리스 실측(1440×900, 엔진 3개,
+ * 설명 14문단): 페이지가 1757px 이 되고 `.flow` 는 1128px 로 늘어나 스크롤이 아예 없었다.
+ * `minmax(0, 1fr)` · `min-height: 0` 을 아무리 걸어도 같다 — 컨테이너 높이가 **불확정**이면
+ * fr 트랙은 max-content 로 풀린다(Grid §12.7.1). 그래서 `.sheet` 의 `min-height: 100svh` 가
+ * 확정 높이가 아닌 이 트리에서는 안쪽 스크롤을 만들 수 있는 조합이 존재하지 않는다.
+ *
+ * 그래서 스크롤 상자를 **흐름 밖**에 둔다(`.flowWrap` 기준면 + `.flow` absolute).
+ * 절대 위치 자식은 어떤 내재 크기에도 기여하지 않으므로, 이 블록의 최소 높이가
+ * 제목 한 줄(+ min-height 바닥)로 떨어지고 긴 설명이 바깥 그리드를 밀어내지 못한다.
+ */
+.flowBlock {
+  /* `0 1 auto` 였다. 스크롤 상자가 흐름 밖으로 나가면서 이 블록에는 "내용만큼"이라는
+     자연 크기가 없어졌다 — 남는 높이를 받지 않으면 설명 상자가 항상 min-height 에 붙는다.
+     대신 짧은 설명일 때 남는 여백이 Propulsion **아래**가 아니라 설명 상자 안에 생긴다.
+     한 화면 조판에서는 그쪽이 낫다: 표가 화면 중간에 뜨지 않고 열이 화면을 채운다.
+     min-height 는 바닥이다: 엔진이 12개까지 들어오면 표가 열을 다 먹어
+     설명 상자가 0 높이로 눌리는데, 그때는 페이지가 길어지는 편이 옳다. */
+  flex: 1 1 auto;
+  min-height: 12rem;
+  display: flex;
+  flex-direction: column;
+}
+
+/**
+ * 스크롤 상자의 기준면. 내용이 전부 절대 위치라 이 상자 자신의 내재 높이는 0 이고,
+ * 남는 높이만 받아 상자 크기를 정한다 — 높이가 **내용의 함수가 아니게** 되는 지점이다.
+ */
+.flowWrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/**
+ * 잘림 어포던스.
+ *
+ * `scrollbar-width: thin` 만으로는 잘렸다는 사실이 화면에 드러나지 않는다 — macOS
+ * 트랙패드는 오버레이 스크롤바라 유휴 상태에서 스크롤바가 **아예 그려지지 않고**,
+ * `scrollbar-gutter: stable` 도 오버레이에서는 no-op 이다. 1440×900·엔진 3개면
+ * 이 상자는 272px(본문 9줄)이라 그보다 긴 CMS 설명은 조용히 잘린다.
+ *
+ * 그래서 아래쪽을 페이드로 지운다. `[data-overflow]` 는 ScrollRegion 이 실측해 붙이는 값이다.
+ * **기본값이 "켜짐"인 것이 중요하다** — JS 가 없거나 아직 재기 전(`unknown`)에도 어포던스가
+ * 남는다. 짧은 설명이면 페이드가 빈 자리에 걸려 눈에 띄지 않으니 거짓말도 아니다.
+ * 끄는 쪽만 상태로 지목한다: 바닥(`end`)·안 넘침(`none`)에서 꺼지므로
+ * "더 있는데 안 보인다"고 거짓말하지 않는다.
+ */
+.flow {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  /* 스크롤바가 생길 때 본문이 흔들리지 않게 자리를 미리 비워 둔다 */
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-strong) transparent;
+  padding-right: var(--sp-3);
+  /* 마스크의 색은 색이 아니라 알파다 — 소스의 알파 채널만 본다.
+     불투명한 토큰(--fg) 하나로 "보인다"를, transparent 로 "지운다"를 적는다. */
+  mask-image: linear-gradient(to bottom, var(--fg) calc(100% - var(--sp-7)), transparent);
+}
+
+/* 포커스 링이 스크롤 박스 안쪽에 그려져야 잘리지 않는다 (EngineTable .scroll 과 같은 이유) */
+.flow:focus-visible { outline-offset: -2px; }
+
+/**
+ * 페이드를 끄는 세 경우.
+ * - `end`  — 바닥이다. 남은 게 없는데 흐려 두면 그게 거짓말이다.
+ * - `none` — 넘치지 않는다.
+ * - 포커스 — 페이드가 포커스 링의 아래쪽까지 함께 지워서 링이 아니라 흠집으로 보인다.
+ *   그 동안 잘림은 캡션(`.hint`)이 대신 알린다.
+ */
+.flow[data-overflow='end'],
+.flow[data-overflow='none'],
+.flow:focus-visible { mask-image: none; }
+
+/**
+ * 페이드만으로는 "왜 흐려졌는지"가 애매하다. 페이드 위에 캡션 한 줄을 얹어 말로도 적는다.
+ * 흐름 밖(absolute)에 두는 이유는 `.flowBlock` 주석에.
+ * 시각 전용이라 `aria-hidden` 이다 — 스크린리더는 잘림과 무관하게 본문을 전부 읽는다.
+ */
+.hint {
+  position: absolute;
+  right: var(--sp-4);
+  bottom: 0;
+  pointer-events: none;
+  padding: var(--sp-1) var(--sp-2);
+  background: var(--bg);
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono-s);
+  line-height: var(--lh-mono);
+  letter-spacing: var(--tr-mono);
+  color: var(--fg-muted);
+}
+/* 한글은 자간을 받지 않는다 — globals 의 `:lang(ko)` 가드와 동률이라 여기서 명시한다 */
+.hint:lang(ko) { font-family: var(--ff-body); letter-spacing: 0; }
 
 .blockTitle {
   font-family: var(--ff-mono);
@@ -87,19 +296,87 @@
   letter-spacing: var(--tr-mono);
   text-transform: uppercase;
   color: var(--fg-muted);
-  padding-bottom: var(--sp-4);
-  margin-bottom: var(--sp-5);
+  padding-bottom: var(--sp-3);
+  margin-bottom: var(--sp-4);
   border-bottom: 1px solid var(--rule-strong);
 }
 
+/**
+ * ── 짧은 뷰포트 1단 (노트북) ──
+ * 폭이 아니라 **높이**로 건다. 기본 조판은 707px(엔진 3개)을 요구하는데 그건
+ * 1366×768·1440×900 노트북에서 브라우저 크롬을 빼면 바로 넘치는 값이다.
+ * 여백·표 행간을 한 단계씩 조여 3개 604px · 5개 699px 로 내린다.
+ *
+ * `min-width: 900px` 로 묶는 이유: 한 화면 조판 자체가 900 이상에서만 성립한다.
+ * 이 가드가 없으면 가로로 돌린 폰(844×390)이 이 블록을 함께 밟는다.
+ */
+@media (min-width: 900px) and (max-height: 899px) {
+  .sheet { padding-block: calc(var(--nav-h) + var(--sp-4)) var(--sp-6); }
+  .shell { gap: var(--sp-5); }
+  .grid { row-gap: var(--sp-5); }
+  .main { gap: var(--sp-5); }
+  .flowBlock { min-height: 10rem; }
+  .blockTitle { padding-bottom: var(--sp-2); margin-bottom: var(--sp-3); }
+}
+
+/**
+ * ── 짧은 뷰포트 2단 ──
+ * 1366×768 에서 크롬을 빼면 뷰포트가 650px 안팎이다. 1단(604/699)으로는 엔진 5개가 넘친다.
+ * 제목을 h2 → h3 로 내리고 남은 여백을 마저 조여 3개 504px · 5개 583px 로 만든다.
+ * 여기까지다 — 엔진 7개 이상은 그대로 넘치게 둔다(억지로 한 화면에 넣으면 표가 못 읽힌다).
+ */
+@media (min-width: 900px) and (max-height: 767px) {
+  .sheet { padding-block: calc(var(--nav-h) + var(--sp-3)) var(--sp-5); }
+  .shell { gap: var(--sp-4); }
+  .grid { row-gap: var(--sp-4); }
+  .main { gap: var(--sp-4); }
+  .head { gap: var(--sp-1); }
+  .flowBlock { min-height: 8.5rem; }
+  .title { font-size: var(--fs-h3); line-height: var(--lh-h3); letter-spacing: var(--tr-h3); }
+}
+
+/**
+ * 좁은 화면에서는 한 화면을 강제하지 않는다 — 세로로 흐르게 두고 여백만 줄인다.
+ * (예전 블록 간격은 --section-pad-l = 6.4rem 이었고, 지금은 .main 의 gap 3.2rem 이다.)
+ */
 @media (max-width: 899px) {
-  .heroGrid { grid-template-columns: minmax(0, 1fr); gap: var(--sp-7); }
+  .sheet {
+    min-height: 0;
+    padding-block: calc(var(--nav-h) + var(--sp-5)) var(--section-pad);
+  }
+  /* 1열로 접는다. 명시 배치를 풀지 않으면 `grid-column: 2` 가 암시 열을 하나 더 만든다. */
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    gap: var(--sp-7);
+  }
+  .head,
+  .aside,
+  .main {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .aside { gap: var(--sp-5); }
   /* 한 열이 되면 그림이 폭을 다 먹어 높이가 두 배가 된다 — 폭을 눌러 화면 안에 붙잡는다 */
-  .stage { width: min(26rem, 62%); }
+  .stage { flex: 0 0 auto; width: min(26rem, 62%); }
+  /* 화면 절반짜리 스크롤 상자는 손가락에게 "두 번 스크롤하라"는 뜻이다. 페이지와 함께 흐른다 —
+     상자를 흐름 밖에 둘 이유도 함께 사라지므로 `.flow` 를 흐름으로 되돌린다. */
+  .flowBlock { display: block; flex: 0 0 auto; min-height: 0; }
+  .flowWrap { position: static; }
+  .flow {
+    position: static;
+    overflow: visible;
+    scrollbar-gutter: auto;
+    padding-right: 0;
+  }
+  /* 스크롤이 없으니 페이드도 캡션도 없다. ScrollRegion 이 `none` 을 재서 탭 정지점과
+     랜드마크까지 함께 걷는다 — 여기서는 재기 전(`unknown`) 한 프레임까지 확실히 끈다. */
+  .flow { mask-image: none; }
 }
 
 @media (max-width: 599px) {
-  .hero { padding-block: var(--sp-7) var(--section-pad); }
-  .detail { padding-block: var(--section-pad); }
+  .sheet { padding-block: calc(var(--nav-h) + var(--sp-4)) var(--section-pad); }
+  .shell { gap: var(--sp-5); }
+  .main { gap: var(--sp-5); }
   .img { padding: var(--sp-4); }
 }

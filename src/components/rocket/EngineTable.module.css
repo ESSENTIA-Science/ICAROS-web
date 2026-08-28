@@ -101,3 +101,27 @@
   .table td { padding: var(--sp-3) var(--sp-2) var(--sp-3) 0; }
   .num { min-width: 3ch; }
 }
+
+/**
+ * 짧은 뷰포트에서는 행 높이를 조인다. 상세 페이지는 한 화면 조판이고, 그 화면에서
+ * 마지막까지 줄지 않는 덩어리가 이 표다 — 행 하나가 55.7px 이라 엔진이 5개면
+ * 표만 328px 이다. 1366×768 노트북(크롬 제외 ≈650px)에서는 그게 곧 초과다.
+ *
+ * 두 단계 모두 세로 padding 만 줄인다(16 → 12 → 8). 글자 크기·자간은 건드리지 않는다 —
+ * 값을 읽는 표라 조밀해지는 것과 작아지는 것은 다른 문제다.
+ * 행 높이: 55.7px → 47.7px → 39.7px.
+ *
+ * `min-width: 900px` 가드는 페이지 쪽 높이 미디어쿼리와 같은 이유다(한 화면 조판이
+ * 900 이상에서만 성립한다 — 가로로 돌린 폰이 이 블록을 밟으면 안 된다).
+ */
+@media (min-width: 900px) and (max-height: 899px) {
+  .table th,
+  .table td { padding-block: var(--sp-3); }
+  .table thead th { padding-bottom: var(--sp-3); }
+}
+
+@media (min-width: 900px) and (max-height: 767px) {
+  .table th,
+  .table td { padding-block: var(--sp-2); }
+  .table thead th { padding-bottom: var(--sp-2); }
+}

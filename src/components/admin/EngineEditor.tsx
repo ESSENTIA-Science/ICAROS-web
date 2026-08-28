@@ -103,7 +103,7 @@ export default function EngineEditor({
                 <TextField
                   id={`${rowId}-thrust`}
                   name="engine.thrustN"
-                  label="추력 (N)"
+                  label="추력 (Ns)"
                   defaultValue={d.thrustN}
                   inputMode="decimal"
                   maxLength={13}
