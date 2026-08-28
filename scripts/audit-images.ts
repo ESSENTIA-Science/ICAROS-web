@@ -57,6 +57,14 @@ async function collectPages(): Promise<Set<string>> {
   return pages
 }
 
+/** 긴 URL 은 **가운데를** 접는다. 앞뒤가 남아야 무엇이 다른지 보인다. */
+function elide(u: string, max = 120): string {
+  if (u.length <= max) return u
+  const head = Math.ceil((max - 3) * 0.45)
+  const tail = max - 3 - head
+  return `${u.slice(0, head)}...${u.slice(-tail)}`
+}
+
 type Bad = { url: string; status: number; pages: string[] }
 
 async function main(): Promise<void> {
@@ -92,16 +100,35 @@ async function main(): Promise<void> {
   let ok = 0
   for (const [u, onPages] of seen) {
     const target = /^https?:\/\//.test(u) ? u : `${BASE}${u}`
+    /**
+     * **한 번 실패했다고 깨졌다고 하지 않는다.**
+     *
+     * 첫 판에서 멀쩡한 이미지 하나가 일시적 `ETIMEDOUT` 으로 실패로 찍혔다(재확인 3/3 200).
+     * 오탐이 섞이는 감사는 곧 무시당하고, 무시당하는 감사는 없는 것과 같다.
+     * 죽은 호스트는 재시도해도 죽어 있으므로 진짜 실패는 그대로 남는다.
+     */
+    let verdict: Bad | null = null
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (attempt > 0) await sleep(1_200)
     try {
       const r = await fetch(target, { signal: AbortSignal.timeout(25_000) })
       const len = Number(r.headers.get('content-length') ?? 0)
       const ct = r.headers.get('content-type') ?? ''
-      if (r.status === 200 && (len > 0 || ct.startsWith('image'))) ok += 1
-      else bad.push({ url: u, status: r.status, pages: [...onPages] })
+      /**
+       * **body 를 반드시 버린다.** 헤더만 읽고 두면 소켓이 열린 채 남고, 나중에 끊길 때
+       * `ETIMEDOUT` 이 **await 밖에서** 터져 try/catch 를 빠져나간다 — 실제로 그렇게
+       * 스크립트가 통째로 죽었다. 이미지 바이트는 필요 없으니 여기서 닫는다.
+       */
+      await r.body?.cancel().catch(() => {})
+      if (r.status === 200 && (len > 0 || ct.startsWith('image'))) { verdict = null; break }
+      verdict = { url: u, status: r.status, pages: [...onPages] }
     } catch {
       // status 0 = DNS·연결 실패. 죽은 외부 호스트가 여기로 온다.
-      bad.push({ url: u, status: 0, pages: [...onPages] })
+      verdict = { url: u, status: 0, pages: [...onPages] }
     }
+    }
+    if (verdict) bad.push(verdict)
+    else ok += 1
     await sleep(100)
   }
 
@@ -112,12 +139,31 @@ async function main(): Promise<void> {
   }
   console.log(`\n  ✗ ${bad.length}건 실패\n`)
   for (const b of bad) {
-    console.log(`   [${b.status || 'DNS/연결실패'}] ${b.url.slice(0, 110)}`)
+    /**
+     * **URL 을 앞에서 자르지 않는다.**
+     *
+     * 처음엔 `slice(0, 110)` 으로 줄였는데, 실패한 두 URL 이 폴더까지 같고 **파일명에서만
+     * 달랐다.** 잘린 출력이 똑같아 보여서 "같은 이미지 1장"으로 오독했고, 그러면
+     * 하나만 복구하고 끝났다고 판단하게 된다. 실제로 그렇게 보고할 뻔했다.
+     *
+     * 구분되는 정보는 대개 **뒤쪽(파일명)** 에 있다. 길면 가운데를 접는다.
+     */
+    console.log(`   [${b.status || 'DNS/연결실패'}] ${elide(b.url)}`)
     console.log(`        ← ${b.pages.slice(0, 3).join(' , ')}`)
   }
   console.log()
   process.exit(1)
 }
+
+/**
+ * 마지막 방어선. 위에서 body 를 닫아도 죽은 호스트를 상대하다 보면 늦은 소켓 오류가
+ * 남을 수 있다. 감사 도구가 **감사 대상보다 먼저 죽으면** 아무것도 못 본다.
+ */
+process.on('unhandledRejection', () => {})
+process.on('uncaughtException', (e) => {
+  if ((e as NodeJS.ErrnoException).code === 'ETIMEDOUT') return
+  throw e
+})
 
 main().catch((e) => {
   console.error('  실패:', e instanceof Error ? e.message : e)
