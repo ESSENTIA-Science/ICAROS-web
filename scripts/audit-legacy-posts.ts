@@ -17,6 +17,10 @@
  * **레거시 11건이 사라진 것처럼 보인다** — 실제로 그렇게 오진한 적이 있다.
  */
 
+/* 이 파일에는 top-level import 가 없어 TS 가 **전역 스크립트**로 본다 — `smoke.ts` 와
+   전역 스코프를 공유해 아래 `BASE` 가 그쪽 `BASE` 와 충돌했다. 빈 export 가 모듈로 만든다. */
+export {}
+
 const BASE = (process.argv[2] ?? 'https://www.icaros.kr').replace(/\/$/, '')
 
 /** 2026-08-27 이관 시점의 실측값. 이 숫자가 안 맞으면 무언가 사라진 것이다. */
