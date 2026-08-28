@@ -32,3 +32,7 @@ certs/
 asset/
 .legacy-archive-tmp/
 .legacy-import-tmp/
+
+# infra:sg-plan 산출물 — 계정 식별자와 대역 목록이 들어간다. 커밋하지 않는다
+sg-plan.json
+sg-rollback-*.json

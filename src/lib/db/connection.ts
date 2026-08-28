@@ -129,6 +129,25 @@ export function buildPoolConfig(): PoolConfig {
   const user = required('PGUSER')
   const region = required('AWS_REGION')
 
+  /**
+   * **로컬에서 RDS 를 쓰기 위한 터널 우회.** 배포에서는 둘 다 없고, 없으면 아무 일도 없다.
+   *
+   * RDS 5432 인바운드는 us-east-1 EC2 대역으로만 열려 있고 그 SG 는 이미 규칙 60개
+   * (상한)에 꽉 차 있다. 개발 머신 IP 를 넣을 자리가 없고, 넣어서도 안 된다 —
+   * WARP/VPN 을 켜면 공인 IP 가 **다른 사용자와 공유되는 출구**가 되고 몇 분 만에 바뀐다.
+   * 그래서 SG 를 건드리는 대신 VPC 안의 EC2 를 통해 SSM 포트포워딩으로 들어간다
+   * (`npm run db:tunnel`).
+   *
+   * **접속 주소만 터널로 돌리고 신원은 실제 엔드포인트로 유지한다.** 둘을 같이 바꾸면
+   * 조용히 두 군데가 깨진다:
+   *   - IAM 토큰은 **호스트명까지 서명에 들어간다.** `127.0.0.1` 로 서명하면 RDS 가 거부한다.
+   *   - 서버 인증서의 CN/SAN 은 RDS 엔드포인트다. `servername` 을 터널 주소로 두면
+   *     `verify-full` 검증이 실패한다 — 그렇다고 검증을 끄면 D20 의 전제가 무너진다.
+   * Postgres 프로토콜 자체는 접속 주소를 신경 쓰지 않으므로, 주소만 갈라 두면 둘 다 산다.
+   */
+  const connectHost = process.env.PGTUNNEL_HOST ?? host
+  const connectPort = process.env.PGTUNNEL_PORT ? Number(process.env.PGTUNNEL_PORT) : port
+
   const ca = loadCaBundle()
   if (!ca) {
     // 여기서 조용히 `rejectUnauthorized: false` 로 떨어지면 안 된다.
@@ -139,8 +158,9 @@ export function buildPoolConfig(): PoolConfig {
   }
 
   return {
-    host,
-    port,
+    // 접속은 터널(있으면), 서명·인증서 검증은 실제 엔드포인트 — 위 주석 참조.
+    host: connectHost,
+    port: connectPort,
     database,
     user,
     // 함수로 넘기면 pg 가 커넥션마다 호출한다. 그 안에서 10분 캐시가 서명 왕복을 걷어낸다.
