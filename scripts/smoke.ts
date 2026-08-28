@@ -21,6 +21,12 @@
  * 눈으로는 404 페이지가 보이므로 사람이 확인하면 절대 못 잡는다. 상태 코드로만 잡힌다.
  */
 
+/* top-level import 가 없는 파일을 TS 는 **전역 스크립트**로 본다. 그러면 같은 처지의 다른
+   스크립트와 전역 스코프를 공유해 같은 이름의 상수가 충돌한다 — 실제로 이 `BASE` 가
+   `audit-legacy-posts.ts` 의 `BASE` 와 부딪혀 typecheck 가 깨졌다.
+   빈 export 하나가 이 파일을 모듈로 만든다. 지우지 말 것. */
+export {}
+
 const BASE = (process.argv[2] ?? 'https://www.icaros.kr').replace(/\/$/, '')
 const TIMEOUT_MS = 25_000
 
