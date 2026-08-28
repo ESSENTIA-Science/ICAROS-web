@@ -21,6 +21,7 @@
     "fonts:subset": "tsx scripts/fonts/subset.ts",
     "db:verify": "tsx scripts/db/verify.ts",
     "smoke": "tsx scripts/smoke.ts",
+    "audit:legacy": "tsx scripts/audit-legacy-posts.ts",
     "db:migrate:drizzle": "drizzle-kit migrate",
     "seed:panels": "tsx scripts/seed-panels.ts",
     "panels:publish": "tsx scripts/db/publish-panels.ts",
