@@ -47,7 +47,15 @@
   padding-inline: var(--page-pad);
 }
 
-.brand { display: flex; align-items: center; }
+/* 클릭 영역을 내비 높이(--nav-h)까지 늘린다. 워드마크 높이(2rem)에 딱 맞추면 72px 짜리 내비
+   안에서 실제로 눌리는 띠가 20px 뿐이고 위아래 26px 은 눌러도 아무 일이 없다 —
+   "로고를 눌러도 메인으로 안 간다"는 보고가 여기서 나온다. 손가락 기준으로는 WCAG 2.5.8 의
+   24×24 CSS px 도 넘지 못한다. 늘리는 것은 히트 영역뿐이고 워드마크 위치는 그대로다. */
+.brand {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+}
 .wordmark { height: 2rem; width: auto; }
 
 .list { display: flex; align-items: center; gap: var(--sp-7); }
@@ -114,11 +122,14 @@
     /* 닫힘 상태를 display:none 이 아니라 가시성으로 다뤄 포커스가 새지 않게 한다 */
     visibility: hidden;
     opacity: 0;
+    /* visibility 는 전환이 끝날 때까지 `visible` 로 남는다 — 닫는 동안 투명해진 패널이
+       그 시간만큼 아래의 탭을 먹는다. 포인터는 전환 없이 즉시 끊어 둔다. */
+    pointer-events: none;
     transform: translateY(-0.8rem);
     transition: opacity var(--dur-2) var(--ease-out),
       transform var(--dur-2) var(--ease-out), visibility var(--dur-2);
   }
-  .menuOpen { visibility: visible; opacity: 1; transform: none; }
+  .menuOpen { visibility: visible; opacity: 1; transform: none; pointer-events: auto; }
 
   .list {
     flex-direction: column;
