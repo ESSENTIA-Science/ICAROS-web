@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import PostCard from '@/components/posts/PostCard'
 import { getFeed } from '@/lib/posts/feed'
 import styles from './page.module.css'
 
@@ -9,6 +10,10 @@ import styles from './page.module.css'
  * 최신은 ESSENTIA Community, 그 뒤는 우리 DB 의 레거시 19건이다. 두 집합은 겹치지 않으므로
  * "복제하지 않는다"는 원칙은 그대로다 — 각 글의 원본이 정확히 한 곳이다.
  * 합치는 규칙과 페이지 경계 처리는 `lib/posts/feed.ts` 한 곳에 있다.
+ *
+ * 괘선 목록이 아니라 **사진 격자**다. 기록의 대부분이 발사·연소·제작 사진이고, 랜딩이 이미
+ * 사진 패널로 가 있다 — 목록만 제목과 날짜로 남으면 같은 사이트로 읽히지 않는다.
+ * `<ol>` 시맨틱은 유지한다. 격자는 배열 방식이지 순서가 사라졌다는 뜻이 아니다.
  *
  * 캐시하지 않는다. ESSENTIA 에서 글을 쓰면 여기 즉시 나와야 한다는 것이 요구사항이다.
  */
@@ -32,6 +37,19 @@ export default async function PostsPage({
   const page = Number.isInteger(parsed) && parsed > 0 ? parsed : 0
 
   const feed = await getFeed(page, PAGE_SIZE)
+
+  /**
+   * 선점으로 받을 사진 한 장. **"첫 카드"가 아니라 "사진이 있는 첫 카드"다.**
+   *
+   * 첫 카드에 사진이 없는 일이 실제로 흔하다 — 상류 글 다수가 본문에 쓸 수 있는 사진이
+   * 없어서 대체 면으로 나가고, 목록은 날짜순이라 그런 글이 맨 앞에 오는 것을 우리가 정할 수
+   * 없다. `i === 0` 으로 두면 그 순간 선점이 아무 데도 걸리지 않고 LCP 이미지는 다시
+   * `lazy` 가 된다 (2026-08-28 실측: 12칸 중 첫 칸이 사진 없는 글이었다).
+   *
+   * 첫 행 밖(3 이상)은 켜지 않는다. 어느 폭에서도 화면 밖이라 선점의 대상이 아니다.
+   */
+  const found = feed.items.findIndex((p) => p.thumb !== null)
+  const lcpIndex = found >= 0 && found < 3 ? found : -1
 
   return (
     <section data-section-theme="ink" className={styles.section}>
@@ -60,19 +78,11 @@ export default async function PostsPage({
               </p>
             ) : null}
 
-            <ol className={styles.list}>
+            {/* 번호를 뗐다. 괘선 목록에서는 위치가 정보였지만, 격자에서 "07" 은 몇 번째 열
+                몇 번째 행인지와 어긋나 오히려 읽는 사람을 헷갈리게 한다. */}
+            <ol className={styles.grid}>
               {feed.items.map((p, i) => (
-                <li key={p.id} className={styles.item}>
-                  <Link href={p.href} className={styles.card}>
-                    <span className={styles.index}>{String(page * PAGE_SIZE + i + 1).padStart(2, '0')}</span>
-                    <span className={styles.cardBody}>
-                      <span className={styles.cardTitle}>{p.title}</span>
-                      <span className={styles.meta}>
-                        <time dateTime={p.date} className="num">{p.date}</time>
-                      </span>
-                    </span>
-                  </Link>
-                </li>
+                <PostCard key={p.id} post={p} priority={i === lcpIndex} />
               ))}
             </ol>
 

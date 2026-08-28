@@ -1,0 +1,141 @@
+.card {
+  position: relative;
+  display: grid;
+  gap: var(--sp-3);
+  align-content: start;
+}
+
+/**
+ * 사진 프레임. 비율을 3:2 로 **고정**한다 — 상류 사진은 세로·정사각·와이드가 섞여 있고
+ * (미션 패치는 정사각, 발사 사진은 가로) 원본 비율을 따르면 격자의 행 높이가 카드마다
+ * 달라져 갤러리가 아니라 벽돌 더미로 읽힌다. 잘리는 대가는 감수한다 — 카드는 미리보기다.
+ *
+ * 사진 없는 글(보고서·공지·죽은 호스트를 가리키던 옛 글)도 같은 프레임을 쓴다. 열이 어긋나지
+ * 않는 것이 첫째 조건이고, 그 안을 무엇으로 채우는지는 아래 `.blank` 가 정한다.
+ */
+.figure {
+  position: relative;
+  aspect-ratio: 3 / 2;
+  background: var(--bg-sunken);
+  border: 1px solid var(--rule);
+  overflow: hidden;
+}
+
+/**
+ * 사진이 없는 카드의 **대체 면**.
+ *
+ * 그냥 비워 두면 `--bg-sunken` 한 면만 남는데, mono 팔레트에서 그건 `#000000` 이다 —
+ * 격자 안의 검정 사각형은 "아직 안 떴다"로 읽힌다. 실제로 최신 글 구간에서 12칸 중 4칸이
+ * 그렇게 나갔다.
+ *
+ * 채우는 방법은 이 저장소가 이미 쓰는 어휘 그대로다. 45° 1px 해치는 `rocket/[slug]` 와
+ * `RocketCard` 의 `.noImage` 선례이고, 1px L 자 코너 마크는 같은 페이지 `.stage` 의
+ * "측정된 영역" 표시다. 둘을 합치면 **빈 채로 측정된 면**이 된다 — 없는 사진을 있는 척
+ * 채우지 않으면서 고장으로도 읽히지 않는 선이 거기다.
+ *
+ * **글자를 넣지 않았다.** 제목도 날짜도 카드 안에 이미 글자로 있어서, 프레임에 한 번 더
+ * 앉히면 40px 아래에 같은 값이 두 번 보인다. 색·아이콘·이니셜은 애초에 공개 화면의
+ * 두 색 원칙 밖이다. `aria-hidden` 인 이유도 같다 — 새로 읽어 줄 정보가 없다.
+ *
+ * 코너 마크에 `--sig` 를 쓰지 않는다. mono 팔레트에서 `--sig` 는 흰색으로 접혀서 결과가
+ * 같아 보이지만, `/admin` 밖의 공개 화면에서 시그널을 부르는 습관을 남기지 않는다.
+ */
+.blank {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(135deg, transparent 0 8px, var(--rule) 8px 9px);
+}
+.blank::before,
+.blank::after {
+  content: '';
+  position: absolute;
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 0 solid var(--rule-strong);
+}
+.blank::before {
+  top: var(--sp-3);
+  left: var(--sp-3);
+  border-top-width: 1px;
+  border-left-width: 1px;
+}
+.blank::after {
+  right: var(--sp-3);
+  bottom: var(--sp-3);
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+}
+
+/**
+ * 사진. 두 갈래(`next/image` · 원시 `<img>`)가 같은 규칙을 쓴다.
+ *
+ * `fill` 을 버리고 `width`/`height` 를 주면서 프레임을 채우는 일이 CSS 로 넘어왔다
+ * (이유는 `PostCard.tsx` 의 `THUMB_W` 주석 — srcset 7종을 2종으로 줄인다).
+ * `width/height` 속성은 비율만 알려 주고 실제 크기는 여기서 정한다.
+ */
+.img,
+.imgRaw {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: var(--t-move);
+}
+
+/* h2 기본값은 디스플레이 서체 + `--fs-h2` 다. 카드 제목은 그 단계가 아니다.
+   `font-stretch` 는 globals 의 `h1, h2` 가 거는 `--display-wdth`(125%)를 되돌린다 —
+   본문 서체(Pretendard)에는 폭 축이 없어서 그 값이 남아 있으면 폰트 매칭만 흔들린다. */
+.title {
+  font-family: var(--ff-body);
+  font-stretch: normal;
+  font-size: var(--fs-h5);
+  font-weight: var(--fw-medium);
+  line-height: 1.35;
+  letter-spacing: 0;
+  color: var(--fg);
+  text-wrap: balance;
+}
+
+/* 카드 전체를 클릭 표적으로 넓힌다. 접근 가능한 이름은 제목 그대로 */
+.link {
+  transition: var(--t-color);
+}
+.link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+/* 발췌는 두 줄까지만 보이고 나머지는 접는다. 본문 길이가 글마다 열 배씩 차이 나서
+   줄 수를 묶지 않으면 한 카드가 그 행의 높이를 혼자 정한다. */
+.excerpt {
+  color: var(--fg-muted);
+  font-size: var(--fs-body-s);
+  line-height: var(--lh-body-s);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.meta {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--tr-mono);
+  color: var(--fg-faint);
+}
+.meta:lang(ko) { font-family: var(--ff-body); letter-spacing: 0; }
+
+.card:hover .img,
+.card:hover .imgRaw,
+.card:has(.link:focus-visible) .img,
+.card:has(.link:focus-visible) .imgRaw {
+  transform: scale(1.03);
+}
+
+/* 레퍼런스 규칙: 터치에서는 호버를 흉내 내지 않고 지운다 */
+@media (hover: none) {
+  .card:hover .img,
+  .card:hover .imgRaw { transform: none; }
+}
