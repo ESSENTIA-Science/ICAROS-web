@@ -21,22 +21,11 @@
  *
  *   npm run db:verify
  */
-import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { readdirSync } from 'node:fs'
 import { Client } from 'pg'
+import { loadEnvLocal, pgConfig } from '../lib/db-config'
 import { MEDIA_FK_COLUMNS } from '../../src/lib/s3/media-references'
 
-function loadEnvLocal(): void {
-  if (!existsSync('.env.local')) return
-  for (const raw of readFileSync('.env.local', 'utf8').split('\n')) {
-    const line = raw.trim()
-    if (line === '' || line.startsWith('#')) continue
-    const eq = line.indexOf('=')
-    if (eq <= 0) continue
-    const k = line.slice(0, eq).trim()
-    if (process.env[k] === undefined) process.env[k] = line.slice(eq + 1).trim()
-  }
-}
 loadEnvLocal()
 
 /**
@@ -56,32 +45,16 @@ const KNOWN_MEDIA_FKS = new Set(
   MEDIA_FK_COLUMNS.map((c) => `${c.table}.${c.column}`)
 )
 
-function clientConfig() {
-  if (process.env.DB_AUTH !== 'iam') {
-    const url = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL
-    if (!url) throw new Error('DATABASE_URL 이 없습니다')
-    return { connectionString: url }
-  }
-  const host = process.env.PGHOST!
-  const port = Number(process.env.PGPORT ?? 5432)
-  const user = process.env.PGUSER_MIGRATE ?? 'icaros_migrator'
-  const region = process.env.AWS_REGION!
-  const profile = process.env.AWS_PROFILE ?? 'essentia'
-  const caPath = process.env.RDS_CA_BUNDLE_PATH
-  const ca = process.env.RDS_CA_BUNDLE ?? (caPath && existsSync(caPath) ? readFileSync(caPath, 'utf8') : undefined)
-  if (!ca) throw new Error('RDS CA 번들이 필요합니다 (scripts/fetch-rds-ca.sh)')
-
-  const password = execFileSync('aws', [
-    'rds', 'generate-db-auth-token',
-    '--profile', profile, '--region', region,
-    '--hostname', host, '--port', String(port), '--username', user,
-  ], { encoding: 'utf8' }).trim()
-
-  return { host, port, user, database: process.env.PGDATABASE!, password, ssl: { ca, rejectUnauthorized: true } }
-}
+/**
+ * 접속 설정은 **`lib/db-config.ts` 하나만 쓴다.**
+ *
+ * 예전에는 이 파일이 같은 로직을 따로 갖고 있었다. 그래서 `PGTUNNEL_HOST` 로 터널 접속을
+ * 지원하게 만들었을 때 **이 스크립트만 조용히 옛 경로로 붙었다** — 설정은 맞는데 안 되는 상태다.
+ * 오늘 잡고 있던 것과 같은 종류라(중복된 목록·중복된 로직) 여기서 없앤다.
+ */
 
 async function main(): Promise<void> {
-  const c = new Client(clientConfig())
+  const c = new Client(pgConfig('migrate'))
   await c.connect()
   const one = async (t: string, params?: unknown[]): Promise<string> =>
     String((await c.query(t, params)).rows[0]?.v ?? '?')

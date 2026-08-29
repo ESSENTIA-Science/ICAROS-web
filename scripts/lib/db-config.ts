@@ -78,24 +78,21 @@ export function pgConfig(role: Role = 'app'): PgConfig {
   /**
    * SSM 포트포워딩 경유 (`15-infra-debt.md` §C4).
    *
-   * 보안그룹이 us-east-1 EC2 대역으로 좁혀져 개발자 머신에서 5432 에 직접 못 붙는다.
-   * ESSENTIA EC2 를 터널로 경유하면 붙지만, 그때 함정이 둘이다:
+   * **의미는 `src/lib/db/connection.ts` 와 정확히 같다** — `PGHOST` 는 언제나 **진짜 RDS
+   * 엔드포인트**이고, `PGTUNNEL_HOST`/`PGTUNNEL_PORT` 는 **실제로 접속할 주소**(터널 입구)다.
    *
-   *   ① IAM 토큰은 **호스트명에 서명**된다 — `localhost` 로 발급하면 거부된다
-   *   ② `rejectUnauthorized` 는 **접속한 호스트명**을 인증서와 대조한다 —
-   *      `127.0.0.1` 로 붙으면 `ERR_TLS_CERT_ALTNAME_INVALID` 로 끊긴다
+   * 주소를 갈라 두는 이유는 함정이 둘이기 때문이다:
+   *   ① IAM 토큰은 **호스트명에 서명**된다 — 로컬 주소로 발급하면 거부된다
+   *   ② `rejectUnauthorized` 는 **인증서의 이름**을 본다 — 로컬 주소로 붙으면 불일치로 끊긴다
    *
-   * `PGTUNNEL_HOST` 에 실제 RDS 엔드포인트를 주면 둘 다 그 이름으로 처리한다.
-   * **이름은 `src/lib/db/connection.ts`·`scripts/db/tunnel.ts` 와 같다** — 같은 개념에 이름이
-   * 둘이면 한쪽만 설정하고 왜 안 되는지 찾게 된다. `npm run db:tunnel` 이 그 값을 출력한다.
-   * **TLS 검증을 끄는 것이 아니다** — CA 검증도 호스트명 대조도 그대로 하고,
-   * 대조 대상만 터널 반대편의 진짜 이름으로 맞춘다. `/etc/hosts` 를 건드릴 필요가 없다.
+   * 그래서 토큰 발급·인증서 대조는 `PGHOST` 로, 소켓 연결만 터널 주소로 한다.
+   * **TLS 검증을 끄지 않는다** — `/etc/hosts` 도 `sslmode` 강등도 필요 없다.
+   *
+   * ⚠️ 한때 이 파일만 의미를 반대로 구현했다(`PGTUNNEL_HOST` 를 진짜 엔드포인트로 읽음).
+   * 같은 이름에 뜻이 둘이면 이름이 둘인 것보다 나쁘다 — 설정은 맞는데 안 되는 상태가 된다.
    */
-  const tunnelHost = process.env.PGTUNNEL_HOST?.trim()
-  /** 토큰 발급·인증서 대조에 쓸 이름. 터널이면 반대편 실제 호스트다. */
-  const certName = tunnelHost || host
-  /** 토큰은 **RDS 가 실제로 듣는 포트**로 서명해야 한다. 터널의 로컬 포트가 아니다. */
-  const tokenPort = tunnelHost ? Number(process.env.PGTUNNEL_PORT ?? 5432) : port
+  const connectHost = process.env.PGTUNNEL_HOST ?? host
+  const connectPort = process.env.PGTUNNEL_PORT ? Number(process.env.PGTUNNEL_PORT) : port
   const user =
     role === 'migrate'
       ? (process.env.PGUSER_MIGRATE ?? 'icaros_migrator')
@@ -111,16 +108,18 @@ export function pgConfig(role: Role = 'app'): PgConfig {
   const password = execFileSync('aws', [
     'rds', 'generate-db-auth-token',
     '--profile', process.env.AWS_PROFILE ?? 'essentia',
-    '--region', region, '--hostname', certName, '--port', String(tokenPort), '--username', user,
+    // 토큰은 **진짜 엔드포인트·진짜 포트**로 서명한다. 터널 주소가 아니다.
+    '--region', region, '--hostname', host, '--port', String(port), '--username', user,
   ], { encoding: 'utf8' }).trim()
 
   return {
-    host,
-    port,
+    host: connectHost,
+    port: connectPort,
     user,
     database,
     password,
-    ssl: { ca, rejectUnauthorized: true, servername: certName },
+    // 인증서 대조도 **진짜 엔드포인트 이름**으로. 접속 주소와 무관하다.
+    ssl: { ca, rejectUnauthorized: true, servername: host },
     max: SCRIPT_POOL_MAX,
   }
 }
