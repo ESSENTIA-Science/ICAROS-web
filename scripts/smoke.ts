@@ -55,6 +55,33 @@ const CHECKS: readonly Check[] = [
   { path: '/rocket/nonexistent-slug-smoke', db: true, expect: 404, note: '비공개·부재 기체' },
 ]
 
+/**
+ * 동적 상세 라우트는 **실제 것 하나를 목록에서 찾아** 확인한다.
+ *
+ * 슬러그를 하드코딩하면 그 항목이 사라지는 날 스모크가 거짓으로 실패하고, 아예 빼 두면
+ * 상세 페이지가 깨져도 통과한다. 위 목록에 `/rocket/nonexistent…`(404)만 있던 것이 그 상태였다 —
+ * **없는 것은 확인하는데 있는 것은 확인하지 않았다.**
+ */
+const DYNAMIC: readonly { list: string; pattern: RegExp; note: string }[] = [
+  { list: '/rocket', pattern: /\/rocket\/([a-z0-9-]+)/, note: '기체 상세' },
+  { list: '/posts', pattern: /\/posts\/legacy\/([a-z0-9-]+)/, note: '레거시 글 상세' },
+  { list: '/posts', pattern: /href="\/posts\/([0-9a-f-]{36})"/, note: '상류 글 상세' },
+]
+
+async function discover(): Promise<Check[]> {
+  const found: Check[] = []
+  for (const d of DYNAMIC) {
+    const res = await fetch(`${BASE}${d.list}`, { redirect: 'follow', signal: AbortSignal.timeout(TIMEOUT_MS) })
+    if (res.status !== 200) continue
+    const m = d.pattern.exec(await res.text())
+    if (!m?.[0]) continue
+    // 패턴이 href 를 포함하면 경로만 남긴다
+    const path = m[0].startsWith('href="') ? (m[0].slice(6, -1) as string) : m[0]
+    found.push({ path, db: true, expect: 200, note: d.note })
+  }
+  return found
+}
+
 type Result = { check: Check; status: number | null; ms: number; detail: string }
 
 async function hit(check: Check): Promise<Result> {
@@ -92,8 +119,9 @@ async function main(): Promise<void> {
   console.log(`\n  대상  ${BASE}\n`)
 
   // 순차 실행이다. 동시에 때리면 우리가 스스로 cold fan-out 을 만든다 (D26).
+  const checks = [...CHECKS, ...(await discover())]
   const results: Result[] = []
-  for (const check of CHECKS) results.push(await hit(check))
+  for (const check of checks) results.push(await hit(check))
 
   for (const r of results) {
     const ok = r.status === r.check.expect && r.detail === ''
@@ -113,7 +141,7 @@ async function main(): Promise<void> {
   // 실패를 축으로 갈라 원인을 좁혀 준다. 이 진단이 이 스크립트의 존재 이유다.
   const dbFailed = failed.filter((r) => r.check.db).length
   const plainFailed = failed.filter((r) => !r.check.db).length
-  const dbTotal = CHECKS.filter((c) => c.db).length
+  const dbTotal = checks.filter((c) => c.db).length
 
   console.log(`\n  ✗ ${failed.length}건 실패`)
   if (plainFailed === 0 && dbFailed === dbTotal) {

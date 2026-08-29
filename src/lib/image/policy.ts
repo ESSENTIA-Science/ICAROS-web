@@ -12,7 +12,19 @@ export const UPLOAD_KINDS = ['media', 'hero', 'poster', 'glb'] as const
 export type UploadKind = (typeof UPLOAD_KINDS)[number]
 
 /** `icaros.media.entity_type` 에 허용하는 값. 스키마 주석과 일치시킨다. */
-export const MEDIA_ENTITY_TYPES = ['rocket', 'member', 'landing', 'model', 'poster'] as const
+/**
+ * `media.entity_type` 에 들어갈 수 있는 값.
+ *
+ * `post` 는 **업로드 폼이 만들지 않는다** — 2026-08 레거시 이관 스크립트가 직접 넣은 값이고,
+ * 지금 DB 에서 가장 많은 종류다(48건). 그런데도 이 목록에 없어서 타입이 현실과 어긋나 있었다.
+ * 그 상태로 `switch (entityType)` 를 쓰면 `post` 를 조용히 빠뜨린다.
+ *
+ * 2026-08-29 장애가 정확히 이 종류였다 — 나중에 생긴 것이 기존 목록에 등록되지 않았고,
+ * 아무 경고가 없었다. **새 entity 종류를 만들면 여기부터 추가할 것.**
+ * 그리고 `lib/s3/media.ts` 의 `CACHEABLE_ENTITY_TYPES`(캐시 정책)도 같이 볼 것 —
+ * 그쪽은 허용 목록이라 빠뜨리면 안전한 쪽(no-store)으로 닫힌다.
+ */
+export const MEDIA_ENTITY_TYPES = ['rocket', 'member', 'landing', 'model', 'poster', 'post'] as const
 export type MediaEntityType = (typeof MEDIA_ENTITY_TYPES)[number]
 
 /** S3 키의 두 번째 세그먼트. 07 §4 의 프리픽스 구조 그대로. */
