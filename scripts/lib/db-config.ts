@@ -85,15 +85,17 @@ export function pgConfig(role: Role = 'app'): PgConfig {
    *   ② `rejectUnauthorized` 는 **접속한 호스트명**을 인증서와 대조한다 —
    *      `127.0.0.1` 로 붙으면 `ERR_TLS_CERT_ALTNAME_INVALID` 로 끊긴다
    *
-   * `DB_TUNNEL_HOST` 에 실제 RDS 엔드포인트를 주면 둘 다 그 이름으로 처리한다.
+   * `PGTUNNEL_HOST` 에 실제 RDS 엔드포인트를 주면 둘 다 그 이름으로 처리한다.
+   * **이름은 `src/lib/db/connection.ts`·`scripts/db/tunnel.ts` 와 같다** — 같은 개념에 이름이
+   * 둘이면 한쪽만 설정하고 왜 안 되는지 찾게 된다. `npm run db:tunnel` 이 그 값을 출력한다.
    * **TLS 검증을 끄는 것이 아니다** — CA 검증도 호스트명 대조도 그대로 하고,
    * 대조 대상만 터널 반대편의 진짜 이름으로 맞춘다. `/etc/hosts` 를 건드릴 필요가 없다.
    */
-  const tunnelHost = process.env.DB_TUNNEL_HOST?.trim()
+  const tunnelHost = process.env.PGTUNNEL_HOST?.trim()
   /** 토큰 발급·인증서 대조에 쓸 이름. 터널이면 반대편 실제 호스트다. */
   const certName = tunnelHost || host
   /** 토큰은 **RDS 가 실제로 듣는 포트**로 서명해야 한다. 터널의 로컬 포트가 아니다. */
-  const tokenPort = tunnelHost ? Number(process.env.DB_TUNNEL_PORT ?? 5432) : port
+  const tokenPort = tunnelHost ? Number(process.env.PGTUNNEL_PORT ?? 5432) : port
   const user =
     role === 'migrate'
       ? (process.env.PGUSER_MIGRATE ?? 'icaros_migrator')
