@@ -24,6 +24,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { Client } from 'pg'
+import { MEDIA_FK_COLUMNS } from '../../src/lib/s3/media-references'
 
 function loadEnvLocal(): void {
   if (!existsSync('.env.local')) return
@@ -43,6 +44,17 @@ loadEnvLocal()
  * 상대가 무엇을 몇 개 만들든 이 목록은 바뀌지 않는다.
  */
 const OUR_ROLES = ['icaros_migrator', 'icaros_app'] as const
+
+/**
+ * `hasReferences()` 가 확인하는 FK 목록. `src/lib/s3/media-references.ts` 가 원본이다.
+ * 여기서 **DB 의 실제 외래키와 대조**한다 — 새 테이블이 `media.id` 를 가리키는데 그 목록에
+ * 없으면 정리 스윕이 살아 있는 사진을 지운다 (2026-08-29 장애).
+ *
+ * 그 파일은 `server-only` 를 import 하지 않는 순수 상수 모듈이라 CLI 에서 그대로 읽힌다.
+ */
+const KNOWN_MEDIA_FKS = new Set(
+  MEDIA_FK_COLUMNS.map((c) => `${c.table}.${c.column}`)
+)
 
 function clientConfig() {
   if (process.env.DB_AUTH !== 'iam') {
@@ -90,6 +102,24 @@ async function main(): Promise<void> {
       where schemaname = 'public' and tableowner = any($1)`,
     [OUR_ROLES as unknown as string[]]
   )
+  /**
+   * `media.id` 를 가리키는 외래키를 DB 에서 직접 긁는다. 사람의 기억이 아니라
+   * 스키마가 목록을 검사하게 만드는 지점이다.
+   */
+  const mediaFks = (
+    await c.query<{ t: string; col: string }>(
+      `select tc.table_name t, kcu.column_name col
+         from information_schema.table_constraints tc
+         join information_schema.key_column_usage kcu
+           on kcu.constraint_name = tc.constraint_name and kcu.table_schema = tc.table_schema
+         join information_schema.constraint_column_usage ccu
+           on ccu.constraint_name = tc.constraint_name and ccu.table_schema = tc.table_schema
+        where tc.constraint_type = 'FOREIGN KEY'
+          and tc.table_schema = 'icaros'
+          and ccu.table_name = 'media' and ccu.column_name = 'id'`
+    )
+  ).rows.map((r) => `${r.t}.${r.col}`)
+
   const files = readdirSync('drizzle').filter((f) => f.endsWith('.sql')).length
   await c.end()
 
@@ -98,12 +128,26 @@ async function main(): Promise<void> {
   console.log(`  icaros 테이블     ${icarosTables}`)
   console.log(`  public 테이블     ${publicTables}  (ESSENTIA 소유 — 참고용)`)
   console.log(`  그중 우리 것      ${oursInPublic}  (0 이어야 한다)`)
+  console.log(`  media 참조 FK     ${mediaFks.length}개`)
 
   let ok = true
   if (Number(migrations) !== files) {
     console.error(`\n  ✗ 원장 ${migrations} ≠ 파일 ${files} — 일부가 적용되지 않았다`)
     ok = false
   }
+  const unguarded = mediaFks.filter((f) => !KNOWN_MEDIA_FKS.has(f))
+  if (unguarded.length > 0) {
+    console.error(`\n  ✗ media 를 가리키는데 hasReferences() 가 모르는 FK: ${unguarded.join(', ')}`)
+    console.error('    정리 스윕이 살아 있는 사진을 지운다 — src/lib/s3/media-references.ts 에 추가할 것')
+    ok = false
+  }
+  /**
+   * 반대 방향(목록에 있는데 DB FK 가 없는 것)은 **검사하지 않는다.**
+   * `rockets.cover_media_id` 처럼 FK 제약 없이 관례로만 미디어를 가리키는 컬럼이 있고,
+   * 그것들도 `hasReferences()` 는 확인해야 한다. 목록이 DB FK 보다 넓은 건 정상이다.
+   * 위험한 방향은 **DB 에 있는데 목록에 없는 쪽** 하나뿐이다 — 그쪽만 막는다.
+   */
+
   if (Number(oursInPublic) !== 0) {
     console.error(`\n  ✗ public 스키마에 우리 role 이 만든 테이블이 ${oursInPublic}개 있다`)
     console.error('    ESSENTIA 가 ddl-auto: validate 로 기동한다 — 상대 API 가 죽는다. 즉시 제거할 것')
