@@ -36,7 +36,7 @@ export interface PgConfig {
   user?: string
   database?: string
   password?: string
-  ssl?: { ca: string; rejectUnauthorized: true }
+  ssl?: { ca: string; rejectUnauthorized: true; servername?: string }
   max?: number
 }
 
@@ -74,6 +74,26 @@ export function pgConfig(role: Role = 'app'): PgConfig {
   if (!host || !region || !database) throw new Error('PGHOST · AWS_REGION · PGDATABASE 가 필요합니다')
 
   const port = Number(process.env.PGPORT ?? 5432)
+
+  /**
+   * SSM 포트포워딩 경유 (`15-infra-debt.md` §C4).
+   *
+   * 보안그룹이 us-east-1 EC2 대역으로 좁혀져 개발자 머신에서 5432 에 직접 못 붙는다.
+   * ESSENTIA EC2 를 터널로 경유하면 붙지만, 그때 함정이 둘이다:
+   *
+   *   ① IAM 토큰은 **호스트명에 서명**된다 — `localhost` 로 발급하면 거부된다
+   *   ② `rejectUnauthorized` 는 **접속한 호스트명**을 인증서와 대조한다 —
+   *      `127.0.0.1` 로 붙으면 `ERR_TLS_CERT_ALTNAME_INVALID` 로 끊긴다
+   *
+   * `DB_TUNNEL_HOST` 에 실제 RDS 엔드포인트를 주면 둘 다 그 이름으로 처리한다.
+   * **TLS 검증을 끄는 것이 아니다** — CA 검증도 호스트명 대조도 그대로 하고,
+   * 대조 대상만 터널 반대편의 진짜 이름으로 맞춘다. `/etc/hosts` 를 건드릴 필요가 없다.
+   */
+  const tunnelHost = process.env.DB_TUNNEL_HOST?.trim()
+  /** 토큰 발급·인증서 대조에 쓸 이름. 터널이면 반대편 실제 호스트다. */
+  const certName = tunnelHost || host
+  /** 토큰은 **RDS 가 실제로 듣는 포트**로 서명해야 한다. 터널의 로컬 포트가 아니다. */
+  const tokenPort = tunnelHost ? Number(process.env.DB_TUNNEL_PORT ?? 5432) : port
   const user =
     role === 'migrate'
       ? (process.env.PGUSER_MIGRATE ?? 'icaros_migrator')
@@ -89,10 +109,18 @@ export function pgConfig(role: Role = 'app'): PgConfig {
   const password = execFileSync('aws', [
     'rds', 'generate-db-auth-token',
     '--profile', process.env.AWS_PROFILE ?? 'essentia',
-    '--region', region, '--hostname', host, '--port', String(port), '--username', user,
+    '--region', region, '--hostname', certName, '--port', String(tokenPort), '--username', user,
   ], { encoding: 'utf8' }).trim()
 
-  return { host, port, user, database, password, ssl: { ca, rejectUnauthorized: true }, max: SCRIPT_POOL_MAX }
+  return {
+    host,
+    port,
+    user,
+    database,
+    password,
+    ssl: { ca, rejectUnauthorized: true, servername: certName },
+    max: SCRIPT_POOL_MAX,
+  }
 }
 
 /** 사람에게 보여줄 접속 대상. **비밀번호나 토큰을 절대 포함하지 않는다.** */

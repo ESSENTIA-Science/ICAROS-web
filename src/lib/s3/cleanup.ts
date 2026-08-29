@@ -2,7 +2,7 @@ import 'server-only'
 
 import { and, asc, desc, eq, gte, isNull, lt, or, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { media, members, rockets, siteSettings, storageCleanupJobs, rocketModels } from '@/lib/db/schema'
+import { media, members, pagePanels, rockets, siteSettings, storageCleanupJobs, rocketModels } from '@/lib/db/schema'
 import { StorageError, describeError } from './errors'
 import { assertKeyWritable } from './keys'
 import { deleteObject, headObject } from './objects'
@@ -132,7 +132,7 @@ export async function deleteMedia(mediaId: string): Promise<DeleteMediaResult> {
  * 참조 확인 없이 soft delete 하는 경로가 실제로 있었다.
  */
 export async function hasReferences(mediaId: string): Promise<boolean> {
-  const [rocketRefs, memberRefs, landingRefs, modelRefs] = await Promise.all([
+  const [rocketRefs, memberRefs, landingRefs, modelRefs, panelRefs] = await Promise.all([
     db.select({ id: rockets.id }).from(rockets).where(eq(rockets.coverMediaId, mediaId)).limit(1),
     db.select({ id: members.id }).from(members).where(eq(members.imageMediaId, mediaId)).limit(1),
     // `mediaId` 는 호출부에서 UUID 임을 확인했으므로 LIKE 와일드카드가 섞일 수 없다.
@@ -149,12 +149,27 @@ export async function hasReferences(mediaId: string): Promise<boolean> {
       .from(rocketModels)
       .where(or(eq(rocketModels.glbMediaId, mediaId), eq(rocketModels.posterMediaId, mediaId)))
       .limit(1),
+    /**
+     * 랜딩 패널. **2026-08-29 에 이게 빠져 있어서 장애가 났다.**
+     *
+     * 패널 CMS 가 나중에 추가됐는데 이 목록에 들어오지 않았다. 그래서 패널이 쓰는 사진을
+     * "아무도 안 쓴다"로 판정하고 지웠고, 랜딩 패널 5개 중 4개가 화면에서 사라졌다.
+     * **관리 화면에는 그대로 보였다** — 공개 로더만 `deleted_at` 을 보기 때문이다.
+     *
+     * `page_panels.media_id` 의 FK 는 `onDelete: restrict` 지만 그건 **하드 삭제**만 막는다.
+     * soft delete 는 그대로 통과한다. 이 함수가 유일한 방어선이다.
+     *
+     * **미디어를 가리키는 컬럼을 새로 만들면 반드시 여기에 추가할 것.**
+     * 빠뜨려도 아무 경고가 없고, 증상은 한참 뒤에 "사진이 사라졌다"로만 나타난다.
+     */
+    db.select({ id: pagePanels.id }).from(pagePanels).where(eq(pagePanels.mediaId, mediaId)).limit(1),
   ])
   return (
     rocketRefs.length > 0 ||
     memberRefs.length > 0 ||
     landingRefs.length > 0 ||
-    modelRefs.length > 0
+    modelRefs.length > 0 ||
+    panelRefs.length > 0
   )
 }
 
