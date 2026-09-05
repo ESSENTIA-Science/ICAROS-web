@@ -807,7 +807,11 @@
   font-size: var(--fs-caption);
   color: var(--fg-faint);
 }
-.panelPick img { width: 100%; height: 100%; object-fit: cover; }
+/* 후보 하나하나가 사진일 수도 영상일 수도 있다 — 두 태그에 **같은 규칙**을 준다.
+   요소 선택자로만 두면 `<video>` 가 규칙 밖으로 새고, 그때부터 인라인 style 로 같은 값을
+   다시 적게 된다(공개 화면의 `.media img, .media video` 와 같은 이유다). */
+.panelPick img,
+.panelPick video { width: 100%; height: 100%; object-fit: cover; }
 .panelPick[aria-pressed='true'] { border-color: var(--sig); outline: 2px solid var(--sig); outline-offset: -3px; }
 
 .panelFocal {
@@ -821,7 +825,8 @@
   cursor: crosshair;
   overflow: hidden;
 }
-.panelFocal img { display: block; width: 100%; height: auto; }
+.panelFocal img,
+.panelFocal video { display: block; width: 100%; height: auto; }
 
 /* 십자선. 점 하나로 두면 밝은 사진 위에서 사라진다 — 두 색을 겹쳐 어느 배경에서도 보이게 한다. */
 .panelCross {
@@ -845,7 +850,8 @@
 }
 .panelCrop[data-ratio='wide'] { width: 32rem; aspect-ratio: 16 / 9; }
 .panelCrop[data-ratio='tall'] { width: 12rem; aspect-ratio: 9 / 16; }
-.panelCrop img { width: 100%; height: 100%; object-fit: cover; }
+.panelCrop img,
+.panelCrop video { width: 100%; height: 100%; object-fit: cover; }
 .panelCrop em {
   position: absolute;
   left: 0;

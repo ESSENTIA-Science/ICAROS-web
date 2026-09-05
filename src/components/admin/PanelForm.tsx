@@ -266,13 +266,12 @@ export default function PanelForm({
                   ) : isVideoMedia(c) ? (
                     /* 목록의 영상은 재생하지 않는다 — 후보가 늘면 자동재생 썸네일이 전부 동시에
                        돌아 관리 화면이 무거워진다. `metadata` 로 첫 프레임만 세운다.
-                       ui.module.css 의 규칙이 `img` 를 지목하고 있어 여기서는 인라인으로 준다. */
+                       크기·크롭은 `ui.module.css` 의 `.panelPick img, .panelPick video` 가 준다. */
                     <video
                       src={`/api/media/${c.id}`}
                       muted
                       playsInline
                       preload="metadata"
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     />
                   ) : (
                     <Image src={`/api/media/${c.id}`} width={c.width} height={c.height} alt="" sizes="120px" />
@@ -295,8 +294,8 @@ export default function PanelForm({
 
             {/* 초점 찍기와 두 크롭은 **영상에서도 같은 값을 쓴다.** 공개 화면의
                 `.media img, .media video` 가 한 규칙이므로 여기서 본 크롭이 곧 그 결과다.
-                ui.module.css 의 `.panelFocal img`·`.panelCrop img` 가 요소 선택자라
-                `<video>` 에는 걸리지 않는다 — 같은 값을 인라인으로 준다. */}
+                `ui.module.css` 도 같은 방식으로 두 태그를 함께 지목한다 — 인라인으로 남는 것은
+                초점(`objectPosition`)뿐이고, 그건 값이 매 렌더 달라지므로 스타일시트에 둘 수 없다. */}
             <button type="button" className={ui.panelFocal} onClick={pick} aria-label="초점 위치 고르기">
               {pickedIsVideo ? (
                 <video
@@ -306,7 +305,6 @@ export default function PanelForm({
                   playsInline
                   autoPlay
                   preload="metadata"
-                  style={{ display: 'block', width: '100%', height: 'auto' }}
                 />
               ) : (
                 <Image
@@ -330,12 +328,7 @@ export default function PanelForm({
                     playsInline
                     autoPlay
                     preload="metadata"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      objectPosition: `${focalX}% ${focalY}%`,
-                    }}
+                    style={{ objectPosition: `${focalX}% ${focalY}%` }}
                   />
                 ) : (
                   <Image
@@ -358,12 +351,7 @@ export default function PanelForm({
                     playsInline
                     autoPlay
                     preload="metadata"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      objectPosition: `${focalX}% ${focalY}%`,
-                    }}
+                    style={{ objectPosition: `${focalX}% ${focalY}%` }}
                   />
                 ) : (
                   <Image

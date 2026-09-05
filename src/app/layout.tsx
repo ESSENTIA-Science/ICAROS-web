@@ -20,21 +20,25 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     /**
-     * 정식 도메인은 **`www`** 다. apex(`icaros.kr`)는 프로덕션에서 307 로 www 에 넘긴다
-     * (2026-09-06 실측 0.25s). `metadataBase` 가 apex 를 가리키면 이 값으로 조립되는
-     * **모든 canonical 과 상대 OG 이미지 URL 이 리다이렉트되는 주소**가 되어, 크롤러가
-     * 페이지마다 한 번씩 더 튕긴다.
+     * 정식 도메인은 **apex(`icaros.kr`)** 다.
      *
-     * 반대 선택지도 유효하다 — Vercel 대시보드에서 apex 를 primary 로 돌리면 코드가 옳아진다.
-     * **둘 중 하나만 고르면 되고, 고르지 않는 것이 가장 나쁘다.** 지금은 관측된 사실(www 가
-     * 서비스 주소다)에 코드를 맞춘다.
+     * 2026-09-06 실측에서는 apex 가 www 로 307 을 내고 있었고(0.25s), 그래서 여기 적힌
+     * canonical 과 상대 OG URL 이 전부 **리다이렉트되는 주소**를 가리키고 있었다 —
+     * 크롤러가 페이지마다 한 번씩 더 튕긴다.
+     *
+     * 고칠 방향은 둘이었고 **apex 를 정식으로** 정했다. 짧은 주소가 살아남고, 명함·포스터에
+     * 적힌 주소와도 맞는다. 따라서 **이 상수가 옳고 리다이렉트 방향이 틀린 것**이다 —
+     * Vercel 대시보드에서 apex 를 primary 로 돌리면 양쪽이 맞는다.
+     *
+     * 한쪽만 고치면 불일치가 유지된 채 시간만 간다. 여기를 www 로 되돌리지 말고,
+     * 어긋나 보이면 **대시보드 쪽을 확인**할 것.
      */
-    metadataBase: new URL('https://www.icaros.kr'),
+    metadataBase: new URL('https://icaros.kr'),
     title: { default: seo.title, template: `%s · ${seo.title}` },
     description: seo.description,
     openGraph: {
       type: 'website',
-      url: 'https://www.icaros.kr',
+      url: 'https://icaros.kr',
       siteName: seo.title,
       title: seo.title,
       description: '학생 주도 항공우주 로켓 연구 프로젝트',

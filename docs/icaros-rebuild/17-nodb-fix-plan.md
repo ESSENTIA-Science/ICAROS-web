@@ -21,10 +21,16 @@
 | 7. VEHICLES 개편 | ⛔ | 분류 테이블 필요 — §7 |
 | 8. AI 티 나는 자잘한 것 | ✅ 전부 (코드에 있는 것) | 카피 2건은 `/admin` 에서 사람이 — §6 |
 | 9. 메인 영상 | ✅ 전부 | 포스트 PDF·영상은 §7 |
-| 10. 웹 로딩 속도 | ✅ 전부 | — |
+| 10. 웹 로딩 속도 | ⚠️ **부분 — 7개 라우트 중 3개만** | `/`·`/member`·`/rocket`·`/posts` 는 캐시 못 함 → §3 A6 "실제 결과" |
 
 **작업량: 6개 에이전트, 2 웨이브, 순수 작업 1.5일.**
 가장 큰 효과는 `A6`(캐시 정책) 하나다 — TTFB 550ms → 80ms 예상, 코드 6줄.
+
+> **사후 정정 (2026-09-06, A7 검수).** 위 10번은 계획 시점에 `✅ 전부` 였다. 틀렸다.
+> "무효화 배선이 다 되어 있으니 `force-dynamic` 만 걷으면 된다"가 전제였는데, **캐시를 막은 것은
+> 무효화가 아니라 빌드와 `searchParams` 였다.** 그 둘은 이 문서를 쓸 때 계산에 없었다.
+> 실제로 전환된 것은 `/rocket/[slug]`·`/posts/[id]`·`/posts/legacy/[slug]` **3개**다.
+> 이 표를 예쁘게 고치지 않고 정정으로 남기는 이유는, 다음에 같은 전제를 다시 세우지 않기 위해서다.
 
 ---
 
@@ -434,6 +440,52 @@ CLAUDE.md 의 "자격증명 불일치는 어느 쪽이 정답인가를 먼저 �
 
 ---
 
+#### A6 실제 결과 (2026-09-06 실행 후, A7 검수로 확인) — **위 표는 7개 전부를 전제했고, 3개만 됐다**
+
+| 라우트 | 계획 | **실제** | 왜 |
+|---|---|---|---|
+| `/rocket/[slug]` | `revalidate = false` | ✅ `revalidate = false` + `generateStaticParams(): []` | |
+| `/posts/[id]` | `revalidate = 300` | ✅ `revalidate = 300` + `generateStaticParams(): []` | |
+| `/posts/legacy/[slug]` | `revalidate = false` | ✅ `revalidate = false` + `generateStaticParams(): []` | |
+| `/` | `revalidate = false` | ❌ **`force-dynamic` 유지** | 프리렌더가 `getSiteContent()` 를 부른다 → 죽은 포트 빌드가 `ECONNREFUSED` 로 exit 1 |
+| `/member` | `revalidate = false` | ❌ **`force-dynamic` 유지** | 같음. `listMembers()` 가 빌드 시점에 나간다 |
+| `/rocket` | `revalidate = false` | ❌ **`force-dynamic` 유지** | `searchParams`(`?series=`) + `generateMetadata` 가 await 전에 `listRocketSeries()` 를 부른다 |
+| `/posts` | `revalidate = 60` | ❌ **`force-dynamic` 유지** | `searchParams`(`?page=`) |
+
+**계획이 틀렸던 지점은 셋이다. 셋 다 이 문서를 쓸 때 몰랐던 사실이다.**
+
+1. **`revalidate` 만으로는 캐시 대상이 되지 않는다.**
+   동적 세그먼트가 있는 라우트는 **`generateStaticParams()` 가 있어야** 빌드 표에서 `● (SSG)` 가 된다.
+   없으면 `revalidate` 를 무엇으로 두든 `ƒ (Dynamic)` 으로 남고 **엣지 캐시가 0**이다.
+   빈 배열(`return []`)이면 충분하다 — 프리렌더되는 페이지는 0개이고, 실제 slug 는 첫 요청에
+   렌더돼 ISR 캐시에 들어간다(`dynamicParams` 기본값 true). **그 안에서 DB 를 읽으면 안 된다** —
+   읽는 순간 배포 빌드가 RDS 도달성을 필수로 요구한다.
+   → 이 문서의 §3 A6 표에는 이 조건이 **한 글자도 없었다.** 표대로만 했으면 세 라우트도 안 됐다.
+
+2. **동적 세그먼트가 없는 라우트(`/`·`/member`)에는 그 우회가 없다.**
+   `revalidate` 를 주면 빌드 시점에 반드시 한 번 프리렌더되고 그 안의 DB 조회가 그대로 나간다.
+   실측: `DATABASE_URL=postgres://x@127.0.0.1:1/x npm run build`
+   → `Error occurred prerendering page "/"` · `Failed query: select "key","value" from "icaros"."site_settings"` · exit 1.
+   **배포 빌드를 RDS 도달성에 묶지 않는다는 규칙(D27)이 TTFB 보다 위다.** 그래서 되돌렸다.
+
+3. **`searchParams` 를 읽는 세그먼트는 캐시되지 않는다** (`/rocket`·`/posts`).
+   정적 생성 중 `await searchParams` 가 동적 렌더로 빠지므로 `revalidate` 값은 무의미하다.
+   `/rocket` 은 더 나쁘다 — `generateMetadata` 가 **searchParams 를 await 하기 전에**
+   `listRocketSeries()` 를 부르므로 동적 탈출 전에 DB 왕복이 먼저 나가고, 죽은 포트 빌드가 실패한다.
+   문서의 "실제로 확인하고 결정해라"는 `/rocket` 에만 붙어 있었지만 **`/posts` 도 같은 이유로 막혔다.**
+
+**남은 길** (둘 다 이 문서 밖 → §7):
+- `/`·`/member`: (가) 빌드 타임 실패를 흡수 → **배포 직후 빈 랜딩이 캐시에 박힌다**(현재 거부).
+  (나) `cacheComponents`(PPR)로 셸/데이터를 갈라 캐시 — 라우트 전반의 Suspense 재설계.
+- `/rocket`·`/posts`: 시리즈·페이지를 쿼리에서 경로 세그먼트로 옮긴다(`/rocket/series/[series]`).
+
+**②(도메인)의 실제 결과** — 에이전트는 지시대로 (나)를 구현해 `www` 로 통일했다(`3d862a6`).
+그 뒤 **사람이 (가)로 뒤집었다** — apex(`icaros.kr`)를 정식으로 정하고 코드를 apex 로 되돌렸다.
+따라서 **코드가 옳고 리다이렉트 방향이 틀린 상태**이며, 남은 일은 코드가 아니라
+**Vercel 대시보드에서 apex 를 primary 로 돌리는 것**이다. 그때까지 canonical·OG 는 계속 307 을 탄다.
+
+---
+
 ## 4. 웨이브 3
 
 ### A7 — 검수·회귀
@@ -512,7 +564,31 @@ w3  (필요 시) 검수에서 나온 회귀 수정
   → 영상 업로드에 마이그레이션이 필요 없다.
 - 프로덕션은 `www.icaros.kr` 에서 서비스되고 `icaros.kr` 은 307 이다. 코드의 metadataBase·OG 는
   `icaros.kr` 을 가리킨다.
+  → **결론(2026-09-06):** apex 를 정식으로 정했다. 코드는 apex 그대로 두고 **대시보드를 바꾼다.**
 - 페리지·이노스페이스 모두 순수 `<video muted loop playsinline>` + `object-fit: cover` 다.
   라이브러리 없음. 이노스페이스 소스는 854×480.
 - `npm run db:tunnel`(SSM 포트포워딩)로 로컬에서 RDS 에 붙을 수 있다 — §C4 는 08-28 해결됐다.
   단 이 문서의 작업에는 필요 없다.
+
+### 실행하면서 새로 확인한 것 (2026-09-06, 계획에 없던 사실)
+
+- **`revalidate` 는 그 자체로 라우트를 캐시 대상으로 만들지 못한다.** 동적 세그먼트가 있는
+  라우트는 `generateStaticParams()` 가 있어야 빌드 표에서 `● (SSG)` 가 된다. 빈 배열이면 충분하고,
+  없으면 `ƒ (Dynamic)` 으로 남아 **엣지 캐시가 0**이다. → §3 A6 "실제 결과" 1번.
+- **동적 세그먼트가 없는 라우트에는 그 우회가 없다.** `revalidate` 를 주는 순간 빌드가
+  프리렌더하고 DB 를 친다. `/`·`/member` 가 여기서 막혔다(죽은 포트 빌드 exit 1 실측).
+- **`searchParams` 를 읽는 세그먼트는 캐시되지 않는다.** `/rocket`(`?series=`)·`/posts`(`?page=`)
+  둘 다. 계획은 `/rocket` 만 의심했지만 `/posts` 도 같은 이유였다.
+- `media.mime` 은 `page_panels` 에 종류 컬럼을 더하지 않고 사진/영상을 가르는 값으로 쓸 수 있다.
+  대신 `getLandingPanels()` 가 `media.width`/`height` 중 하나라도 null 이면 그 패널을 **조용히
+  버리므로**, 영상은 브라우저가 `<video>` 메타데이터에서 치수를 읽어 실어 보내야 한다.
+- `confirmUpload` 은 매직 넘버로 내용을 검증한다(`sniffMime`). **mp4 판정을 같이 넣지 않으면**
+  업로드가 성공한 것처럼 보이다가 확정 단계에서 객체가 지워진다. ISO BMFF 는 선두 4바이트가
+  박스 크기라 `ftyp` 는 offset 4 다.
+- `MAX_BYTES_BY_FOLDER` 에 새 폴더를 빠뜨리면 `confirmUpload` 의 `folderMax` 가 `0` 이 되어
+  **그 종류의 확정이 전건 거부**된다. `KEY_FOLDERS` 만 늘리고 여기를 빼먹기 쉬운 자리다.
+- `lib/s3/media-references.ts` 의 `MEDIA_FK_COLUMNS` 에 `page_panels.media_id` 가 **이미 있다**
+  (D28 사고 후 추가). 영상도 같은 FK 를 타므로 정리 cron 이 살아 있는 영상을 지우지 않는다.
+- `/api/cron/storage` 는 `media` 를 지우면서 `revalidatePath` 를 부르지 않는다. 지금은 `/` 가
+  `force-dynamic` 이라 무해하지만, **`/` 를 캐시하는 순간 지워진 사진이 캐시에 남는다.**
+  §3 A6 "남은 길"을 실행할 때 같이 볼 것.

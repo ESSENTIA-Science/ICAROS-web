@@ -98,7 +98,7 @@ export async function generateMetadata(): Promise<Metadata> {
           description,
           openGraph: {
             type: 'website',
-            url: 'https://www.icaros.kr',
+            url: 'https://icaros.kr',
             siteName: 'ICAROS',
             title: 'ICAROS',
             description,
