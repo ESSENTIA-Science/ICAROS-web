@@ -34,9 +34,3 @@
   /* 시그널 컬러는 1px 마크로만 쓴다 — 텍스트에는 올리지 않는다 */
   border-bottom-color: var(--sig);
 }
-
-.count {
-  font-size: var(--fs-mono-s);
-  color: var(--fg-faint);
-}
-.tab[data-active] .count { color: var(--sig-ink); }

@@ -71,10 +71,6 @@ export default async function LegacyPostPage({ params }: Params) {
         <div className={styles.prose}>
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.contentMd}</ReactMarkdown>
         </div>
-
-        <p className={styles.source}>
-          이관 이전 기록입니다. 원본은 ICAROS 가 직접 보관합니다.
-        </p>
       </div>
     </section>
   )

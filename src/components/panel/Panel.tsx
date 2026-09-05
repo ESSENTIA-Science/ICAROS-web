@@ -52,12 +52,6 @@ export default function Panel({ panel, first }: { panel: LandingPanel; first: bo
       <div className={styles.inner}>
         <Reveal>
           <div className={styles.text}>
-          {panel.eyebrow ? (
-            <p className={styles.eyebrow} lang="en">
-              {panel.eyebrow}
-            </p>
-          ) : null}
-
           {/* 첫 패널만 h1. 나머지는 h2 — 사진 다섯 장이 전부 h1 이면 문서에 제목이 다섯 개다. */}
           {first ? (
             <h1 className={styles.headline} lang="en">
@@ -85,21 +79,6 @@ export default function Panel({ panel, first }: { panel: LandingPanel; first: bo
           ) : null}
           </div>
         </Reveal>
-
-        {panel.credit ? (
-          <p className={styles.credit}>
-            <span lang="ko">{panel.credit}</span>
-          </p>
-        ) : null}
-
-        {first ? (
-          <p className={styles.scrollCue} aria-hidden="true">
-            <span className={styles.scrollWord} lang="en">
-              Scroll
-            </span>
-            <span className={styles.scrollLine} />
-          </p>
-        ) : null}
       </div>
     </section>
   )

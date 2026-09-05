@@ -32,14 +32,12 @@
 }
 .squad + .squad { margin-top: var(--sp-9); }
 
+/* 안에 부서명 하나뿐이다 — 인원 수를 지운 뒤로 격자가 정렬할 것이 없다 */
 .squadHead {
   /* 긴 부서(10명)를 스크롤하는 동안 어느 부서를 보고 있는지 왼쪽에 남는다 */
   position: sticky;
   top: calc(var(--nav-h) + var(--sp-5));
   align-self: start;
-  display: grid;
-  gap: var(--sp-3);
-  justify-items: start;
 }
 
 .squadTitle {
@@ -49,17 +47,6 @@
   line-height: var(--lh-h4);
   letter-spacing: 0;
   color: var(--fg);
-}
-
-.squadCount {
-  font-family: var(--ff-mono);
-  font-size: var(--fs-mono);
-  letter-spacing: var(--tr-mono);
-  color: var(--fg-muted);
-  /* 숫자 위의 1px 마크 — 시그널 컬러의 허용 용법 */
-  border-top: 1px solid var(--sig);
-  padding-top: var(--sp-2);
-  min-width: 3ch;
 }
 
 .grid {
@@ -85,14 +72,7 @@
     gap: var(--sp-6);
     padding-top: var(--sp-7);
   }
-  .squadHead {
-    position: static;
-    grid-auto-flow: column;
-    justify-content: start;
-    align-items: baseline;
-    gap: var(--sp-4);
-  }
-  .squadCount { border-top: 0; border-left: 1px solid var(--sig); padding-top: 0; padding-left: var(--sp-3); }
+  .squadHead { position: static; }
 }
 
 @media (max-width: 599px) {

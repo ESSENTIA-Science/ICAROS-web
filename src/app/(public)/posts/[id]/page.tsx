@@ -49,7 +49,6 @@ export default async function PostDetailPage({ params }: Params) {
   return (
     <section data-section-theme="ink" className={styles.section}>
       <article className={`container ${styles.inner}`}>
-        <p className="eyebrow" lang="en">Post</p>
         <h1 className={styles.title}>{post.title}</h1>
         <p className={styles.meta}>
           <time dateTime={post.createdAt} className="num">{fmtDate(post.createdAt)}</time>

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import ui from '@/components/admin/ui.module.css'
 import PanelForm from '@/components/admin/PanelForm'
 import PanelRowActions from '@/components/admin/PanelRowActions'
+import { isStorageConfigured } from '@/lib/s3/config'
 import { getPanel, listPanelMediaChoices, listPanels, panelsVersion } from '../_data/panels'
 import { adminHref } from '../_tabs'
 
@@ -44,7 +45,7 @@ export default async function PanelsPanel({
         <h2 className={ui.cardTitle} lang="en">
           {editing ? 'Edit Panel' : 'New Panel'}
         </h2>
-        <PanelForm panel={editing} choices={choices} />
+        <PanelForm panel={editing} choices={choices} storageReady={isStorageConfigured()} />
       </section>
     )
   }
@@ -64,7 +65,8 @@ export default async function PanelsPanel({
 
       <p className={ui.hint} lang="ko">
         랜딩은 이 배열입니다. 위에서 아래 순서로 그려지고, <b>공개된 {published}장</b>만 나갑니다.
-        패널에는 사진이 반드시 있어야 합니다 — 글만 있는 패널은 만들 수 없습니다.
+        패널에는 사진이 반드시 있어야 합니다 — 글만 있는 패널은 만들 수 없습니다. 사진은 패널을
+        만들거나 고칠 때 그 화면에서 바로 올립니다.
       </p>
 
       {panels.length === 0 ? (

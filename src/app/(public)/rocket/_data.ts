@@ -150,24 +150,6 @@ export const listRocketSeries = cache(async (): Promise<RocketSeriesOption[]> =>
 })
 
 /**
- * 시리즈별 공개 개수 — 탭에 표기해 빈 탭을 눌러 보게 만들지 않는다.
- *
- * 로켓이 하나도 없는 카테고리도 **키가 있어야 한다.** 없으면 탭이 개수 자리에 아무것도
- * 못 그리고, 그게 "0" 과 다르게 보인다. 그래서 목록을 먼저 0 으로 채운 뒤 센다.
- */
-export async function countRocketsBySeries(): Promise<Record<string, number>> {
-  const [series, rows] = await Promise.all([
-    listRocketSeries(),
-    db.select({ series: schema.rockets.series }).from(schema.rockets).where(isPublic),
-  ])
-
-  const out: Record<string, number> = {}
-  for (const s of series) out[s.id] = 0
-  for (const r of rows) out[r.series] = (out[r.series] ?? 0) + 1
-  return out
-}
-
-/**
  * 비공개는 없는 것처럼 다룬다 — 상세는 notFound() 로 이어진다 (C8).
  *
  * generateMetadata 와 본문이 각각 부르기 때문에 감싸지 않으면 렌더 1회에 4쿼리가 나간다.

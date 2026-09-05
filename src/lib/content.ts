@@ -87,6 +87,16 @@ export const getSeo = (c: SiteContent): SeoContent => {
   }
 }
 
+/**
+ * Instagram 값은 **핸들만** 저장돼 있고, 운영자가 `@` 를 붙여 넣는 일이 실제로 있다.
+ * 표기용 핸들과 URL 을 여기 한 곳에서 만든다 — 랜딩 Contact 와 `/posts` 두 곳이 쓰므로
+ * 사본을 두면 `@` 처리가 언젠가 갈라진다.
+ */
+export const instagramHandle = (handle: string): string => handle.replace(/^@/, '')
+
+export const instagramUrl = (handle: string): string =>
+  `https://www.instagram.com/${encodeURIComponent(instagramHandle(handle))}/`
+
 /** `\n` 구분 리스트를 배열로. 빈 줄은 버린다. */
 export const toList = (v: string | undefined): string[] =>
   (v ?? '').split('\n').map((s) => s.trim()).filter(Boolean)

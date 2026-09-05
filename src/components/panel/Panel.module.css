@@ -106,8 +106,8 @@
    글자 크기가 6.4vw 인데 글 자리를 48rem 으로 묶으면 1440px 에서 두 줄짜리 문장이
    다섯 줄로 쪼개지고, 그 순간 이 조판이 성립하는 이유(한 호흡에 읽히는 큰 한 줄)가 사라진다.
    폭 제한은 본문에만 건다. */
-/* 균등 gap 을 쓰지 않는다. eyebrow 는 헤드라인에 붙고, 본문은 떨어지고,
-   CTA 는 더 떨어진다 — 간격이 곧 위계다. */
+/* 균등 gap 을 쓰지 않는다. 본문은 헤드라인에서 떨어지고 CTA 는 더 떨어진다 —
+   간격이 곧 위계다. 그래서 gap 은 0 이고 여백은 각 요소가 자기 margin 으로 낸다. */
 .text {
   display: grid;
   gap: 0;
@@ -117,16 +117,6 @@
 .panel[data-anchor='center'] .text { justify-items: center; }
 .panel[data-anchor='bottom-center'] .cta,
 .panel[data-anchor='center'] .cta { justify-self: center; }
-
-.eyebrow {
-  margin: 0 0 var(--sp-4);
-  font-family: var(--ff-mono);
-  font-size: 1.1rem;
-  line-height: 1.5;
-  letter-spacing: 0.26em;
-  text-transform: uppercase;
-  color: rgb(255 255 255 / 0.74);
-}
 
 /* 대문자 · 폭 좁힘 없이. SpaceX 계열 조판의 핵심은 크기이지 장식이 아니다. */
 /* 폭 축을 108 로 살짝 벌린다. 100 은 밋밋하고 125(본문 시스템 값)는 이 크기에서 뭉갠다.
@@ -194,82 +184,7 @@
   .cta:hover .ctaArrow { translate: none; }
 }
 
-/* ── 사진 출처 ─────────────────────────────────── */
-/* 출처는 **스크림이 있는 쪽**에 붙는다. 아래 고정으로 두면 `scrim: top` 인 패널에서
-   그늘 없는 밝은 사진 위에 놓여 읽히지 않는다 (CREW 패널에서 실측으로 확인).
-   그림자는 그 위의 보험이다 — 스크림이 `none` 인 패널도 있을 수 있다. */
-.credit {
-  position: absolute;
-  right: var(--page-pad);
-  bottom: var(--sp-5);
-  margin: 0;
-  text-shadow: 0 1px 3px rgb(0 0 0 / 0.65);
-  font-family: var(--ff-mono);
-  font-size: var(--fs-mono-s);
-  letter-spacing: var(--tr-mono);
-  font-size: 1.05rem;
-  color: rgb(255 255 255 / 0.38);
-  font-variant-numeric: tabular-nums lining-nums;
-  text-align: right;
-}
-
-/* ── 스크롤 단서 ───────────────────────────────── */
-/* 첫 패널이 화면을 꽉 채우면 아래에 뭔가 더 있다는 신호가 사라진다.
-   화살표를 튀기지 않는다 — 선이 천천히 자랐다 사라지는 쪽이 조용하고, 조용한 쪽이 비싸 보인다. */
-.scrollCue {
-  position: absolute;
-  left: 50%;
-  bottom: var(--sp-4);
-  translate: -50% 0;
-  margin: 0;
-  display: grid;
-  justify-items: center;
-  gap: var(--sp-2);
-}
-
-.scrollWord {
-  font-family: var(--ff-mono);
-  font-size: 1rem;
-  line-height: 1;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: rgb(255 255 255 / 0.5);
-  /* 자간이 오른쪽에도 붙어 가운데 정렬이 왼쪽으로 밀린다. 그만큼 되돌린다. */
-  text-indent: 0.3em;
-}
-
-.scrollLine {
-  width: 1px;
-  height: 3.2rem;
-  background: linear-gradient(to bottom, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0));
-  transform-origin: top;
-  animation: scrollPulse 2.4s var(--ease-in-out, ease-in-out) infinite;
-}
-
-@keyframes scrollPulse {
-  0%   { scale: 1 0.2; opacity: 0; }
-  35%  { scale: 1 1;   opacity: 1; }
-  100% { scale: 1 1;   opacity: 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .scrollLine { animation: none; opacity: 0.55; }
-}
-
-@media (max-width: 767px) {
-  .scrollCue { display: none; }
-}
-
-.panel[data-scrim='top'] .credit {
-  top: calc(var(--nav-h) + var(--sp-4));
-  bottom: auto;
-}
-
 @media (max-width: 767px) {
   .inner { padding-block: calc(var(--nav-h) + var(--sp-6)) var(--sp-8); }
-  .panel[data-scrim='top'] .credit { top: auto; }
   .headline { font-size: clamp(3rem, 11vw, 5.2rem); }
-  .credit { position: static; margin-top: var(--sp-6); text-align: left; }
-  .panel[data-anchor='center'] .credit,
-  .panel[data-anchor='bottom-center'] .credit { text-align: center; }
 }

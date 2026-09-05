@@ -94,13 +94,13 @@ type SectionRow = { id: string; label: string }
 type BuildContext = { donateCtaHref: string | undefined }
 
 /**
- * 인덱스와 hero 다음 앵커는 "무엇이 살아남았는지"를 알아야 정해진다. 그래서 빌드 단계에서
+ * hero 다음 앵커는 "무엇이 살아남았는지"를 알아야 정해진다. 그래서 빌드 단계에서
  * 확정하지 않고 렌더 시점 인자로 미룬다.
  */
 /**
- * 섹션 렌더 함수. **컴포넌트가 아니다** — 이미 만들어진 엘리먼트를 번호만 받아 돌려준다.
- * 번호를 배열 위치가 아니라 "실제 렌더되는 섹션" 기준으로 매기려면
- * 무엇이 렌더될지 먼저 정해진 뒤에 번호가 붙어야 해서 이 2단계 구조가 필요하다.
+ * 섹션 렌더 함수. **컴포넌트가 아니다** — 이미 만들어진 엘리먼트를 인자만 받아 돌려준다.
+ * `index` 는 `Section` 이 더 이상 그리지 않지만(`01` `02` 라벨을 걷어냈다) 시그니처에는
+ * 남아 있고, 값은 여전히 "실제 렌더되는 섹션" 기준으로 매긴다 — 되살릴 때 구멍이 없게.
  *
  * 이름 있는 함수 표현식으로 쓴다. 익명 화살표로 두면 `react/display-name` 이
  * 익명 컴포넌트로 오인해 lint 를 깬다.
@@ -110,7 +110,6 @@ type SectionRenderer = (index: number, nextAfterHero: string | undefined) => Rea
 /**
  * 섹션 하나를 "그릴 수 있으면 렌더 함수, 비었으면 null" 로 판정한다.
  *
- * 번호를 배열 위치로 매기면 빈 섹션이 빠질 때 02·03·05 처럼 구멍이 난다.
  * 비었는지 판정하는 규칙은 각 컴포넌트가 export 하는 술어 하나뿐이다(컴포넌트도 같은 술어로
  * 자기 자신을 막는다). 여기와 컴포넌트가 서로 다른 기준을 갖는 일이 없다.
  */
@@ -121,7 +120,7 @@ function buildSection(row: SectionRow, c: SiteContent, ctx: BuildContext): Secti
   switch (row.id) {
     case 'hero': {
       // Hero 는 카피가 비어도 로고와 스크롤 지시가 남는다 — 항상 그린다.
-      // 번호는 쓰지 않지만 자리는 차지한다(About 이 02 로 시작하는 현재 조판 유지).
+      // 번호는 쓰지 않지만 자리는 차지한다.
       const tagline = c['hero.tagline']
       return function renderHero(_index, nextAfterHero) {
         return (
@@ -281,7 +280,7 @@ export default async function HomePage() {
         <Panel key={panel.id} panel={panel} first={i === 0} />
       ))}
 
-      {/* 번호는 배열 위치가 아니라 살아남은 순서다 — 빈 섹션이 빠져도 02·03·05 로 뛰지 않는다 */}
+      {/* index 는 배열 위치가 아니라 살아남은 순서다 — 화면에 나가지는 않지만 구멍은 만들지 않는다 */}
       {rendered.map((r, i) => r.render(i + 1, nextAfterHero))}
     </div>
   )

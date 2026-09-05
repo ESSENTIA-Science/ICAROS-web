@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import PostCard from '@/components/posts/PostCard'
+import { getSiteContent, instagramHandle, instagramUrl } from '@/lib/content'
 import { getFeed } from '@/lib/posts/feed'
 import styles from './page.module.css'
 
@@ -26,6 +27,21 @@ export const metadata: Metadata = {
 
 const PAGE_SIZE = 12
 
+/** 외부 링크 표시. 아이콘 폰트도 글리프도 쓰지 않는다 — Contact 행 끝의 1px 화살표와 같은 도형이다. */
+function ExternalArrow() {
+  return (
+    <svg viewBox="0 0 16 16" className={styles.socialArrow} aria-hidden="true">
+      <path
+        d="M3 13 13 3M6 3h7v7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinecap="square"
+      />
+    </svg>
+  )
+}
+
 export default async function PostsPage({
   searchParams,
 }: {
@@ -36,7 +52,14 @@ export default async function PostsPage({
   const parsed = Number(raw)
   const page = Number.isInteger(parsed) && parsed > 0 ? parsed : 0
 
-  const feed = await getFeed(page, PAGE_SIZE)
+  /**
+   * `getSiteContent()` 는 `cache()` 라 Header·Footer 와 같은 요청에서 결과를 공유한다 —
+   * 여기서 부른다고 쿼리가 늘지 않는다. 다만 **왕복은 늘 수 있으므로** 피드와 같이 묶는다.
+   */
+  const [feed, content] = await Promise.all([getFeed(page, PAGE_SIZE), getSiteContent()])
+
+  // 값이 없으면 아무것도 그리지 않는다. 랜딩 섹션들과 같은 규칙이다.
+  const instagram = content['contact.instagram']
 
   /**
    * 선점으로 받을 사진 한 장. **"첫 카드"가 아니라 "사진이 있는 첫 카드"다.**
@@ -54,8 +77,22 @@ export default async function PostsPage({
   return (
     <section data-section-theme="ink" className={styles.section}>
       <div className={`container ${styles.inner}`}>
-        <p className="eyebrow" lang="en">Posts</p>
-        <h1 className={styles.title}>기록</h1>
+        <header className={styles.head}>
+          <h1 className={styles.title}>기록</h1>
+
+          {instagram ? (
+            <a
+              className={styles.social}
+              href={instagramUrl(instagram)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span className={styles.socialLabel} lang="en">Instagram</span>
+              <span className={styles.socialHandle}>@{instagramHandle(instagram)}</span>
+              <ExternalArrow />
+            </a>
+          ) : null}
+        </header>
 
         {feed.items.length === 0 ? (
           feed.communityUnavailable ? (
@@ -99,10 +136,6 @@ export default async function PostsPage({
             </nav>
           </>
         )}
-
-        <p className={styles.source}>
-          최신 기록은 ESSENTIA 커뮤니티의 ICAROS 게시판이 원본이고, 그 이전 기록은 ICAROS 가 직접 보관합니다.
-        </p>
       </div>
     </section>
   )

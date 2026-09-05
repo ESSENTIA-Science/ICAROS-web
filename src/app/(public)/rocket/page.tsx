@@ -10,7 +10,7 @@ import {
   type RocketSeries,
   type RocketSeriesOption,
 } from '@/components/rocket/series'
-import { countRocketsBySeries, listRocketSeries, listRocketsBySeries } from './_data'
+import { listRocketSeries, listRocketsBySeries } from './_data'
 import styles from './page.module.css'
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
@@ -71,10 +71,9 @@ export default async function RocketIndexPage({ searchParams }: { searchParams: 
       <RevealNoScript />
       <div className="container">
         <header className={styles.head}>
-          <p className="eyebrow" lang="en">Fleet</p>
           <h1 lang="en">Rockets</h1>
           <p className={styles.lede}>
-            ICAROS가 직접 설계·제작하고 발사한 기체입니다. 카드를 선택하면 제원과 엔진 구성을 볼 수 있습니다.
+            ICAROS가 직접 설계·제작하고 발사한 기체입니다.
           </p>
         </header>
 
@@ -102,14 +101,11 @@ async function RocketFleet({
   series: RocketSeries
   all: readonly RocketSeriesOption[]
 }) {
-  const [rockets, counts] = await Promise.all([
-    listRocketsBySeries(series),
-    countRocketsBySeries(),
-  ])
+  const rockets = await listRocketsBySeries(series)
 
   return (
     <>
-      <SeriesTabs active={series} all={all} counts={counts} />
+      <SeriesTabs active={series} all={all} />
 
       {rockets.length === 0 ? (
         <p className={styles.empty}>

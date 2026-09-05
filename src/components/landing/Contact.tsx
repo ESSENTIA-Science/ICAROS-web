@@ -1,10 +1,7 @@
+import { instagramHandle, instagramUrl } from '@/lib/content'
 import Section, { type SectionTheme } from './Section'
 import { revealIndex } from './reveal-style'
 import styles from './Contact.module.css'
-
-/** Instagram 값은 핸들만 저장돼 있다 — URL 은 여기서 조립한다. */
-const instagramUrl = (handle: string) =>
-  `https://www.instagram.com/${encodeURIComponent(handle.replace(/^@/, ''))}/`
 
 export type ContactContent = {
   body: string | undefined
@@ -90,7 +87,7 @@ export default function Contact({
                   <span className={styles.label} lang="en">
                     Instagram
                   </span>
-                  <span className={styles.value}>@{instagram.replace(/^@/, '')}</span>
+                  <span className={styles.value}>@{instagramHandle(instagram)}</span>
                   <Arrow />
                 </a>
               </li>

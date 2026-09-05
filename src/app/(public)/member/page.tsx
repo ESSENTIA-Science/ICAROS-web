@@ -37,7 +37,6 @@ export default async function MemberPage() {
       <RevealNoScript />
       <div className="container">
         <header className={styles.head}>
-          <p className="eyebrow" lang="en">Crew</p>
           <h1 lang="en">Members</h1>
           <p className={styles.lede}>
             설계부터 발사 운용까지, 각 부서에서 실제로 손을 대는 사람들입니다.
@@ -49,12 +48,9 @@ export default async function MemberPage() {
         ) : (
           squads.map((squad) => (
             <section key={squad.key} className={styles.squad}>
+              {/* 인원 수는 표시하지 않는다 — 바로 옆 카드 목록이 그 자리에서 세어진다 */}
               <div className={styles.squadHead}>
                 <h2 className={styles.squadTitle}>{squad.squad ?? UNASSIGNED_SQUAD_LABEL}</h2>
-                {/* 인원 수는 바로 옆 목록으로도 셀 수 있다 — 보조기술에는 중복이라 숨긴다 */}
-                <span className={`${styles.squadCount} num`} aria-hidden="true">
-                  {squad.members.length}
-                </span>
               </div>
 
               {/* 리빌은 카드 격자에만. 부서 제목은 문서 구조라 항상 그려져 있어야 한다 */}

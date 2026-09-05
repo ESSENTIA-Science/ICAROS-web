@@ -20,13 +20,11 @@ export interface LandingPanel {
   readonly width: number
   readonly height: number
   readonly alt: string
-  readonly credit: string | null
   readonly focalX: number
   readonly focalY: number
   readonly scrim: PanelScrim
   readonly anchor: PanelAnchor
   readonly heightMode: PanelHeight
-  readonly eyebrow: string | null
   readonly headline: string
   readonly body: string | null
   readonly ctaLabel: string | null
@@ -52,7 +50,6 @@ export async function getLandingPanels(): Promise<readonly LandingPanel[]> {
       scrim: pagePanels.scrim,
       anchor: pagePanels.anchor,
       heightMode: pagePanels.height,
-      eyebrow: pagePanels.eyebrow,
       headline: pagePanels.headline,
       body: pagePanels.body,
       ctaLabel: pagePanels.ctaLabel,
@@ -76,13 +73,11 @@ export async function getLandingPanels(): Promise<readonly LandingPanel[]> {
       width: r.width!,
       height: r.height!,
       alt: r.alt ?? DEFAULT_ALT,
-      credit: null,
       focalX: r.focalX,
       focalY: r.focalY,
       scrim: r.scrim as PanelScrim,
       anchor: r.anchor as PanelAnchor,
       heightMode: r.heightMode as PanelHeight,
-      eyebrow: r.eyebrow,
       headline: r.headline,
       body: r.body,
       ctaLabel: r.ctaLabel,

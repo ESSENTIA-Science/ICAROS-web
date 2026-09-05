@@ -21,13 +21,16 @@ export const sectionHeadingId = (id: string): string => `${id}-title`
  * 그래서 h2 는 큰 글씨가 아니라 12px 대문자 모노 아이브로로 조판한다 — 큰 자리는 카피가 갖는다.
  * 헤딩 텍스트는 `page_sections.label` 그대로이고, 다만 CMS 편집 대상이라 언어를 값에서 판별한다.
  *
- * 번호 + 끝단 눈금이 달린 1px 제도 치수선 + 6px 시그널 사각형이 이 껍데기의 전부다.
+ * 끝단 눈금이 달린 1px 제도 치수선 + 6px 시그널 사각형이 이 껍데기의 전부다.
  * 시그널은 여기서 "면"이 아니라 "마크"로만 쓰인다 (03 §4).
+ *
+ * `index` 는 **받기만 하고 그리지 않는다.** `01` `02` 라벨은 화면에서 걷어냈지만,
+ * 이 prop 을 지우면 Statement·Research·Mission·Donate·Contact 다섯 컴포넌트의
+ * 시그니처까지 같이 흔들린다. 번호가 다시 필요해지면 여기서만 되살리면 된다.
  */
 export default function Section({
   id,
   label,
-  index,
   theme = 'paper',
   reveal = 'block',
   children,
@@ -49,9 +52,6 @@ export default function Section({
     >
       <div className="container">
         <header className={styles.head}>
-          <span className={styles.index} aria-hidden="true">
-            {String(index).padStart(2, '0')}
-          </span>
           <h2 id={headingId} className={styles.label} lang={textLang(label)}>
             {label}
           </h2>

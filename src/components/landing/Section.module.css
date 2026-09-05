@@ -34,16 +34,6 @@
   text-transform: none;
 }
 
-.index {
-  flex: none;
-  font-family: var(--ff-mono);
-  font-size: var(--fs-mono);
-  line-height: var(--lh-mono);
-  letter-spacing: var(--tr-mono);
-  color: var(--fg-faint);
-  font-variant-numeric: tabular-nums lining-nums;
-}
-
 /* 끝단에 눈금이 선 제도 치수선. 1px 괘선 + 24px 세로 눈금 2개 */
 .rule {
   flex: 1 1 auto;
