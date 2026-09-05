@@ -1,7 +1,7 @@
 /**
  * 프로덕션 스모크 — **읽기 전용**. 배포 직후 사람이 URL 을 하나씩 열어 보던 것을 대체한다.
  *
- *   npx tsx scripts/smoke.ts                      # https://www.icaros.kr
+ *   npx tsx scripts/smoke.ts                      # https://icaros.kr
  *   npx tsx scripts/smoke.ts http://localhost:3000
  *
  * ## 왜 DB 의존 경로와 비의존 경로를 갈라 놓는가
@@ -19,6 +19,13 @@
  *
  * `notFound()` 위에 loading 경계가 생기면 셸이 먼저 flush 되어 **404 가 200 이 된다**(soft-404).
  * 눈으로는 404 페이지가 보이므로 사람이 확인하면 절대 못 잡는다. 상태 코드로만 잡힌다.
+ *
+ * ## 본문까지 보는 이유 (2026-09-06 추가)
+ *
+ * `/`·`/member` 가 캐시 라우트가 되면서 **200 이면서 비어 있는** 상태가 가능해졌다.
+ * 빌드가 RDS 에 닿지 못한 배포는 빈 화면을 프리렌더해 캐시에 넣고, 배포 성공 웹훅이
+ * 조용히 실패하면 그게 그대로 남는다. 상태 코드는 정상, 헤더·푸터도 정상, 가운데만 없다.
+ * **이 스크립트가 그 그물이다** — `CHECKS` 의 `contains`/`containsAny` 를 지우지 말 것.
  */
 
 /* top-level import 가 없는 파일을 TS 는 **전역 스크립트**로 본다. 그러면 같은 처지의 다른
@@ -27,7 +34,7 @@
    빈 export 하나가 이 파일을 모듈로 만든다. 지우지 말 것. */
 export {}
 
-const BASE = (process.argv[2] ?? 'https://www.icaros.kr').replace(/\/$/, '')
+const BASE = (process.argv[2] ?? 'https://icaros.kr').replace(/\/$/, '')
 const TIMEOUT_MS = 25_000
 
 type Check = {
@@ -37,6 +44,8 @@ type Check = {
   expect: number
   /** 응답 본문에 반드시 있어야 하는 문자열. 200 인데 내용이 빈 경우를 잡는다. */
   contains?: string
+  /** 이 중 **하나라도** 있으면 통과. 화면이 두 모양 중 하나로 성립하는 경우에 쓴다. */
+  containsAny?: readonly string[]
   note: string
 }
 
@@ -47,9 +56,39 @@ const CHECKS: readonly Check[] = [
   { path: '/favicon.png', db: false, expect: 200, note: 'DB 비의존 — 배포 자체' },
   { path: '/og.png', db: false, expect: 200, note: 'DB 비의존 — 정적 자산' },
   { path: '/nonexistent-page-smoke', db: false, expect: 404, note: 'soft-404 회귀' },
-  { path: '/', db: true, expect: 200, note: '랜딩 패널' },
+  /**
+   * `/` 와 `/member` 는 **200 만으로는 아무것도 증명하지 못한다** (2026-09-06, W4 이후).
+   *
+   * 두 라우트가 `revalidate = 60` 캐시로 넘어가면서 새 실패 모드가 하나 생겼다:
+   * 빌드 컨테이너가 RDS 에 닿지 못한 배포는 로더가 실패를 삼켜(`getSiteContentSafe` 등)
+   * **빈 화면을 프리렌더해 캐시 초기값으로 넣는다.** 배포 성공 웹훅(`POST /api/revalidate`)이
+   * 그 창을 닫게 되어 있지만, 훅이 조용히 안 오는 것이 이 설계의 유일한 실패 모드다.
+   * 그때 화면은 200 이고, 헤더·푸터·폰트까지 정상이며, 가운데만 비어 있다 —
+   * **상태 코드로도 사람 눈으로도 안 잡힌다.** 본문 검사가 그 그물이다.
+   *
+   * 판정 기준을 이 문자열들로 잡은 이유:
+   *  · 랜딩은 두 모양 중 하나로만 성립한다 — 사진 패널이거나(`data-scrim=`, `Panel.tsx` 전용),
+   *    패널이 0개일 때 돌아오는 레거시 섹션이다(`aria-labelledby=`, `Section.tsx`·`Hero.tsx` 전용).
+   *    **둘 다 없으면 그린 것이 하나도 없다는 뜻**이고 그게 정확히 이 실패 모드다.
+   *    실측(2026-09-06, DB 를 죽인 채 `next start`): 빈 랜딩의 `<main>` 은 리빌 해제용
+   *    `<noscript>` 한 줄이 전부였고 두 문자열 다 0건이었다.
+   *  · `/member` 의 `data-reveal-item="` 는 `MemberCard` 한 장당 하나다. 명단이 비면 사라진다.
+   *  · 셋 다 서버 컴포넌트가 내보내는 **평범한 HTML 속성**이다. CSS Modules 해시 클래스명은
+   *    빌드마다 바뀌므로 쓸 수 없다. 카피 문자열도 쓸 수 없다 — 팀이 `/admin` 에서 바꾼다.
+   *  · `=` 를 붙여 검사한다. noscript 안의 리빌 해제 CSS 가 `[data-reveal-item]` 처럼
+   *    **속성 선택자**로 같은 이름을 적어 두어서, `=` 가 없으면 빈 화면도 통과한다.
+   *  · `data-section-theme=` 은 쓰지 않는다 — 루트 레이아웃의 `Loader` 가 그 속성을 **모든
+   *    페이지에** 항상 하나 내보낸다. 처음에 그걸 골랐다가 실측에서 걸렀다.
+   */
+  {
+    path: '/',
+    db: true,
+    expect: 200,
+    containsAny: ['data-scrim=', 'aria-labelledby='],
+    note: '랜딩 — 패널 또는 섹션이 최소 1개',
+  },
   { path: '/rocket', db: true, expect: 200, note: '기체 목록 · 시리즈 탭' },
-  { path: '/member', db: true, expect: 200, note: '멤버' },
+  { path: '/member', db: true, expect: 200, contains: 'data-reveal-item="', note: '멤버 — 카드 최소 1장' },
   { path: '/posts', db: true, expect: 200, note: 'Community 병합 피드' },
   { path: '/admin', db: true, expect: 200, note: '로그인 화면 (인증 게이트)' },
   { path: '/rocket/nonexistent-slug-smoke', db: true, expect: 404, note: '비공개·부재 기체' },
@@ -86,7 +125,13 @@ type Result = { check: Check; status: number | null; ms: number; detail: string 
 
 async function hit(check: Check): Promise<Result> {
   const started = Date.now()
-  // 캐시 우회. CDN HIT 이 섞이면 함수와 DB 가 실제로 도는지 알 수 없다.
+  /**
+   * 매번 다른 쿼리를 붙여 **엣지 캐시**를 비껴간다. CDN HIT 이 섞이면 함수가 실제로 도는지 알 수 없다.
+   *
+   * 다만 이것이 ISR 캐시까지 비껴가지는 않는다 — 공개 라우트의 프리렌더 엔트리는 쿼리가 아니라
+   * **경로로** 키가 잡히므로, `/` 는 `?smoke=…` 를 붙여도 캐시에 들어 있는 그 HTML 이 나온다.
+   * 위 본문 검사가 "캐시에 박힌 빈 화면"을 잡을 수 있는 것이 그 덕이다. 우연이 아니라 성질이다.
+   */
   const sep = check.path.includes('?') ? '&' : '?'
   const url = `${BASE}${check.path}${sep}smoke=${Date.now()}`
 
@@ -101,10 +146,19 @@ async function hit(check: Check): Promise<Result> {
     if (res.status !== check.expect) {
       return { check, status: res.status, ms, detail: `기대 ${check.expect}` }
     }
-    if (check.contains) {
+    if (check.contains || check.containsAny) {
       const body = await res.text()
-      if (!body.includes(check.contains)) {
+      if (check.contains && !body.includes(check.contains)) {
         return { check, status: res.status, ms, detail: `본문에 "${check.contains}" 없음` }
+      }
+      if (check.containsAny && !check.containsAny.some((needle) => body.includes(needle))) {
+        return {
+          check,
+          status: res.status,
+          ms,
+          // 200 인데 비어 있는 경우다. 원인은 대개 배포 직후 빈 프리렌더가 캐시에 박힌 것이다.
+          detail: `본문이 비었다 — ${check.containsAny.join(' / ')} 중 아무것도 없음`,
+        }
       }
     }
     return { check, status: res.status, ms, detail: '' }

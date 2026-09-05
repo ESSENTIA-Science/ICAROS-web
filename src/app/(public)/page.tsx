@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import { asc, eq } from 'drizzle-orm'
 
 import { db, schema } from '@/lib/db'
-import { getSiteContent, toList, toNumber, type SiteContent } from '@/lib/content'
+import { getSiteContentSafe, toList, toNumber, type SiteContent } from '@/lib/content'
 import { getLandingPanelsSafe } from '@/lib/panels'
 import Panel from '@/components/panel/Panel'
 import Hero from '@/components/landing/Hero'
@@ -15,42 +15,61 @@ import Contact, { hasContactContent } from '@/components/landing/Contact'
 import type { SectionTheme } from '@/components/landing/Section'
 
 /**
- * 랜딩은 CMS 가 그때그때 고치는 화면이다. cacheComponents 를 끈 상태(04 §Caching posture)에서는
- * DB 만 읽는 페이지가 빌드 타임에 프리렌더돼 버려서 카피를 고쳐도 재배포 전까지 반영되지 않는다.
- * 요청 시각 렌더로 못박아 둔다.
+ * **온디맨드 무효화 + 60초 백스톱.** `force-dynamic` 이었다 (W4, 2026-09-06 전환).
  *
- * ─── ISR 전환을 시도했고, 되돌렸다 (2026-09-06) ───────────────────────────────
- * 무효화 배선은 이미 충분하다 — `_actions/panels.ts`(5곳)·`landing.ts`·`scene.ts` 가 전부
- * `revalidatePath('/')` 를 부르므로 "published=false 가 계속 보인다"는 문제는 없다.
- * 막은 것은 **빌드다.** `/` 는 동적 세그먼트가 없는 정적 라우트라 `revalidate` 를 주는 순간
- * Next 가 빌드 시점에 한 번 프리렌더하고, 그 안의 `getSiteContent()` 가 그대로 나간다.
- * 실측: `DATABASE_URL=postgres://x@127.0.0.1:1/x npm run build`
- *   → `Error occurred prerendering page "/"` · `Failed query: select "key","value" from
- *      "icaros"."site_settings"` · `ECONNREFUSED` · exit 1.
- * 즉 **배포 빌드가 RDS 도달성을 필수 의존성으로 갖게 된다.** RDS 5432 인바운드는 us-east-1 EC2
- * 대역 29개로만 열려 있고 그 목록은 날마다 흔들린다(D27) — 빌드가 조용히 타임아웃 나는 날이
- * 곧 배포가 막히는 날이다. 그 대가를 TTFB 와 바꾸지 않는다.
+ * ─── 왜 60초인가. CLAUDE.md 지뢰 "ISR 로 공개 여부를 감싸지 말 것"과의 관계 ──────────
+ * 그 지뢰는 **시간 기반 revalidate 를 유일한 무효화 신호로 쓰는 것**을 경고한다 —
+ * `published=false` 로 내린 패널이 최대 그 시간만큼 계속 보인다는 뜻이다.
+ * 여기서 시간은 유일한 신호가 아니라 **백스톱**이다:
+ *   · 공개 여부를 바꾸는 경로는 전부 `_actions` 를 지나고, 그 다섯 곳이 모두
+ *     `revalidatePath('/')`(panels·scene) / `('/', 'layout')`(landing) 를 부른다 → 노출 창 0.
+ *   · 60초는 "아무도 아무것도 저장하지 않았을 때의 상한"이다. 그 상황에서는 바뀐 것도 없다.
+ * 반대로 `revalidate = false`(온디맨드 전용)로 두면 아래 (2)의 빈 프리렌더가 **영구히** 박힌다.
+ * 훅이 실패해도 60초 안에 스스로 낫는 것 — 그것이 이 값의 유일한 목적이다.
  *
- * `/rocket/[slug]` 처럼 `generateStaticParams(): []` 로 빠져나가는 수는 **동적 세그먼트가 있는
- * 라우트에만** 있다. `/` 를 캐시하려면 둘 중 하나가 먼저다 —
- *   (가) `getSiteContentSafe()` 류로 빌드 타임 실패를 흡수 → 배포 직후 **빈 랜딩이 캐시에 박힌다**.
- *        누가 `/admin` 에서 뭔가 저장하기 전까지 그 상태다. 지금은 받아들일 수 없다.
- *   (나) `cacheComponents`(PPR) 로 셸/데이터를 갈라 캐시 — 라우트 전반의 Suspense 재설계가 필요하다.
- * 둘 다 이 파일 밖의 결정이다. 17-nodb-fix-plan.md §7 로 넘긴다.
+ * ─── (2) 빌드가 DB 를 못 쳐도 죽지 않는다 ─────────────────────────────────────
+ * A6 이 여기서 막혔다. `/` 는 동적 세그먼트가 없어 `revalidate` 를 주는 순간 빌드가 반드시 한 번
+ * 프리렌더하고, 그 안의 `getSiteContent()` 가 그대로 RDS 로 나가 `ECONNREFUSED` 로 빌드를 죽였다.
+ * `/rocket/[slug]` 의 `generateStaticParams(): []` 우회는 동적 세그먼트가 있는 라우트 전용이다.
+ * 그래서 **로더 세 개를 전부 fail-safe 로** 바꿨다 — `getSiteContentSafe()`·`loadSections()`·
+ * `getLandingPanelsSafe()`. 셋 다 실패하면 그 자리를 비우고 렌더는 계속된다.
+ * 대가는 하나뿐이다: **빌드가 DB 를 못 읽은 배포는 빈 랜딩을 프리렌더해 캐시에 넣는다.**
+ * 그 창을 닫는 것이 배포 성공 웹훅(`POST /api/revalidate`)이고, 훅이 실패했을 때의 상한이 위 60초다.
+ * 그래도 남는 마지막 그물이 `npm run smoke` 의 `/` 본문 검사다 — 사람 눈이 아니라 스모크가 잡는다.
+ *
+ * 배포 빌드를 RDS 도달성에 묶지 않는다는 규칙(D27)은 그대로다. 이 파일은 그 규칙을 지킨 채
+ * 캐시로 넘어간 것이지, 규칙을 판 것이 아니다.
  */
-export const dynamic = 'force-dynamic'
+export const revalidate = 60
 
-/** generateMetadata 와 본문이 같은 요청 안에서 쿼리를 한 번만 쓰도록 묶는다. */
-const loadContent = cache(getSiteContent)
+/**
+ * generateMetadata 와 본문이 같은 요청 안에서 쿼리를 한 번만 쓰도록 묶는다.
+ *
+ * **`getSiteContent`(throw) 가 아니라 `getSiteContentSafe`(swallow) 다.** 루트 레이아웃이
+ * 같은 이유로 safe 를 쓴다 — 다만 여기서는 이유가 하나 더 있다: `generateMetadata` 도 이 로더를
+ * 타므로, 던지는 버전을 쓰면 본문을 아무리 방어해도 **메타데이터 단계에서 빌드가 죽는다.**
+ * 실패 시 `description` 이 undefined 가 되어 아래 openGraph 블록이 통째로 빠지고,
+ * 루트 레이아웃의 og:* 가 그대로 살아남는다(키 단위 치환 지뢰가 오히려 안전한 방향으로 작동한다).
+ */
+const loadContent = getSiteContentSafe
 
-const loadSections = cache(async () =>
-  db
-    .select({ id: schema.pageSections.id, label: schema.pageSections.label })
-    .from(schema.pageSections)
-    .where(eq(schema.pageSections.enabled, true))
-    // sort_order 가 겹쳐도 순서가 흔들리지 않게 id 로 tie-break 한다
-    .orderBy(asc(schema.pageSections.sortOrder), asc(schema.pageSections.id))
-)
+/**
+ * 섹션 목록. 실패하면 **빈 배열**이다 — 랜딩이 통째로 500 이 되는 대신 그 자리를 비운다.
+ * (패널이 하나라도 살아 있으면 화면은 여전히 성립한다. 둘 다 비면 스모크가 잡는다.)
+ */
+const loadSections = cache(async (): Promise<SectionRow[]> => {
+  try {
+    return await db
+      .select({ id: schema.pageSections.id, label: schema.pageSections.label })
+      .from(schema.pageSections)
+      .where(eq(schema.pageSections.enabled, true))
+      // sort_order 가 겹쳐도 순서가 흔들리지 않게 id 로 tie-break 한다
+      .orderBy(asc(schema.pageSections.sortOrder), asc(schema.pageSections.id))
+  } catch (err) {
+    console.error('[landing] page_sections 조회 실패 — 섹션 없이 렌더합니다', err)
+    return []
+  }
+})
 
 /**
  * 섹션 테마 배분. page_sections 에는 테마 컬럼이 없고 스키마는 건드리지 않으므로 id 로 고정한다.

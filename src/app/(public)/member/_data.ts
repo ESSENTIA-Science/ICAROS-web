@@ -78,6 +78,27 @@ export async function listMembers(): Promise<MemberDto[]> {
   })
 }
 
+/**
+ * 실패를 삼키는 변형. `getSiteContentSafe`·`getLandingPanelsSafe` 와 같은 패턴이다.
+ *
+ * `/member` 는 `revalidate = 60` 이라 **빌드가 반드시 한 번 프리렌더한다.** 그때 RDS 에 닿지
+ * 못하면(D27 — 인바운드가 us-east-1 EC2 대역으로만 열려 있고 그 목록은 날마다 흔들린다)
+ * 던지는 버전은 배포 빌드를 통째로 죽인다. 실측: `npm run build` 가
+ * `Error occurred prerendering page "/member"` 로 exit 1 (17-nodb-fix-plan.md §3 A6 "실제 결과").
+ *
+ * 실패하면 명단이 비고, 페이지는 "공개된 부원이 아직 없습니다."를 그린다.
+ * 그 상태가 캐시에 박히는 창은 두 겹으로 막는다 — 배포 성공 웹훅(`POST /api/revalidate`)과
+ * 60초 백스톱. 그래도 남으면 `npm run smoke` 의 `/member` 본문 검사가 잡는다.
+ */
+export async function listMembersSafe(): Promise<MemberDto[]> {
+  try {
+    return await listMembers()
+  } catch (err) {
+    console.error('[member] members 조회 실패 — 빈 명단으로 렌더합니다', err)
+    return []
+  }
+}
+
 const blankToNull = (v: string | null): string | null => (v && v.trim() !== '' ? v.trim() : null)
 
 /** 신규(S3) → 레거시 레포 경로 → 플레이스홀더 순 (E6). */

@@ -1,4 +1,4 @@
-import { getNavItems, getSiteContent } from '@/lib/content'
+import { getNavItems, getSiteContentSafe } from '@/lib/content'
 import HeaderNav from './HeaderNav'
 
 /**
@@ -12,8 +12,15 @@ import HeaderNav from './HeaderNav'
  *
  * 쿼리 비용은 0 이다 — `getSiteContent` 는 `cache()` 라 같은 요청 안에서 Footer 와
  * 결과를 공유한다.
+ *
+ * **던지지 않는 `getSiteContentSafe` 를 쓴다** (W4, 2026-09-06). 이 껍데기는 `(public)/layout.tsx`
+ * 에 있어 `/`·`/member` 의 프리렌더에 같이 들어간다. 두 라우트가 `revalidate = 60` 으로 넘어가면서
+ * 빌드가 반드시 한 번 프리렌더하는데, 던지는 버전이면 **빌드 컨테이너가 RDS 에 닿지 못하는 날
+ * 배포 전체가 죽는다**(D27). 실측: `Error occurred prerendering page "/"` · exit 1.
+ * 잃는 것은 없다 — 라벨은 `getNavItems` 가 코드 기본값으로 채운다. 내비게이션은 비어도 되는
+ * 자리가 아니라는 그 함수의 전제가 여기서 그대로 작동한다.
  */
 export default async function Header() {
-  const content = await getSiteContent()
+  const content = await getSiteContentSafe()
   return <HeaderNav items={getNavItems(content)} />
 }

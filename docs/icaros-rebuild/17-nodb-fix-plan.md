@@ -21,7 +21,7 @@
 | 7. VEHICLES 개편 | ⛔ | 분류 테이블 필요 — §7 |
 | 8. AI 티 나는 자잘한 것 | ✅ 전부 (코드에 있는 것) | 카피 2건은 `/admin` 에서 사람이 — §6 |
 | 9. 메인 영상 | ✅ 전부 | 포스트 PDF·영상은 §7 |
-| 10. 웹 로딩 속도 | ⚠️ **부분 — 7개 라우트 중 3개만** | `/`·`/member`·`/rocket`·`/posts` 는 캐시 못 함 → §3 A6 "실제 결과" |
+| 10. 웹 로딩 속도 | ⚠️ **부분 — 7개 라우트 중 5개** | `/rocket`·`/posts` 는 `searchParams` 때문에 남음 → §4.5 W4 |
 
 **작업량: 6개 에이전트, 2 웨이브, 순수 작업 1.5일.**
 가장 큰 효과는 `A6`(캐시 정책) 하나다 — TTFB 550ms → 80ms 예상, 코드 6줄.
@@ -31,6 +31,13 @@
 > 무효화가 아니라 빌드와 `searchParams` 였다.** 그 둘은 이 문서를 쓸 때 계산에 없었다.
 > 실제로 전환된 것은 `/rocket/[slug]`·`/posts/[id]`·`/posts/legacy/[slug]` **3개**다.
 > 이 표를 예쁘게 고치지 않고 정정으로 남기는 이유는, 다음에 같은 전제를 다시 세우지 않기 위해서다.
+
+> **두 번째 정정 (2026-09-06, W4 실행 후).** 위 3개가 5개가 됐다. `/`·`/member` 가 `○ (Static)`
+> `Revalidate 1m` 으로 넘어갔다. A6 이 막혔던 벽(빌드 프리렌더가 RDS 를 친다)은 **없애지 못했고,
+> 대신 프리렌더가 실패해도 죽지 않게** 했다 — 로더를 전부 fail-safe 로 바꾸고, 그 대가로 생기는
+> "빈 화면이 캐시에 박히는 창"을 배포 웹훅 + 60초 백스톱 + 스모크 본문 검사 셋으로 막았다.
+> **남은 2개(`/rocket`·`/posts`)는 그대로다** — `searchParams` 는 fail-safe 로 풀리는 문제가
+> 아니라 라우트 모양을 바꿔야 하는 문제라서 §7 에 남는다.
 
 ---
 
@@ -515,6 +522,267 @@ CLAUDE.md 의 "자격증명 불일치는 어느 쪽이 정답인가를 먼저 �
 
 ---
 
+## 4.5 웨이브 4
+
+### A8 — `/`·`/member` 캐시 전환 (A6 가 되돌린 것의 후속)
+
+**소유 파일**
+
+```
+src/app/(public)/page.tsx
+src/app/(public)/member/page.tsx
+src/app/(public)/member/_data.ts
+src/app/api/revalidate/route.ts        ← 신설
+src/app/api/cron/storage/route.ts
+scripts/smoke.ts
+.env.example
+```
+
+#### 무엇이 실제로 됐나 — 죽은 포트 빌드 라우트 표
+
+`DATABASE_URL=postgres://x@127.0.0.1:1/x DB_AUTH=password npm run build` → **exit 0**
+
+```
+Route (app)               Revalidate  Expire
+┌ ○ /                             1m      1y      ← ƒ 였다
+├ ○ /_not-found
+├ ƒ /admin
+├ ƒ /api/cron/storage
+├ ƒ /api/media/[id]
+├ ƒ /api/revalidate                                ← 신설
+├ ƒ /api/upload/confirm
+├ ƒ /api/upload/presign
+├ ○ /member                       1m      1y      ← ƒ 였다
+├ ƒ /posts
+├ ● /posts/[id]
+├ ● /posts/legacy/[slug]
+├ ƒ /rocket
+└ ● /rocket/[slug]
+```
+
+응답 헤더(로컬 `next start`, DB 를 죽인 채 실측):
+`Cache-Control: s-maxage=60, stale-while-revalidate=31535940` · `x-nextjs-cache: HIT` ·
+`x-nextjs-prerender: 1`. 즉 **엣지가 실제로 캐시한다.**
+
+#### 1. 로더를 fail-safe 로 — 벽을 없앤 게 아니라 벽을 넘어가지 않게 했다
+
+A6 의 벽은 그대로다. `/`·`/member` 는 동적 세그먼트가 없어 `revalidate` 를 주는 순간 빌드가
+**반드시 한 번 프리렌더**하고, `generateStaticParams(): []` 우회는 동적 세그먼트 전용이라 못 쓴다.
+바꾼 것은 그 프리렌더가 **실패해도 빌드를 죽이지 않게** 만든 것이다.
+
+| 로더 | 어디 | 전 | 후 | 실패하면 화면 |
+|---|---|---|---|---|
+| `getSiteContent` | `/` 본문 + `generateMetadata` | throw | **`getSiteContentSafe`** | 카피가 전부 빈 값. 섹션은 각자의 `has*Content()` 술어에 걸려 통째로 빠진다 |
+| `loadSections` | `/` (page.tsx 내부) | throw | **try/catch → `[]`** | 섹션 0개 |
+| `getLandingPanelsSafe` | `/` | 이미 safe | 그대로 | 패널 0개 |
+| `listMembers` | `/member` | throw | **`listMembersSafe()`** 신설 | "공개된 부원이 아직 없습니다." |
+| `getSiteContent` | `Header`·`Footer` (**소유 파일 밖 — 아래 참조**) | throw | **`getSiteContentSafe`** | 내비 라벨은 `getNavItems` 의 코드 기본값, 푸터 저작권 줄은 빔 |
+
+**`Header`·`Footer` 가 진짜 벽이었다.** 둘은 `(public)/layout.tsx` 에 있어 `/`·`/member` 의
+프리렌더에 같이 들어간다. 페이지 쪽 로더를 아무리 방어해도 이 둘이 던지면 빌드는 그대로 죽는다 —
+실측: `Error occurred prerendering page "/"` · `Failed query: select "key","value" from
+"icaros"."site_settings"` · exit 1. A6 의 "실제 결과" 표가 원인을 `getSiteContent()` 라고만
+적어 둔 것은 절반만 맞았다. **호출부가 5곳이고 그중 2곳이 레이아웃에 있다**가 전부다.
+
+#### 2. `revalidate = 60` — 시간은 백스톱이지 신호가 아니다
+
+CLAUDE.md 지뢰 *"ISR 로 공개 여부를 감싸지 말 것"* 은 **시간이 유일한 무효화 신호일 때**를 경고한다.
+여기서는 아니다 — 공개 여부를 바꾸는 경로가 전부 `_actions` 를 지나고 거기 무효화가 걸려 있다.
+60초는 "아무도 아무것도 저장하지 않았을 때의 상한"이고, 그 상황에서는 바뀐 것도 없다.
+
+**그럼 왜 `revalidate = false`(온디맨드 전용)가 아닌가.** 아래 §4 의 빈 프리렌더가 **영구히**
+박히기 때문이다. 웹훅이 조용히 실패하는 날 빈 랜딩이 캐시에 영원히 남는다.
+60초는 그 하나를 위해 있다. 웹훅과 시간은 대체재가 아니라 이중화다.
+
+**기존 `_actions/**` 배선이 실제로 이 라우트를 비우는지 확인했다** (로컬 `next start` 실측):
+
+| 호출 | 타입 | 결과 |
+|---|---|---|
+| `revalidatePath('/')` — `panels.ts`×5·`scene.ts` | 기본 `'page'` | 다음 요청 `x-nextjs-cache: MISS` → **비운다** |
+| `revalidatePath('/member')` — `members.ts`×3 | 기본 `'page'` | 다음 요청 `MISS` → **비운다** |
+| `revalidatePath('/', 'layout')` — `landing.ts` | `'layout'` | 다음 요청 `MISS` → **비운다** |
+
+`'page'` 로도 충분하다는 것이 실측 결과다. 다만 `landing.ts` 만 `'layout'` 인 것은 **옳다** —
+`site_settings` 는 루트 레이아웃(Header·Footer·SEO)이 읽고, 그 값은 `/`·`/member` 를 넘어
+모든 라우트의 껍데기에 들어간다. `'page'` 로 바꾸지 말 것.
+
+무효화는 **purge 다(mark-stale 이 아니다)**. 부른 직후 첫 요청이 `MISS` 로 잡히고 그 요청이
+DB 를 읽어 새로 렌더한다. 그래서 **stale 을 보는 방문자가 0명**이다 — 아래 창 계산의 근거다.
+
+#### 3. `POST /api/revalidate` (신설)
+
+배포 성공 웹훅이 친다. 하는 일은 `revalidatePath('/', 'layout')` 한 줄.
+
+**인증 두 갈래. 둘 다 상수시간(`timingSafeEqual`), 둘 다 fail-closed.**
+
+| 갈래 | 헤더 | 시크릿 | 쓰는 곳 |
+|---|---|---|---|
+| Bearer | `Authorization: Bearer …` | `REVALIDATE_SECRET` | CI(GitHub Actions)·curl |
+| HMAC | `x-vercel-signature` (본문 HMAC-SHA1 hex) | `VERCEL_WEBHOOK_SECRET` | **Vercel 대시보드 웹훅** |
+
+- **`CRON_SECRET` 을 재사용하지 않는다.** `CRON_SECRET` 은 Vercel 이 cron 요청에 자동으로
+  실어 주는 값이라 우리 인프라 밖으로 나갈 일이 없다. 이 훅의 비밀은 **반대로** 파이프라인에
+  사람이 붙여 넣어야 한다. 그리고 권한 크기가 다르다 — 이 훅이 새면 최악이 "캐시가 한 번 더
+  지워진다"이지만 `CRON_SECRET` 이 새면 `/api/cron/storage` 를 통한 **S3 객체 삭제**가 열린다.
+  하나로 묶으면 약한 쪽의 유출이 강한 쪽의 권한이 된다.
+- **HMAC 갈래가 필요한 이유:** Vercel 대시보드 웹훅은 **커스텀 헤더를 붙일 수 없다.**
+  Bearer 만 받으면 "대시보드에서 웹훅을 연결한다"가 애초에 불가능하다.
+- **시크릿이 둘 다 없으면 503** (`not_configured`). 401 이 아닌 이유: "시크릿이 틀렸다"와
+  "시크릿을 안 넣었다"가 구별되어야 한다. 이 설계의 유일한 실패 모드가 "훅이 조용히 안 온다"이므로
+  로그에 그 둘이 같은 줄로 남으면 안 된다.
+- `payload.target` 이 **명시적으로** `production` 이 아니면 건너뛴다(프리뷰 배포가 프로덕션
+  캐시를 흔들지 않게). 본문이 없거나 모양을 모르면 무효화하는 쪽으로 넘긴다 — curl 한 줄이 막히면
+  훅이 있으나 마나가 된다.
+- 성공·실패를 전부 `[revalidate]` 접두사로 로그에 남긴다.
+
+실측(로컬 `next start`):
+
+```
+인증 없음                   401
+잘못된 Bearer               401
+GET                         405
+올바른 Bearer               200  {"revalidated":true,...}   → 직후 / 가 MISS
+target=staging              200  {"revalidated":false,"reason":"not-production"}
+올바른 HMAC 서명            200  {"revalidated":true,...}
+변조된 서명                 401
+시크릿 미설정 + 올바른 Bearer  503  {"error":"not_configured"}
+```
+
+#### 4. 빈 화면이 캐시에 박히는 창 — 실제 크기
+
+전제: 빌드 컨테이너가 RDS 에 닿지 못하면 프리렌더가 **빈 랜딩·빈 명단**을 만들어 그것이
+그 배포의 캐시 초기값이 된다. (닿으면 진짜 데이터가 프리렌더된다 — 어느 쪽인지는 배포해 봐야
+안다. 첫 배포 뒤 `npm run smoke` 가 그 답을 준다.)
+
+| 경우 | 빈 화면을 보는 방문자 |
+|---|---|
+| 웹훅이 정상 동작 | **0명** (엄밀히는 배포 승격 ~ 훅 도착 사이 몇 초). 무효화가 purge 라 첫 요청이 `MISS` → 그 요청이 DB 를 읽어 렌더한다 |
+| 웹훅이 실패 | **최대 60초 + 백그라운드 재생성 1회분.** `s-maxage=60` 이 지나면 엣지가 stale 을 내주면서 뒤에서 다시 굽는다(SWR). 그 렌더가 끝나면 진짜 데이터로 바뀐다 |
+| 웹훅도 없고 `revalidate = false` 였다면 | **영구.** 누가 `/admin` 에서 뭔가 저장할 때까지. ← 이것이 A6 이 "지금은 받아들일 수 없다"고 적은 그 상태이고, 60초가 그것을 사는 값이다 |
+
+리전마다·배포마다 한 번씩이다. 그래서 **웹훅은 속도를, 60초는 안전을, 스모크는 관측을** 맡는다.
+
+#### 5. `/api/cron/storage` 에 무효화 추가
+
+정리 cron 이 실제로 지운 것이 있을 때만(`cleaned.completed + swept.orphansFound +
+swept.unattachedReclaimed > 0`) `revalidatePath('/', 'layout')` 을 부른다.
+
+원래 이 cron 이 지우는 것은 "어디서도 참조되지 않는" media 라 화면이 바뀔 리 없다.
+**그 전제가 깨진 적이 있다** — `MEDIA_FK_COLUMNS` 에 `page_panels` 가 빠져 살아 있는 랜딩 사진
+4장을 지웠다(D28). `force-dynamic` 이던 시절에는 "다음 요청부터 깨진 이미지"로 끝났지만
+캐시가 붙은 지금은 **지워진 사진을 가리키는 HTML 이 캐시에 남는다.** `/`·`/member` 는 60초
+백스톱이 낫게 하지만 `/rocket/[slug]`·`/posts/legacy/[slug]` 는 `revalidate = false` 라
+**영원히 낫지 않는다.** 그래서 여기서 한 번 비운다.
+
+어느 화면이 그 media 를 썼는지 따지지 않는다 — 그걸 세는 순간 D28 과 같은 종류의 횡단 목록이
+하나 더 생긴다. 하루 한 번 돌고 평소 0건이라 비용도 없다.
+
+#### 6. `npm run smoke` 에 본문 검사 — 이 설계의 안전망
+
+`/`·`/member` 는 이제 **200 이면서 비어 있을 수 있다.** 헤더·푸터·폰트까지 정상이고 가운데만
+없다. 상태 코드로도 사람 눈으로도 안 잡힌다.
+
+| 경로 | 판정 | 근거 |
+|---|---|---|
+| `/` | `data-scrim=` **또는** `aria-labelledby=` 가 1개 이상 | 랜딩은 두 모양 중 하나로만 성립한다 — 사진 패널(`Panel.tsx` 전용 속성)이거나 레거시 섹션(`Section.tsx`·`Hero.tsx` 전용). 둘 다 없으면 그린 것이 하나도 없다 |
+| `/member` | `data-reveal-item="` 1개 이상 | `MemberCard` 한 장당 하나. 명단이 비면 사라진다 |
+
+전부 **서버 컴포넌트가 내보내는 평범한 HTML 속성**이다. CSS Modules 해시 클래스명은 빌드마다
+바뀌어 못 쓰고, 카피 문자열은 팀이 `/admin` 에서 바꾸므로 못 쓴다.
+
+밟은 함정 둘:
+- 처음에 `data-section-theme=` 을 골랐다가 걸렀다. **루트 레이아웃의 `Loader` 가 그 속성을 모든
+  페이지에 항상 하나 내보낸다** — 빈 랜딩도 통과했다.
+- `=` 를 붙여 검사한다. `<noscript>` 안의 리빌 해제 CSS 가 `[data-reveal-item]` 처럼 **속성
+  선택자**로 같은 이름을 적어 둔다. `=` 가 없으면 빈 화면이 통과한다.
+
+스모크가 `?smoke=<ts>` 를 붙이는 것은 **엣지 캐시**를 비끼려는 것이고 **ISR 캐시는 못 비낀다** —
+프리렌더 엔트리는 쿼리가 아니라 경로로 키가 잡힌다. 실측: `/?smoke=1` → `x-nextjs-cache: HIT`.
+검사가 "캐시에 박힌 빈 화면"을 볼 수 있는 것이 그 덕이다.
+
+실측(DB 를 죽인 채 로컬 서버에 스모크를 돌린 결과) — 검사가 없었으면 둘 다 조용히 통과했다:
+
+```
+✗ DB  200      4ms  /        랜딩 — 본문이 비었다 — data-scrim= / aria-labelledby= 중 아무것도 없음
+✗ DB  200      4ms  /member  멤버 — 본문에 "data-reveal-item=" 없음
+```
+
+#### 7. 사람이 해야 할 것 — 이게 없으면 배포돼도 훅은 안 돈다
+
+**(A) 시크릿 만들기**
+
+```bash
+openssl rand -hex 32      # 이 값을 REVALIDATE_SECRET 으로 쓴다
+```
+
+**(B) Vercel 환경변수** — 대시보드 → 프로젝트 → Settings → Environment Variables
+
+| 이름 | 값 | 환경 |
+|---|---|---|
+| `REVALIDATE_SECRET` | (A)의 값 | Production (필요하면 Preview 도) |
+
+넣지 않으면 `POST /api/revalidate` 는 **503 으로 닫혀 있다.** 사이트는 정상 동작하고 60초
+백스톱만 남는다 — 즉 "안 넣으면 조용히 열리는" 실패는 없다.
+
+**(C) 훅을 실제로 쏘게 하기. 둘 중 하나만 하면 된다.**
+
+*(C-1) Vercel 대시보드 웹훅 — 코드·CI 없이 대시보드만*
+
+1. Vercel → Team Settings → **Webhooks** → Create Webhook
+2. Endpoint: `https://icaros.kr/api/revalidate`
+3. Events: **Deployment Succeeded** (`deployment.succeeded`)
+4. Projects: `icaros-web` 만 선택
+5. 만든 직후 **한 번만** 보여 주는 시크릿을 복사한다
+6. 그 값을 Vercel 환경변수 **`VERCEL_WEBHOOK_SECRET`** (Production) 으로 넣는다
+7. 다음 배포 후 Vercel 로그에서 `[revalidate] '/' 이하 캐시를 비웠다 (target=production)` 을 확인한다
+
+> 대시보드 웹훅은 커스텀 헤더를 못 붙이므로 `REVALIDATE_SECRET` 이 아니라 이 서명 경로를 탄다.
+> 프리뷰 배포도 같이 오지만 `target` 이 production 이 아니면 스스로 건너뛴다.
+
+*(C-2) GitHub Actions — 대시보드 웹훅을 못 쓰거나 안 쓸 때*
+
+1. GitHub → 저장소 → Settings → Secrets and variables → Actions → New repository secret
+   - 이름 `REVALIDATE_SECRET`, 값은 (A)와 **같은 값**
+2. 워크플로 파일 하나를 추가한다 (이 저장소에는 아직 없다 — 사람이 만든다):
+
+```yaml
+# .github/workflows/revalidate.yml
+name: revalidate after deploy
+on:
+  deployment_status:
+jobs:
+  ping:
+    if: github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -sS -X POST https://icaros.kr/api/revalidate             -H "Authorization: Bearer ${{ secrets.REVALIDATE_SECRET }}"             --fail-with-body
+```
+
+**(D) 확인**
+
+```bash
+npm run smoke        # / 와 /member 가 본문 검사까지 통과하는지
+```
+
+`/` 나 `/member` 가 "본문이 비었다"로 잡히면 훅이 안 온 것이다. Vercel 로그에서 `[revalidate]`
+를 찾아 (C) 를 다시 본다. 60초 뒤 다시 돌려서 통과하면 백스톱만 살아 있는 상태다.
+
+**(E) 아직 남아 있는 대시보드 일 (W4 와 무관, §3 A6 ②에서 넘어온 것)**
+apex(`icaros.kr`)를 primary 로 돌리는 것. 코드는 이미 apex 를 가리킨다.
+
+#### 8. 하지 않은 것
+
+- **`/rocket`·`/posts` 는 그대로 `force-dynamic`.** `searchParams`(`?series=`·`?page=`)는
+  fail-safe 로 풀리는 문제가 아니다 — 정적 생성 중 `await searchParams` 가 동적 렌더로 빠진다.
+  쿼리를 경로 세그먼트로 옮기는 라우트 개편이 필요하고 그건 §7 이다.
+- **`src/lib/content.ts` 는 건드리지 않았다.** `getSiteContent`(throw)는 그대로 남는다 —
+  `/posts` 가 여전히 그것을 쓰고, 그 라우트는 캐시 대상이 아니라 던지는 편이 옳다.
+- **cacheComponents(PPR) 로 가지 않았다.** 라우트 전반의 Suspense 재설계가 필요하고,
+  이 작업의 목표(TTFB)는 그것 없이 달성된다.
+
+---
+
 ## 5. 커밋
 
 웨이브당 1개. Claude/AI 흔적을 **넣지 않는다** (CLAUDE.md).
@@ -523,6 +791,7 @@ CLAUDE.md 의 "자격증명 불일치는 어느 쪽이 정답인가를 먼저 �
 w1  랜딩·멤버·기체·포스트에서 장식 텍스트를 걷어내고 포스트에 인스타 링크를 붙인다
 w2  패널 영상 업로드·재생 경로 · 공개 라우트를 온디맨드 무효화 기반 캐시로 전환
 w3  (필요 시) 검수에서 나온 회귀 수정
+w4  홈·멤버를 fail-safe 로더 + 60초 백스톱 캐시로 전환하고 배포 훅·스모크 본문 검사를 붙인다
 ```
 
 ---

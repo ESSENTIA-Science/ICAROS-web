@@ -2,6 +2,7 @@ import 'server-only'
 
 import { NextResponse } from 'next/server'
 import { headers } from 'next/headers'
+import { revalidatePath } from 'next/cache'
 import { timingSafeEqual } from 'node:crypto'
 import { listAbandonedCleanupJobs, runCleanupJobs, sweepStalePendingUploads } from '@/lib/s3'
 
@@ -45,5 +46,26 @@ export async function GET() {
     console.warn(`[storage] 재시도 상한에 도달해 방치된 정리 작업 ${abandoned.length}건`)
   }
 
-  return NextResponse.json({ swept, cleaned, abandoned: abandoned.length })
+  /**
+   * **정리 cron 이 실제로 무언가를 지웠으면 공개 캐시를 비운다** (W4, 2026-09-06).
+   *
+   * 이 cron 이 지우는 것은 원래 "어디에서도 참조되지 않는" media 여야 한다 — 그렇다면 화면은
+   * 바뀌지 않고 무효화도 필요 없다. 그 전제가 깨진 적이 있다: `hasReferences()` 의
+   * `MEDIA_FK_COLUMNS` 에 `page_panels` 가 빠져 있어 **살아 있는 랜딩 사진 4장을 지웠다**(D28).
+   * 공개 라우트가 `force-dynamic` 이던 시절에는 그 사고가 "다음 요청부터 깨진 이미지"로 끝났지만,
+   * 캐시가 붙은 지금은 **지워진 사진을 가리키는 HTML 이 캐시에 그대로 남는다.**
+   * `/`·`/member` 는 60초 백스톱이 있어 스스로 낫지만 `/rocket/[slug]`·`/posts/legacy/[slug]` 는
+   * `revalidate = false` 라 **영원히 낫지 않는다.** 그래서 여기서 한 번 비운다.
+   *
+   * 판정은 "삭제 건수 > 0" 하나다. 목록을 따로 들지 않는다 — 어느 화면이 그 media 를 쓰고
+   * 있었는지를 여기서 다시 세는 순간 D28 과 같은 종류의 횡단 목록이 하나 더 생긴다.
+   * 하루 한 번(03:17) 돌고 평소에는 0건이라 비용도 거의 없다.
+   */
+  const removed = cleaned.completed + swept.orphansFound + swept.unattachedReclaimed
+  if (removed > 0) {
+    revalidatePath('/', 'layout')
+    console.log(`[storage] media ${removed}건을 정리해 '/' 이하 캐시를 비웠다`)
+  }
+
+  return NextResponse.json({ swept, cleaned, abandoned: abandoned.length, revalidated: removed > 0 })
 }

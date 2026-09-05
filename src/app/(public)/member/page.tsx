@@ -2,23 +2,26 @@ import type { Metadata } from 'next'
 import MemberCard from '@/components/member/MemberCard'
 import InView from '@/components/rocket/InView'
 import RevealNoScript from '@/components/rocket/RevealNoScript'
-import { groupBySquad, listMembers } from './_data'
+import { groupBySquad, listMembersSafe } from './_data'
 import styles from './page.module.css'
 
 /**
- * ISR 을 쓰지 않는다. **다만 이유가 바뀌었다 (2026-09-06).**
+ * **온디맨드 무효화 + 60초 백스톱.** `force-dynamic` 이었다 (W4, 2026-09-06 전환).
  *
- * 예전 근거는 "published=false 가 revalidate 주기 동안 명단에 남아 E5 를 깬다"였다. 그건 이제
- * 근거가 아니다 — `_actions/members.ts` 의 세 mutation 전부가 `revalidatePath('/member')` 를
- * 부르므로 시간 기반이 아닌 온디맨드 무효화가 걸린다(창이 0이다).
+ * 공개 여부는 시간이 아니라 액션이 무효화한다 — `_actions/members.ts` 의 세 mutation 전부가
+ * `revalidatePath('/member')` 를 부르므로 `published=false` 가 남아 있는 창은 0이다.
+ * CLAUDE.md 지뢰 "ISR 로 공개 여부를 감싸지 말 것"이 경고한 것은 **시간이 유일한 신호일 때**다.
  *
- * 지금 막는 것은 **빌드다.** `/member` 는 동적 세그먼트가 없어서 `revalidate` 를 주면 빌드 시점에
- * 프리렌더되고 `listMembers()` 가 그대로 DB 로 나간다. 죽은 포트 빌드에서 `/` 가 같은 이유로
- * ECONNREFUSED 로 죽는 것을 실측했다(`page.tsx` 주석에 명령과 출력이 있다).
- * 배포 빌드를 RDS 도달성에 묶지 않는다는 규칙이 TTFB 보다 위다 (D27).
- * `generateStaticParams(): []` 우회는 동적 세그먼트가 있는 라우트에만 쓸 수 있다.
+ * 그러면 60초는 왜 두는가. `/member` 는 동적 세그먼트가 없어 `revalidate` 를 주면 빌드가 반드시
+ * 한 번 프리렌더한다(`generateStaticParams(): []` 우회는 동적 세그먼트 전용이다). 빌드가 RDS 에
+ * 닿지 못하는 날에는 `listMembersSafe()` 가 실패를 삼켜 **빈 명단이 프리렌더돼 캐시에 들어간다.**
+ * 배포 성공 웹훅(`POST /api/revalidate`)이 그 창을 즉시 닫지만, 훅이 조용히 실패하면
+ * 시간 말고는 스스로 낫는 길이 없다. 60초가 그 상한이다. `revalidate = false` 였다면 영구다.
+ *
+ * 배포 빌드를 RDS 도달성에 묶지 않는다는 규칙(D27)이 TTFB 보다 위라는 점은 그대로다 —
+ * 던지는 `listMembers()` 대신 `listMembersSafe()` 를 쓰는 이유가 그것이다.
  */
-export const dynamic = 'force-dynamic'
+export const revalidate = 60
 
 /**
  * 소속이 비어 있는 그룹의 표시 라벨. DAL 은 센티널을 null 로만 내보내고 이름은 여기서 붙인다 —
@@ -33,11 +36,11 @@ export const metadata: Metadata = {
 }
 
 export default async function MemberPage() {
-  const squads = groupBySquad(await listMembers())
+  const squads = groupBySquad(await listMembersSafe())
 
   return (
-    // 여기에 loading.tsx 를 다시 만들지 말 것. 이 라우트는 force-dynamic 이라 로딩 경계가
-    // 생기면 Next 가 fallback 셸을 먼저 흘려보내고 본문은 문서 끝의 hidden 조각으로 붙는다.
+    // 여기에 loading.tsx 를 다시 만들지 말 것. 로딩 경계가 생기면 Next 가 fallback 셸을 먼저
+    // 흘려보내고 본문은 문서 끝의 hidden 조각으로 붙는다.
     // 실측: 그 상태에서 /member 의 HTML 은 스켈레톤이 3.8KB 지점, 본문은 hidden 안에 있었다 —
     // JS 없는 클라이언트·크롤러에게는 명단이 통째로 사라진다.
     /* `paper`(밝은 면)가 mono 아래에서 검정으로 뒤집힌다 — 멤버 사진이 어두운 면 위에서
