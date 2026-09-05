@@ -19,12 +19,22 @@ export async function generateMetadata(): Promise<Metadata> {
   const seo = getSeo(await getSiteContentSafe())
 
   return {
-    metadataBase: new URL('https://icaros.kr'),
+    /**
+     * 정식 도메인은 **`www`** 다. apex(`icaros.kr`)는 프로덕션에서 307 로 www 에 넘긴다
+     * (2026-09-06 실측 0.25s). `metadataBase` 가 apex 를 가리키면 이 값으로 조립되는
+     * **모든 canonical 과 상대 OG 이미지 URL 이 리다이렉트되는 주소**가 되어, 크롤러가
+     * 페이지마다 한 번씩 더 튕긴다.
+     *
+     * 반대 선택지도 유효하다 — Vercel 대시보드에서 apex 를 primary 로 돌리면 코드가 옳아진다.
+     * **둘 중 하나만 고르면 되고, 고르지 않는 것이 가장 나쁘다.** 지금은 관측된 사실(www 가
+     * 서비스 주소다)에 코드를 맞춘다.
+     */
+    metadataBase: new URL('https://www.icaros.kr'),
     title: { default: seo.title, template: `%s · ${seo.title}` },
     description: seo.description,
     openGraph: {
       type: 'website',
-      url: 'https://icaros.kr',
+      url: 'https://www.icaros.kr',
       siteName: seo.title,
       title: seo.title,
       description: '학생 주도 항공우주 로켓 연구 프로젝트',

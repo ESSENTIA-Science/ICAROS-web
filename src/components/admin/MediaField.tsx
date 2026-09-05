@@ -2,9 +2,15 @@
 
 import { useId, useRef, useState } from 'react'
 import Image from 'next/image'
-import type { MediaEntityType, UploadKind } from '@/lib/image/policy'
+import { UPLOAD_POLICIES, type MediaEntityType, type UploadKind } from '@/lib/image/policy'
 import ui from './ui.module.css'
-import { describeUploadFailure, formatDimensions, uploadOne, type MediaPreview } from './media-upload'
+import {
+  describeUploadFailure,
+  formatDimensions,
+  isVideoMedia,
+  uploadOne,
+  type MediaPreview,
+} from './media-upload'
 
 /**
  * 대표 이미지 한 장 (F4·C7·E6).
@@ -45,6 +51,12 @@ export default function MediaField({
   error?: string
 }) {
   const fieldId = useId()
+  /**
+   * 문구·`accept`·미리보기 태그가 전부 이 정책에서 나온다. kind 를 하나 더 만들어도
+   * 이 컴포넌트는 그대로다 — "이미지"라고 박아 두면 영상 kind 에서 거짓말을 한다.
+   */
+  const policy = UPLOAD_POLICIES[kind]
+  const isVideoKind = policy.mime.startsWith('video/')
   const [current, setCurrent] = useState<MediaPreview | null>(initial)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
@@ -64,7 +76,8 @@ export default function MediaField({
 
     setBusy(true)
     setFailure(null)
-    setStatus('이미지를 변환하고 있습니다…')
+    // 영상은 변환하지 않는다 — 확인만 하고 원본을 그대로 올린다. 문구가 그 사실과 맞아야 한다.
+    setStatus(isVideoKind ? '영상을 확인하고 있습니다…' : '이미지를 변환하고 있습니다…')
 
     try {
       const uploaded = await uploadOne(file, { kind, entityType })
@@ -84,7 +97,7 @@ export default function MediaField({
     runRef.current += 1
     setCurrent(null)
     setFailure(null)
-    setStatus('이미지를 제거했습니다. 저장해야 반영됩니다.')
+    setStatus(`${policy.label}을(를) 제거했습니다. 저장해야 반영됩니다.`)
     inputRef.current?.focus()
   }
 
@@ -110,7 +123,11 @@ export default function MediaField({
 
       <div className={ui.media}>
         <div className={ui.mediaThumb}>
-          {current ? (
+          {current && isVideoMedia(current) ? (
+            /* 영상은 `next/image` 를 통과시키지 않는다 — `/api/media/{id}` 가 바이트를 그대로
+               흘려 주므로 `<video>` 가 직접 붙으면 된다. 썸네일이라 소리도 컨트롤도 없다. */
+            <video className={ui.mediaImg} src={current.url} muted loop playsInline autoPlay preload="metadata" />
+          ) : current ? (
             /* unoptimized: 관리 화면 썸네일 한 장에 최적화기를 거칠 이유가 없고,
                멤버 사진처럼 `private, no-store` 로 서빙되는 이미지의 사본을 이미지 캐시에 남기지 않는다. */
             <Image
@@ -134,7 +151,7 @@ export default function MediaField({
             id={fieldId}
             ref={inputRef}
             type="file"
-            accept="image/*"
+            accept={isVideoKind ? 'video/mp4' : 'image/*'}
             /* name 을 주지 않는다 — 주면 원본 파일이 Server Action 본문에 통째로 실린다.
                서버로 가는 것은 업로드가 끝난 뒤의 media id 하나뿐이다. */
             onChange={handlePick}
@@ -158,7 +175,7 @@ export default function MediaField({
                 onClick={handleRemove}
                 disabled={busy}
               >
-                이미지 제거
+                {policy.label} 제거
               </button>
             </div>
           ) : null}
@@ -167,7 +184,7 @@ export default function MediaField({
 
       {!storageReady ? (
         <p className={ui.mediaWarn}>
-          이미지 저장소가 아직 구성되지 않아(S3_BUCKET 미설정) 업로드가 실패합니다. 나머지 항목은
+          파일 저장소가 아직 구성되지 않아(S3_BUCKET 미설정) 업로드가 실패합니다. 나머지 항목은
           정상적으로 저장됩니다.
         </p>
       ) : null}
@@ -190,8 +207,8 @@ export default function MediaField({
 
       <noscript>
         <p className={ui.hint}>
-          이미지 업로드는 JavaScript 가 필요합니다. 나머지 항목은 그대로 저장할 수 있고, 기존
-          이미지도 유지됩니다.
+          {policy.label} 업로드는 JavaScript 가 필요합니다. 나머지 항목은 그대로 저장할 수 있고,
+          기존 {policy.label}도 유지됩니다.
         </p>
       </noscript>
     </div>

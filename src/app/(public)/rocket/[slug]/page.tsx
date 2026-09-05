@@ -16,19 +16,33 @@ import styles from './page.module.css'
 type Params = { slug: string }
 
 /**
- * ISR 을 쓰지 않는다. published=false 전환이 revalidate 주기 동안(+stale-while-revalidate)
- * 상세에 그대로 노출돼 C8 을 깬다. 어드민이 revalidatePath 를 붙이기 전까지는
- * 요청 시각 렌더가 유일하게 올바른 동작이다 (04-architecture.md §Caching posture).
+ * **온디맨드 무효화 전용 ISR.** 시간 기반이 아니다 — `revalidate = false` 는 "만료되지 않는다"는
+ * 뜻이고, 캐시를 비우는 주체는 오직 `revalidatePath` 다.
+ *
+ * 예전 주석은 "ISR 을 쓰지 않는다 — published=false 가 revalidate 주기 동안 노출돼 C8 을 깬다.
+ * 어드민이 revalidatePath 를 붙이기 전까지는"이라고 적혀 있었다. **그 전제가 이제 성립하지 않는다.**
+ * `_actions/rockets.ts`·`rocket-series.ts`·`scene.ts` 세 파일이 모든 mutation 끝에
+ * `revalidatePath('/rocket/[slug]', 'page')` 를 부른다(= 이 라우트의 모든 slug 를 한 번에 비운다).
+ * 공개 여부가 바뀌는 경로가 전부 그 셋을 지나므로 노출 창(window)이 0이다.
+ * CLAUDE.md 지뢰 "ISR 로 공개 여부를 감싸지 말 것"이 경고한 것은 **시간 기반** revalidate 다.
  */
-export const dynamic = 'force-dynamic'
+export const revalidate = false
 
-/*
- * `generateStaticParams` 를 두지 않는다.
- * 이 라우트는 `force-dynamic` 이라 프리렌더되는 페이지가 0개인데, 그 함수는 빌드 시점에
- * 그대로 실행되어 DB 를 친다 — 결과는 버려진다. 실측: DATABASE_URL 을 죽은 포트로 두면
- * `next build` 가 ECONNREFUSED 로 실패한다. 배포 빌드가 아무 이득 없이
- * DB 네트워크 도달성을 필수로 요구하게 되는데, RDS 는 VPC 안이라 그게 곧 빌드 실패다.
+/**
+ * **빈 배열을 반환하는 `generateStaticParams` 가 이 라우트를 캐시 대상으로 만든다.**
+ *
+ * 실측(2026-09-06, `next build` 라우트 표): 이 함수가 없으면 `revalidate` 를 무엇으로 두든
+ * 라우트가 `ƒ (Dynamic)` 으로 남아 **엣지 캐시가 0** 이다. 빈 배열을 반환하면 `● (SSG)` 가 되고,
+ * 목록에 없는 slug 는 첫 요청에 렌더돼 ISR 캐시에 들어간다(`dynamicParams` 기본값 true).
+ *
+ * 빈 배열이라는 점이 핵심이다 — 예전 주석이 경고한 "빌드 시점에 DB 를 친다"는 **slug 를 DB 에서
+ * 읽어 오는 구현**의 이야기다. 여기서는 DB 를 치지 않으므로 프리렌더되는 페이지가 0개인 것은
+ * 그대로이고, 죽은 포트 빌드(`DATABASE_URL` → 127.0.0.1:1)도 그대로 통과한다.
+ * **이 함수 안에서 DB 를 읽지 말 것.** 읽는 순간 배포 빌드가 RDS 도달성을 필수로 요구하게 된다.
  */
+export function generateStaticParams(): { slug: string }[] {
+  return []
+}
 
 export async function generateMetadata({
   params,

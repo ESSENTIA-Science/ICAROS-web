@@ -12,8 +12,9 @@ import {
   PANEL_HEIGHTS,
   PANEL_SCRIMS,
 } from '@/lib/db/schema/panels'
+import { UPLOAD_POLICIES } from '@/lib/image/policy'
 import { SelectField, TextAreaField, TextField } from './Fields'
-import { describeUploadFailure, formatDimensions, uploadOne } from './media-upload'
+import { describeUploadFailure, formatDimensions, isVideoMedia, uploadOne } from './media-upload'
 import { ActionNotice } from './Notice'
 import SubmitButton from './SubmitButton'
 import ui from './ui.module.css'
@@ -42,9 +43,28 @@ export type PanelMediaChoice = {
   filename: string | null
   width: number | null
   height: number | null
+  /**
+   * **optional 이다.** `listPanelMediaChoices()`(`_data/panels.ts`)는 `media.mime` 을
+   * select 하지 않으므로 서버가 준 목록에는 값이 없다. 그 경우 `isVideoMedia()` 가
+   * 원본 파일명 확장자로 판정한다 — 업로드 정책이 영상에 `.mp4` 를 강제하므로 우리 행에서는 맞는다.
+   * 방금 이 화면에서 올린 것에는 `/confirm` 이 확인한 실제 mime 이 들어 있다.
+   */
+  mime?: string
 }
 
 const opts = (values: readonly string[]) => values.map((v) => ({ value: v, label: v }))
+
+/** 배경 사진은 `hero`(긴 변 1600px · 2MB), 배경 영상은 `video`(mp4 · 32MB). */
+const VIDEO_MAX = UPLOAD_POLICIES.video.maxBytes / (1024 * 1024)
+
+/**
+ * 고른 파일이 영상인가. **확장자를 먼저 본다** — 브라우저가 붙이는 `file.type` 은 OS·확장자
+ * 매핑에 따라 비어 있는 경우가 있고, 그때 사진 경로로 흘러가면 canvas 디코딩에서 엉뚱한
+ * 문구("이미지를 읽을 수 없습니다")로 실패한다.
+ */
+function looksLikeVideo(file: File): boolean {
+  return /\.mp4$/i.test(file.name) || file.type.startsWith('video/')
+}
 
 /**
  * 패널 편집 폼.
@@ -56,6 +76,10 @@ const opts = (values: readonly string[]) => values.map((v) => ({ value: v, label
  * 새 사진을 넣으려면 개발자가 `npm run seed:panels` 를 돌려야 했다 — 운영자에게는
  * "메인 사진을 추가할 수 없다"와 같은 말이었다. 고르기 목록은 그대로 남겨 둔다:
  * 같은 사진을 두 패널에 쓰는 경로가 실제로 있고, 지우면 그 경로가 사라진다.
+ *
+ * **배경은 영상일 수도 있다.** 입력 칸을 나누지 않는다 — 운영자에게 "이 패널의 배경"은 하나의
+ * 개념이고, 사진이냐 영상이냐는 고른 파일이 말한다. `page_panels` 에는 종류 컬럼이 없고
+ * `media_id` 가 가리키는 행의 `mime` 이 곧 종류다. 그래서 스키마가 그대로다.
  *
  * 초점은 **사진 위에서 직접 찍는다.** 숫자 두 칸으로 두면 운영자가 그 값이 무엇을 하는지
  * 알 방법이 없다. 클릭한 자리가 곧 `object-position` 이고, 옆의 두 미리보기(데스크톱 16:9 ·
@@ -92,6 +116,7 @@ export default function PanelForm({
      빈 채로 남고, 운영자는 사진이 안 올라갔다고 읽는다. */
   const gallery: readonly PanelMediaChoice[] = [...uploads, ...choices]
   const picked = gallery.find((c) => c.id === mediaId) ?? null
+  const pickedIsVideo = picked !== null && isVideoMedia(picked)
   const pickedMeta = picked
     ? [formatDimensions(picked.width, picked.height), picked.filename].filter(
         (v): v is string => v !== null && v !== ''
@@ -102,10 +127,13 @@ export default function PanelForm({
   /**
    * 파일 하나를 올려 media 행까지 확정한다(presign → PUT → confirm).
    *
-   * `kind: 'hero'` — 전면 배경 사진이라 `media`(긴 변 512px · 1MB)로는 모자란다.
+   * **kind 는 고른 파일이 정한다.** 사진이면 `hero`(전면 배경이라 `media` 의 512px·1MB 로는
+   * 모자란다), 영상이면 `video`(mp4 · 32MB, 브라우저 변환 없음). 입력 칸을 둘로 나누지 않는 이유는
+   * 운영자에게 "이 패널의 배경"은 한 가지 개념이기 때문이다 — 사진이냐 영상이냐는 파일이 말한다.
+   *
    * `entityType: 'landing'` — **비우면 안 된다.** `/api/media/[id]` 는 용도를 모르는 미디어를
    * `private, no-store` 로 서빙하므로(`lib/s3/media.ts` 의 `CACHEABLE_ENTITY_TYPES` 허용 목록)
-   * 랜딩 사진에 CDN 캐시가 아예 붙지 않는다.
+   * 랜딩 배경에 CDN 캐시가 아예 붙지 않는다. 영상은 용량이 커서 그 차이가 사진보다 훨씬 크다.
    */
   async function handleUpload(event: React.ChangeEvent<HTMLInputElement>): Promise<void> {
     const file = event.target.files?.[0]
@@ -115,21 +143,27 @@ export default function PanelForm({
 
     const run = runRef.current + 1
     runRef.current = run
+    const video = looksLikeVideo(file)
 
     setBusy(true)
     setFailure(null)
-    setStatus('사진을 변환하고 있습니다…')
+    // 영상은 변환하지 않는다 — 형식·크기·치수만 확인하고 원본을 그대로 올린다.
+    setStatus(video ? '영상을 확인하고 있습니다…' : '사진을 변환하고 있습니다…')
 
     try {
-      const up = await uploadOne(file, { kind: 'hero', entityType: 'landing' })
+      const up = await uploadOne(file, { kind: video ? 'video' : 'hero', entityType: 'landing' })
       if (runRef.current !== run) return
       setUploads((prev) => [
-        { id: up.id, filename: up.filename, width: up.width, height: up.height },
+        { id: up.id, filename: up.filename, width: up.width, height: up.height, ...(up.mime ? { mime: up.mime } : {}) },
         ...prev,
       ])
-      // 올린 사진을 곧바로 이 패널의 사진으로 삼는다. 한 번 더 고르게 할 이유가 없다.
+      // 올린 것을 곧바로 이 패널의 배경으로 삼는다. 한 번 더 고르게 할 이유가 없다.
       setMediaId(up.id)
-      setStatus('사진을 올렸습니다. 초점을 찍고 저장 버튼을 눌러야 반영됩니다.')
+      setStatus(
+        video
+          ? '영상을 올렸습니다. 초점을 찍고 저장 버튼을 눌러야 반영됩니다.'
+          : '사진을 올렸습니다. 초점을 찍고 저장 버튼을 눌러야 반영됩니다.'
+      )
     } catch (e) {
       if (runRef.current !== run) return
       setStatus(null)
@@ -164,23 +198,24 @@ export default function PanelForm({
       <input type="hidden" name="focalX" value={focalX} />
       <input type="hidden" name="focalY" value={focalY} />
 
-      {/* ── 1. 사진 ─────────────────────────────────── */}
+      {/* ── 1. 배경 ─────────────────────────────────── */}
       <fieldset className={ui.fieldset}>
-        <legend lang="en">Photo</legend>
+        <legend lang="en">Background</legend>
 
         <div className={ui.field}>
           <label className={ui.label} htmlFor={fileId}>
-            사진 올리기
+            사진·영상 올리기
           </label>
           <p className={ui.hint} id={`${fileId}-hint`} lang="ko">
-            긴 변 1600px · 2MB 이하 WebP 로 자동 변환됩니다. 올린 사진은 아래 목록 맨 앞에 붙고
-            바로 이 패널의 사진이 됩니다.
+            사진은 긴 변 1600px · 2MB 이하 WebP 로 자동 변환됩니다. 영상은 <b>.mp4 · {VIDEO_MAX}MB
+            이하</b>를 변환 없이 그대로 올립니다 — 배경 루프는 854×480 정도면 충분하고, 소리는
+            나가지 않습니다. 올린 것은 아래 목록 맨 앞에 붙고 바로 이 패널의 배경이 됩니다.
           </p>
           <input
             className={ui.fileInput}
             id={fileId}
             type="file"
-            accept="image/*"
+            accept="image/*,video/mp4"
             /* name 을 주지 않는다 — 주면 원본 파일이 Server Action 본문에 통째로 실린다.
                서버로 가는 것은 업로드가 끝난 뒤의 media id 하나뿐이다. */
             onChange={handleUpload}
@@ -190,7 +225,7 @@ export default function PanelForm({
 
           {!storageReady ? (
             <p className={ui.mediaWarn} lang="ko">
-              이미지 저장소가 아직 구성되지 않아(S3_BUCKET 미설정) 업로드가 실패합니다. 이미 올라와
+              파일 저장소가 아직 구성되지 않아(S3_BUCKET 미설정) 업로드가 실패합니다. 이미 올라와
               있는 사진은 그대로 고를 수 있습니다.
             </p>
           ) : null}
@@ -208,14 +243,13 @@ export default function PanelForm({
 
         {gallery.length === 0 ? (
           <p className={ui.empty} lang="ko">
-            아직 사진이 없습니다. 위에서 한 장 올리면 패널을 만들 수 있습니다 — 패널은 사진이
+            아직 올라온 것이 없습니다. 위에서 하나 올리면 패널을 만들 수 있습니다 — 패널은 배경이
             있어야 성립합니다.
           </p>
         ) : (
           <>
             <p className={ui.hint} lang="ko">
-              이미 올라와 있는 사진에서 고를 수도 있습니다. 같은 사진을 여러 패널이 함께 써도
-              됩니다.
+              이미 올라와 있는 것에서 고를 수도 있습니다. 같은 사진을 여러 패널이 함께 써도 됩니다.
             </p>
             <div className={ui.panelPickRow}>
               {gallery.map((c) => (
@@ -227,10 +261,21 @@ export default function PanelForm({
                   onClick={() => setMediaId(c.id)}
                   title={c.filename ?? c.id}
                 >
-                  {c.width !== null && c.height !== null ? (
-                    <Image src={`/api/media/${c.id}`} width={c.width} height={c.height} alt="" sizes="120px" />
-                  ) : (
+                  {c.width === null || c.height === null ? (
                     <span lang="ko">크기 미확정</span>
+                  ) : isVideoMedia(c) ? (
+                    /* 목록의 영상은 재생하지 않는다 — 후보가 늘면 자동재생 썸네일이 전부 동시에
+                       돌아 관리 화면이 무거워진다. `metadata` 로 첫 프레임만 세운다.
+                       ui.module.css 의 규칙이 `img` 를 지목하고 있어 여기서는 인라인으로 준다. */
+                    <video
+                      src={`/api/media/${c.id}`}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <Image src={`/api/media/${c.id}`} width={c.width} height={c.height} alt="" sizes="120px" />
                   )}
                 </button>
               ))}
@@ -243,42 +288,93 @@ export default function PanelForm({
             {pickedMeta.length > 0 ? <p className={ui.mediaMeta}>{pickedMeta.join(' · ')}</p> : null}
 
             <p className={ui.hint} lang="ko">
-              사진을 눌러 <b>초점</b>을 찍으세요. 지금 값은 {focalX} / {focalY} 입니다. 같은 사진이
-              데스크톱에서는 가로로, 모바일에서는 세로로 잘립니다 — 무엇이 주인공인지는 사람만 압니다.
+              {pickedIsVideo ? '영상' : '사진'}을 눌러 <b>초점</b>을 찍으세요. 지금 값은 {focalX} /{' '}
+              {focalY} 입니다. 같은 화면이 데스크톱에서는 가로로, 모바일에서는 세로로 잘립니다 —
+              무엇이 주인공인지는 사람만 압니다.
             </p>
 
+            {/* 초점 찍기와 두 크롭은 **영상에서도 같은 값을 쓴다.** 공개 화면의
+                `.media img, .media video` 가 한 규칙이므로 여기서 본 크롭이 곧 그 결과다.
+                ui.module.css 의 `.panelFocal img`·`.panelCrop img` 가 요소 선택자라
+                `<video>` 에는 걸리지 않는다 — 같은 값을 인라인으로 준다. */}
             <button type="button" className={ui.panelFocal} onClick={pick} aria-label="초점 위치 고르기">
-              <Image
-                src={`/api/media/${picked.id}`}
-                width={picked.width}
-                height={picked.height}
-                alt=""
-                sizes="640px"
-              />
+              {pickedIsVideo ? (
+                <video
+                  src={`/api/media/${picked.id}`}
+                  muted
+                  loop
+                  playsInline
+                  autoPlay
+                  preload="metadata"
+                  style={{ display: 'block', width: '100%', height: 'auto' }}
+                />
+              ) : (
+                <Image
+                  src={`/api/media/${picked.id}`}
+                  width={picked.width}
+                  height={picked.height}
+                  alt=""
+                  sizes="640px"
+                />
+              )}
               <span className={ui.panelCross} style={{ left: `${focalX}%`, top: `${focalY}%` }} aria-hidden="true" />
             </button>
 
             <div className={ui.panelCrops}>
               <span className={ui.panelCrop} data-ratio="wide">
-                <Image
-                  src={`/api/media/${picked.id}`}
-                  width={picked.width}
-                  height={picked.height}
-                  alt=""
-                  sizes="320px"
-                  style={{ objectPosition: `${focalX}% ${focalY}%` }}
-                />
+                {pickedIsVideo ? (
+                  <video
+                    src={`/api/media/${picked.id}`}
+                    muted
+                    loop
+                    playsInline
+                    autoPlay
+                    preload="metadata"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      objectPosition: `${focalX}% ${focalY}%`,
+                    }}
+                  />
+                ) : (
+                  <Image
+                    src={`/api/media/${picked.id}`}
+                    width={picked.width}
+                    height={picked.height}
+                    alt=""
+                    sizes="320px"
+                    style={{ objectPosition: `${focalX}% ${focalY}%` }}
+                  />
+                )}
                 <em lang="en">16 : 9</em>
               </span>
               <span className={ui.panelCrop} data-ratio="tall">
-                <Image
-                  src={`/api/media/${picked.id}`}
-                  width={picked.width}
-                  height={picked.height}
-                  alt=""
-                  sizes="200px"
-                  style={{ objectPosition: `${focalX}% ${focalY}%` }}
-                />
+                {pickedIsVideo ? (
+                  <video
+                    src={`/api/media/${picked.id}`}
+                    muted
+                    loop
+                    playsInline
+                    autoPlay
+                    preload="metadata"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      objectPosition: `${focalX}% ${focalY}%`,
+                    }}
+                  />
+                ) : (
+                  <Image
+                    src={`/api/media/${picked.id}`}
+                    width={picked.width}
+                    height={picked.height}
+                    alt=""
+                    sizes="200px"
+                    style={{ objectPosition: `${focalX}% ${focalY}%` }}
+                  />
+                )}
                 <em lang="en">9 : 16</em>
               </span>
             </div>

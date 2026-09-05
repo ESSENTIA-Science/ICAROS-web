@@ -9,13 +9,32 @@ import { UploadError, uploadFile, type UploadOptions } from '@/lib/image/upload'
  * 여기서는 **화면에 보여 줄 형태**로만 감싼다.
  */
 
-/** 폼이 들고 있는 이미지 한 장. 서버 DAL 의 `AdminMediaRef` 가 그대로 대입된다. */
+/** 폼이 들고 있는 미디어 한 장. 서버 DAL 의 `AdminMediaRef` 가 그대로 대입된다. */
 export type MediaPreview = {
   id: string
   url: string
   filename: string | null
   width: number | null
   height: number | null
+  /**
+   * 확정된 Content-Type. **optional 이다** — 서버 DAL(`AdminMediaRef`·`listPanelMediaChoices`)은
+   * 이 컬럼을 select 하지 않으므로 그 경로로 들어온 미디어에는 값이 없다.
+   * 그래서 `isVideoMedia()` 가 없을 때의 판정까지 함께 갖는다.
+   */
+  mime?: string
+}
+
+/**
+ * 이 미디어를 `<video>` 로 그려야 하는가. **미리보기 전용 판정이다.**
+ *
+ * `mime` 이 있으면 그것이 정답이다(`/confirm` 이 매직 넘버로 확인한 값).
+ * 없으면 원본 파일명 확장자로 본다 — 업로드 정책이 영상에 `.mp4` 를 강제하므로
+ * 우리가 만든 행에서는 이 추론이 항상 맞는다. 틀려도 결과는 관리 화면 썸네일 한 칸이고,
+ * 공개 화면은 `lib/panels.ts` 가 실제 `media.mime` 을 읽어 판정한다.
+ */
+export function isVideoMedia(m: { mime?: string | undefined; filename: string | null }): boolean {
+  if (m.mime !== undefined && m.mime !== '') return m.mime.startsWith('video/')
+  return /\.mp4$/i.test(m.filename ?? '')
 }
 
 export async function uploadOne(file: File, options: UploadOptions): Promise<MediaPreview> {
@@ -26,6 +45,7 @@ export async function uploadOne(file: File, options: UploadOptions): Promise<Med
     filename: file.name,
     width: result.width,
     height: result.height,
+    mime: result.mime,
   }
 }
 

@@ -88,14 +88,20 @@ export async function panelsVersion(): Promise<string> {
   return row?.v ?? ''
 }
 
-/** 패널에 붙일 수 있는 사진 후보 — 확정(`ready`)되고 살아 있는 것만. */
+/**
+ * 패널에 붙일 수 있는 미디어 후보 — 확정(`ready`)되고 살아 있는 것만.
+ *
+ * `mime` 을 같이 읽는다. 폼이 후보 하나하나를 `<img>` 로 그릴지 `<video>` 로 그릴지 정해야 하는데,
+ * 파일명 확장자로 추측하면 우리가 올린 행에서만 맞고 나중에 다른 경로로 들어온 행에서 틀린다.
+ */
 export async function listPanelMediaChoices(): Promise<
-  readonly { id: string; filename: string | null; width: number | null; height: number | null }[]
+  readonly { id: string; filename: string | null; mime: string; width: number | null; height: number | null }[]
 > {
   return db
     .select({
       id: schema.media.id,
       filename: schema.media.originalFilename,
+      mime: schema.media.mime,
       width: schema.media.width,
       height: schema.media.height,
     })

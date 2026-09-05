@@ -21,7 +21,7 @@
 .panel[data-height='tall'] { min-height: 80dvh; }
 .panel[data-height='half'] { min-height: 56dvh; }
 
-/* ── 사진 ──────────────────────────────────────── */
+/* ── 사진 · 영상 ───────────────────────────────── */
 .media {
   position: absolute;
   inset: 0;
@@ -29,12 +29,22 @@
   overflow: hidden;
 }
 
-.media img {
+/* 사진과 영상이 **같은 규칙**을 받는다. 초점 모델이 갈라지면 운영자가 사진에서 배운 조작이
+   영상에서 통하지 않고, 그러면 `focal_x/y` 는 사진 전용 필드로 퇴화한다. */
+.media img,
+.media video {
   width: 100%;
   height: 100%;
   object-fit: cover;
   /* 초점은 레코드가 정한다. 가운데 크롭 기본값으로 두면 세로 화면에서 피사체가 잘린다. */
   object-position: var(--focal-x, 50%) var(--focal-y, 50%);
+}
+
+/* `<video>` 는 기본이 inline 이라 베이스라인 아래 여백이 생기고, 첫 프레임이 오기 전에는
+   비어 있다 — 패널 배경과 같은 색을 깔아 그 사이에 다른 색이 비치지 않게 한다. */
+.media video {
+  display: block;
+  background: var(--n-950);
 }
 
 /* ── 스크림 ────────────────────────────────────── */

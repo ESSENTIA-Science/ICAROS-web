@@ -36,7 +36,7 @@ export function isSameBucket(a: string, b: string): boolean {
  */
 export const SNIFF_BYTES = 16
 
-export type SniffedMime = 'image/webp' | 'model/gltf-binary'
+export type SniffedMime = 'image/webp' | 'model/gltf-binary' | 'video/mp4'
 
 /** `bytes` 의 `start` 위치부터가 ASCII 문자열 `text` 인가. 범위를 벗어나면 false. */
 function hasAscii(bytes: Uint8Array, start: number, text: string): boolean {
@@ -58,6 +58,10 @@ export function sniffMime(bytes: Uint8Array): SniffedMime | null {
   if (hasAscii(bytes, 0, 'RIFF') && hasAscii(bytes, 8, 'WEBP')) return 'image/webp'
   // glTF 바이너리 헤더: magic `glTF` + version + length.
   if (hasAscii(bytes, 0, 'glTF')) return 'model/gltf-binary'
+  // ISO BMFF(MP4): 선두 4바이트가 박스 크기라 건너뛰고 4~7 의 `ftyp` 를 본다.
+  // 이 줄이 없으면 `confirmUpload` 이 mp4 를 판정하지 못해 **객체를 지우고** 확정을 거부한다 —
+  // 업로드가 성공한 것처럼 보이다 마지막에 사라지므로 원인을 찾기 어렵다.
+  if (hasAscii(bytes, 4, 'ftyp')) return 'video/mp4'
   return null
 }
 

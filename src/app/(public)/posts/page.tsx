@@ -17,6 +17,12 @@ import styles from './page.module.css'
  * `<ol>` 시맨틱은 유지한다. 격자는 배열 방식이지 순서가 사라졌다는 뜻이 아니다.
  *
  * 캐시하지 않는다. ESSENTIA 에서 글을 쓰면 여기 즉시 나와야 한다는 것이 요구사항이다.
+ *
+ * `revalidate = 60` 을 시도했고 되돌렸다 (2026-09-06). **이 페이지는 `searchParams.page` 를
+ * 읽는다** — 정적 생성 중 `await searchParams` 가 동적 렌더로 빠지므로 `revalidate` 를 무엇으로
+ * 두든 빌드 표에서 `ƒ (Dynamic)` 으로 남는다(실측). 값만 바꿔 두면 "캐시된다"고 **거짓말하는
+ * 선언**이 하나 늘 뿐이라 원래대로 둔다. 페이지네이션을 쿼리에서 경로 세그먼트로 옮기는 것은
+ * 라우트 개편이라 17-nodb-fix-plan.md §7 로 넘긴다.
  */
 export const dynamic = 'force-dynamic'
 

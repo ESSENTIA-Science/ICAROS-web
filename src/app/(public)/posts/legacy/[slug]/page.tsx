@@ -19,7 +19,25 @@ import styles from '../../[id]/page.module.css'
  * `loading.tsx` 를 두지 않는다. `notFound()` 위에 loading 경계가 생기면 셸이 먼저 flush 되어
  * 404 가 200 으로 굳는다.
  */
-export const dynamic = 'force-dynamic'
+/**
+ * **만료되지 않는 ISR.** 이관된 19건짜리 고정 아카이브라 늘지도 바뀌지도 않는다.
+ *
+ * 단서를 남겨 둔다: 이 라우트를 무효화하는 `revalidatePath` 가 **저장소 어디에도 없다.**
+ * `/admin` 에 `legacy_posts` 편집기가 없기 때문인데(PostsPanel 은 읽기 전용), 뒤집어 말하면
+ * 누가 SQL 로 `published=false` 를 해도 **다음 배포 전까지 캐시된 페이지가 계속 보인다.**
+ * 이 아카이브에 쓰기 경로가 생기면 그 액션에 `revalidatePath('/posts/legacy/[slug]', 'page')` 를
+ * 같이 붙이거나, 여기를 시간 기반(예: 3600)으로 바꿔라.
+ */
+export const revalidate = false
+
+/**
+ * 빈 배열이 이 라우트를 `● (SSG)` 로 만든다 — 이 함수가 없으면 `revalidate` 값과 무관하게
+ * `ƒ (Dynamic)` 으로 남아 엣지 캐시가 0이다(2026-09-06 빌드 표로 실측).
+ * **여기서 slug 를 DB 로 읽어 오지 말 것.** 읽는 순간 배포 빌드가 RDS 도달성을 필수로 요구한다.
+ */
+export function generateStaticParams(): { slug: string }[] {
+  return []
+}
 
 type Params = { params: Promise<{ slug: string }> }
 

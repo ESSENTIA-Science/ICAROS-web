@@ -26,9 +26,18 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>
  * 즉 **아무 이득 없이 배포 빌드가 DB 를 필수 의존성으로 갖게 된다.** 빌드 환경에서 RDS 에
  * 닿지 못하는 순간(네트워크·자격증명·정책 어느 것이든) 배포 자체가 실패한다.
  *
- * `[slug]/page.tsx` 에는 같은 이유로 이미 이 선언이 있다. 여기 70번째 줄 주석은
- * "이 페이지는 force-dynamic 이고"라고 **단정하고 있었지만 실제 선언은 없었다** —
- * 옆 라우트의 사실을 이 파일에 옮겨 적은 것이었고, 그래서 아무도 눈치채지 못했다.
+ * 이 파일 아래쪽 주석은 한때 "이 페이지는 force-dynamic 이고"라고 **단정하고 있었지만 실제
+ * 선언은 없었다** — 옆 라우트의 사실을 이 파일에 옮겨 적은 것이었고, 그래서 아무도 눈치채지 못했다.
+ *
+ * ─── ISR 전환을 시도했고, 되돌렸다 (2026-09-06) ───────────────────────────────
+ * 무효화 배선은 충분하다(`rockets.ts`·`rocket-series.ts`·`scene.ts` 가 `revalidatePath('/rocket')`).
+ * 막은 것은 **`searchParams` 다.** 이 라우트는 `?series=` 를 읽고, 정적 생성 중 `await searchParams`
+ * 는 동적 렌더로 빠진다 — `revalidate` 를 무엇으로 두든 빌드 표에서 `ƒ (Dynamic)` 이다(실측).
+ * 게다가 `generateMetadata` 가 **searchParams 를 await 하기 전에** `listRocketSeries()` 를 부르므로
+ * 그 동적 탈출이 일어나기 전에 DB 왕복이 먼저 나간다 — 죽은 포트 빌드에서 그대로 실패한다.
+ * `[slug]` 쪽에 쓴 `generateStaticParams(): []` 우회는 동적 세그먼트가 없는 여기에는 쓸 수 없다.
+ * 시리즈를 쿼리에서 경로 세그먼트(`/rocket/series/[series]`)로 옮기면 캐시 대상이 되지만
+ * 그건 라우트 개편이라 17-nodb-fix-plan.md §7 이다.
  */
 export const dynamic = 'force-dynamic'
 

@@ -11,13 +11,22 @@ import {
   WEBP_QUALITY_FLOOR,
   WEBP_QUALITY_START,
   WEBP_QUALITY_STEP,
+  fileExtension,
   formatBytes,
   isBlockedSource,
   type UploadKind,
 } from './policy'
 
 export class PreprocessError extends Error {
-  readonly code: 'blocked' | 'decode_failed' | 'encode_failed' | 'too_large' | 'not_glb'
+  readonly code:
+    | 'blocked'
+    | 'decode_failed'
+    | 'encode_failed'
+    | 'too_large'
+    | 'not_glb'
+    | 'not_video'
+    /** 영상 전용. 치수를 못 읽으면 패널이 화면에서 조용히 사라지므로 업로드 자체를 막는다. */
+    | 'no_dimensions'
 
   constructor(code: PreprocessError['code'], message: string) {
     super(message)
@@ -31,13 +40,16 @@ export interface PreparedUpload {
   contentType: string
   width: number | null
   height: number | null
-  /** 실제로 채택된 WebP 품질. 로그·디버깅용. GLB 는 null. */
+  /** 실제로 채택된 WebP 품질. 로그·디버깅용. GLB·영상은 null. */
   quality: number | null
 }
 
 /** kind 에 맞는 전처리를 고른다. 관리 UI 는 이 함수 하나만 부르면 된다. */
 export async function prepareUpload(file: File, kind: UploadKind): Promise<PreparedUpload> {
-  return UPLOAD_POLICIES[kind].extension === 'glb' ? prepareGlb(file) : encodeToWebp(file, kind)
+  const policy = UPLOAD_POLICIES[kind]
+  if (policy.preprocess === 'webp') return encodeToWebp(file, kind)
+  // 전처리가 없는 종류는 원본을 그대로 올린다. 매직 넘버는 형식마다 다르므로 형식별로 확인한다.
+  return policy.extension === 'glb' ? prepareGlb(file) : prepareVideo(file, kind)
 }
 
 /**
@@ -117,7 +129,107 @@ export async function prepareGlb(file: File): Promise<PreparedUpload> {
   }
 }
 
+/**
+ * 영상은 **다시 굽지 않는다.** 브라우저에서 트랜스코딩할 방법이 없고, 배경 루프는 애초에
+ * 작게 만들어 올리는 것이 맞다(이노스페이스 854×480). 여기서는 형식·크기·치수만 확인한다.
+ *
+ * ## 치수를 여기서 읽는 것이 이 함수의 존재 이유다
+ *
+ * `/confirm` 의 `HeadObject` 는 바이트 수와 타입만 준다 — 영상의 가로·세로는 알 수 없다.
+ * 그런데 `getLandingPanels()` 는 `media.width`/`height` 중 하나라도 null 이면 **그 패널을
+ * 조용히 버린다.** 즉 치수를 못 실어 보내면 영상 패널은 저장은 되는데 랜딩에서 사라진다.
+ * 그래서 읽지 못하면 업로드 자체를 여기서 막는다 — 나중에 화면에서 사라지는 것보다 낫다.
+ */
+export async function prepareVideo(file: File, kind: UploadKind): Promise<PreparedUpload> {
+  const policy = UPLOAD_POLICIES[kind]
+
+  if (isBlockedSource(file.name, file.type)) {
+    throw new PreprocessError('blocked', '스크립트를 담을 수 있는 형식은 업로드할 수 없습니다.')
+  }
+  // 전처리가 없으므로 확장자가 곧 형식 주장이다. 서버(`checkUploadCandidate`)도 같은 판정을 한다.
+  if (fileExtension(file.name) !== policy.extension) {
+    throw new PreprocessError('not_video', '영상은 .mp4 파일만 업로드할 수 있습니다.')
+  }
+  if (file.size > policy.maxBytes) {
+    throw new PreprocessError(
+      'too_large',
+      `영상은 ${formatBytes(policy.maxBytes)} 이하만 업로드할 수 있습니다. 해상도와 길이를 줄여 주세요 — 배경 루프는 854×480 정도면 충분합니다.`
+    )
+  }
+
+  // 확장자·MIME 은 위조된다. ISO BMFF 는 4바이트 박스 크기 뒤에 `ftyp` 가 온다.
+  const head = new Uint8Array(await file.slice(0, 12).arrayBuffer())
+  if (!hasAscii(head, 4, 'ftyp')) {
+    throw new PreprocessError('not_video', '올바른 MP4 파일이 아닙니다.')
+  }
+
+  const { width, height } = await readVideoDimensions(file)
+
+  return {
+    // 브라우저가 붙인 타입을 신뢰하지 않는다. 서명에 들어갈 값으로 다시 감싼다.
+    blob: new Blob([file], { type: policy.mime }),
+    contentType: policy.mime,
+    width,
+    height,
+    quality: null,
+  }
+}
+
 // ── 내부 ────────────────────────────────────────────────────────────────────
+
+/** `bytes` 의 `start` 위치부터가 ASCII 문자열 `text` 인가. 범위를 벗어나면 false. */
+function hasAscii(bytes: Uint8Array, start: number, text: string): boolean {
+  if (bytes.length < start + text.length) return false
+  for (let i = 0; i < text.length; i += 1) {
+    if (bytes[start + i] !== text.charCodeAt(i)) return false
+  }
+  return true
+}
+
+/**
+ * `<video>` 메타데이터에서 실제 픽셀 치수를 읽는다.
+ *
+ * 코덱을 이 브라우저가 못 열면 `error` 가 뜨고, 오디오 전용 파일이면 `videoWidth` 가 0 이다.
+ * 둘 다 업로드를 막는다 — 그대로 올리면 랜딩에서 사라지는 패널이 된다.
+ */
+async function readVideoDimensions(file: File): Promise<{ width: number; height: number }> {
+  const url = URL.createObjectURL(file)
+  const el = document.createElement('video')
+
+  try {
+    return await new Promise<{ width: number; height: number }>((resolve, reject) => {
+      el.preload = 'metadata'
+      el.muted = true
+      el.playsInline = true
+      el.onloadedmetadata = () => {
+        if (el.videoWidth > 0 && el.videoHeight > 0) {
+          resolve({ width: el.videoWidth, height: el.videoHeight })
+          return
+        }
+        reject(
+          new PreprocessError(
+            'no_dimensions',
+            '영상의 가로·세로 크기를 읽지 못했습니다. 영상 트랙이 있는 MP4 인지 확인해 주세요.'
+          )
+        )
+      }
+      el.onerror = () => {
+        reject(
+          new PreprocessError(
+            'decode_failed',
+            '이 브라우저가 열 수 없는 영상입니다. H.264 로 인코딩된 MP4 를 사용해 주세요.'
+          )
+        )
+      }
+      el.src = url
+    })
+  } finally {
+    // 남겨 두면 해제한 objectURL 을 계속 물고 있는 요소가 된다.
+    el.removeAttribute('src')
+    el.load()
+    URL.revokeObjectURL(url)
+  }
+}
 
 interface DecodedImage {
   image: CanvasImageSource & { width: number; height: number }

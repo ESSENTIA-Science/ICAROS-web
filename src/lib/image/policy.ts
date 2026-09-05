@@ -8,7 +8,7 @@
  * 근거: 07-s3-storage-plan.md §5, DECISIONS 기본값 표.
  */
 
-export const UPLOAD_KINDS = ['media', 'hero', 'poster', 'glb'] as const
+export const UPLOAD_KINDS = ['media', 'hero', 'poster', 'glb', 'video'] as const
 export type UploadKind = (typeof UPLOAD_KINDS)[number]
 
 /** `icaros.media.entity_type` 에 허용하는 값. 스키마 주석과 일치시킨다. */
@@ -27,31 +27,55 @@ export type UploadKind = (typeof UPLOAD_KINDS)[number]
 export const MEDIA_ENTITY_TYPES = ['rocket', 'member', 'landing', 'model', 'poster', 'post'] as const
 export type MediaEntityType = (typeof MEDIA_ENTITY_TYPES)[number]
 
-/** S3 키의 두 번째 세그먼트. 07 §4 의 프리픽스 구조 그대로. */
-export const KEY_FOLDERS = ['media', 'poster', 'glb', 'temp'] as const
+/**
+ * S3 키의 두 번째 세그먼트. 07 §4 의 프리픽스 구조 그대로.
+ *
+ * `video` 를 더해도 `media_key_prefix_ck` 는 통과한다 — 그 CHECK 는 루트(`icaros-web/%`·`forum/%`)만
+ * 보고 폴더 세그먼트를 보지 않는다. 그래서 영상 업로드에 마이그레이션이 필요 없다.
+ */
+export const KEY_FOLDERS = ['media', 'poster', 'glb', 'video', 'temp'] as const
 export type KeyFolder = (typeof KEY_FOLDERS)[number]
 
 export interface UploadPolicy {
   readonly folder: Exclude<KeyFolder, 'temp'>
-  readonly extension: 'webp' | 'glb'
+  readonly extension: 'webp' | 'glb' | 'mp4'
   /** 서버가 수락하는 **유일한** Content-Type. presigned PUT 서명에도 이 값이 박힌다. */
-  readonly mime: 'image/webp' | 'model/gltf-binary'
+  readonly mime: 'image/webp' | 'model/gltf-binary' | 'video/mp4'
   readonly maxBytes: number
-  /** 긴 변 상한. GLB 는 픽셀 개념이 없어 null. */
+  /** 긴 변 상한. GLB·영상은 브라우저가 리사이즈하지 않으므로 null. */
   readonly maxEdgePx: number | null
+  /**
+   * 브라우저 전처리 방식.
+   *
+   * `'webp'` 는 canvas 로 다시 굽는다 — 원본 확장자가 산출물과 무관해지므로 확장자를 보지 않는다.
+   * `'none'` 은 원본 바이트를 그대로 PUT 한다. 그 경우 **확장자가 곧 형식 주장**이라
+   * `checkUploadCandidate` 가 확장자를 강제한다. GLB 와 영상이 같은 이유로 여기에 속한다 —
+   * `'glb'` 특수 케이스를 늘리는 대신 이 필드가 그 분기를 대신한다.
+   */
+  readonly preprocess: 'webp' | 'none'
+  /** 거부 문구에 쓰는 종류 이름. kind 마다 "무엇이" 거부됐는지가 문장에 나와야 한다. */
+  readonly label: string
 }
 
 const MB = 1024 * 1024
 
 export const UPLOAD_POLICIES: Readonly<Record<UploadKind, UploadPolicy>> = {
   // 로켓 카드·멤버 사진·랜딩 이미지·OG. 카드 뷰 전송량이 목적이라 가장 빡빡하다 (요구사항 I16).
-  media: { folder: 'media', extension: 'webp', mime: 'image/webp', maxBytes: 1 * MB, maxEdgePx: 512 },
+  media: { folder: 'media', extension: 'webp', mime: 'image/webp', maxBytes: 1 * MB, maxEdgePx: 512, preprocess: 'webp', label: '이미지' },
   // 히어로·로켓 대표 이미지. 512px 로는 부족해 상향한 대신 용량 상한을 2MB 로 연다.
-  hero: { folder: 'media', extension: 'webp', mime: 'image/webp', maxBytes: 2 * MB, maxEdgePx: 1600 },
+  hero: { folder: 'media', extension: 'webp', mime: 'image/webp', maxBytes: 2 * MB, maxEdgePx: 1600, preprocess: 'webp', label: '이미지' },
   // WebGL 미가용 시 3D 를 대체하는 정지 이미지.
-  poster: { folder: 'poster', extension: 'webp', mime: 'image/webp', maxBytes: 2 * MB, maxEdgePx: 1600 },
+  poster: { folder: 'poster', extension: 'webp', mime: 'image/webp', maxBytes: 2 * MB, maxEdgePx: 1600, preprocess: 'webp', label: '이미지' },
   // 브라우저 전처리가 불가능하다. 빌드타임에 Draco/meshopt 로 줄인 뒤 올린다.
-  glb: { folder: 'glb', extension: 'glb', mime: 'model/gltf-binary', maxBytes: 8 * MB, maxEdgePx: null },
+  glb: { folder: 'glb', extension: 'glb', mime: 'model/gltf-binary', maxBytes: 8 * MB, maxEdgePx: null, preprocess: 'none', label: '3D 모델' },
+  /**
+   * 랜딩 패널 배경 영상. 브라우저에서 트랜스코딩하지 않으므로 **원본 그대로** 올라간다.
+   *
+   * 32MB 는 회선과 `/confirm` 의 HeadObject 만 보고 정한 값이다 — presigned PUT 은
+   * 브라우저 → S3 직행이라 Vercel 함수 본문 제한과 무관하다. 참고로 이노스페이스의 배경 루프는
+   * 854×480 이다. 배경 영상은 작게 쓰는 것이 정상이고 32MB 는 그 용도에 넉넉하다.
+   */
+  video: { folder: 'video', extension: 'mp4', mime: 'video/mp4', maxBytes: 32 * MB, maxEdgePx: null, preprocess: 'none', label: '영상' },
 }
 
 /**
@@ -64,6 +88,8 @@ export const MAX_BYTES_BY_FOLDER: Readonly<Record<KeyFolder, number>> = {
   media: 2 * MB,
   poster: 2 * MB,
   glb: 8 * MB,
+  // 빠뜨리면 `confirmUpload` 의 folderMax 가 0 이 되어 모든 영상 확정이 "0B 이하만" 으로 막힌다.
+  video: 32 * MB,
   temp: 8 * MB,
 }
 
@@ -179,9 +205,14 @@ export function checkUploadCandidate(input: {
       }
     }
     // 이미지는 브라우저에서 WebP 로 다시 구워지므로 원본 확장자는 보지 않는다.
-    // GLB 는 전처리가 없어 확장자가 곧 형식 주장이다 — 그래서 여기서만 확장자를 강제한다.
-    if (policy.extension === 'glb' && fileExtension(filename) !== 'glb') {
-      return { ok: false, code: 'wrong_extension', message: '3D 모델은 .glb 파일만 업로드할 수 있습니다.' }
+    // 전처리가 없는 종류(GLB·영상)는 원본이 그대로 올라가므로 **확장자가 곧 형식 주장**이다.
+    // 종류를 하나씩 적지 않고 `preprocess` 로 판정한다 — 새 형식이 늘어도 여기는 그대로다.
+    if (policy.preprocess === 'none' && fileExtension(filename) !== policy.extension) {
+      return {
+        ok: false,
+        code: 'wrong_extension',
+        message: `${policy.label} 파일은 .${policy.extension} 형식만 업로드할 수 있습니다.`,
+      }
     }
   } else if (isBlockedSource('', normalizedMime)) {
     return { ok: false, code: 'blocked_type', message: '허용되지 않은 파일 형식입니다.' }

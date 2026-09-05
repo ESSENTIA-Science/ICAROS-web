@@ -18,6 +18,25 @@ import type { SectionTheme } from '@/components/landing/Section'
  * 랜딩은 CMS 가 그때그때 고치는 화면이다. cacheComponents 를 끈 상태(04 §Caching posture)에서는
  * DB 만 읽는 페이지가 빌드 타임에 프리렌더돼 버려서 카피를 고쳐도 재배포 전까지 반영되지 않는다.
  * 요청 시각 렌더로 못박아 둔다.
+ *
+ * ─── ISR 전환을 시도했고, 되돌렸다 (2026-09-06) ───────────────────────────────
+ * 무효화 배선은 이미 충분하다 — `_actions/panels.ts`(5곳)·`landing.ts`·`scene.ts` 가 전부
+ * `revalidatePath('/')` 를 부르므로 "published=false 가 계속 보인다"는 문제는 없다.
+ * 막은 것은 **빌드다.** `/` 는 동적 세그먼트가 없는 정적 라우트라 `revalidate` 를 주는 순간
+ * Next 가 빌드 시점에 한 번 프리렌더하고, 그 안의 `getSiteContent()` 가 그대로 나간다.
+ * 실측: `DATABASE_URL=postgres://x@127.0.0.1:1/x npm run build`
+ *   → `Error occurred prerendering page "/"` · `Failed query: select "key","value" from
+ *      "icaros"."site_settings"` · `ECONNREFUSED` · exit 1.
+ * 즉 **배포 빌드가 RDS 도달성을 필수 의존성으로 갖게 된다.** RDS 5432 인바운드는 us-east-1 EC2
+ * 대역 29개로만 열려 있고 그 목록은 날마다 흔들린다(D27) — 빌드가 조용히 타임아웃 나는 날이
+ * 곧 배포가 막히는 날이다. 그 대가를 TTFB 와 바꾸지 않는다.
+ *
+ * `/rocket/[slug]` 처럼 `generateStaticParams(): []` 로 빠져나가는 수는 **동적 세그먼트가 있는
+ * 라우트에만** 있다. `/` 를 캐시하려면 둘 중 하나가 먼저다 —
+ *   (가) `getSiteContentSafe()` 류로 빌드 타임 실패를 흡수 → 배포 직후 **빈 랜딩이 캐시에 박힌다**.
+ *        누가 `/admin` 에서 뭔가 저장하기 전까지 그 상태다. 지금은 받아들일 수 없다.
+ *   (나) `cacheComponents`(PPR) 로 셸/데이터를 갈라 캐시 — 라우트 전반의 Suspense 재설계가 필요하다.
+ * 둘 다 이 파일 밖의 결정이다. 17-nodb-fix-plan.md §7 로 넘긴다.
  */
 export const dynamic = 'force-dynamic'
 
@@ -79,7 +98,7 @@ export async function generateMetadata(): Promise<Metadata> {
           description,
           openGraph: {
             type: 'website',
-            url: 'https://icaros.kr',
+            url: 'https://www.icaros.kr',
             siteName: 'ICAROS',
             title: 'ICAROS',
             description,

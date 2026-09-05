@@ -17,6 +17,13 @@ import type { PanelAnchor, PanelHeight, PanelScrim } from '@/lib/db/schema'
 export interface LandingPanel {
   readonly id: string
   readonly mediaId: string
+  /**
+   * 이 패널이 사진인지 영상인지 가르는 **유일한 값**이다.
+   *
+   * `page_panels` 에는 종류 컬럼이 없다 — `media_id` 가 가리키는 행이 무엇인지가 곧 종류다.
+   * 그래서 컬럼을 더하지 않고 영상 패널이 들어온다. `Panel.tsx` 가 `video/` 접두사로 분기한다.
+   */
+  readonly mime: string
   readonly width: number
   readonly height: number
   readonly alt: string
@@ -37,6 +44,10 @@ export interface LandingPanel {
  * `next/image` 는 `width`/`height` 없이 `fill` 이 아닌 이미지를 못 그리고, 임의 기본값을 주면
  * 비율이 틀린 채로 레이아웃이 잡혀 첫 페인트가 한 번 튄다. `/confirm` 이 `HeadObject` 로
  * 실측해 넣는 값이라, 비어 있다는 것은 그 업로드가 확정되지 않았다는 뜻이다.
+ *
+ * **영상도 같은 필터를 통과해야 한다.** `HeadObject` 는 영상 치수를 모르므로 브라우저가
+ * `<video>` 메타데이터에서 읽어 업로드 페이로드에 실어 보낸다(`lib/image/encode.ts`).
+ * 그 경로가 끊기면 영상 패널은 저장은 되는데 여기서 걸러져 **화면에서 조용히 사라진다.**
  */
 const DEFAULT_ALT = ''
 
@@ -54,6 +65,7 @@ export async function getLandingPanels(): Promise<readonly LandingPanel[]> {
       body: pagePanels.body,
       ctaLabel: pagePanels.ctaLabel,
       ctaHref: pagePanels.ctaHref,
+      mime: media.mime,
       width: media.width,
       height: media.height,
       alt: media.originalFilename,
@@ -70,6 +82,7 @@ export async function getLandingPanels(): Promise<readonly LandingPanel[]> {
     .map((r) => ({
       id: r.id,
       mediaId: r.mediaId,
+      mime: r.mime,
       width: r.width!,
       height: r.height!,
       alt: r.alt ?? DEFAULT_ALT,

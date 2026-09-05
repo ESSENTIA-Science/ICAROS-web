@@ -28,13 +28,24 @@ export interface UploadOptions {
 
 export interface UploadResult {
   mediaId: string
-  /** `next/image` 의 `src` 로 그대로 쓰는 안정적 URL. */
+  /** `next/image` 나 `<video>` 의 `src` 로 그대로 쓰는 안정적 URL. */
   url: string
   size: number
+  /**
+   * 확정된 Content-Type. **폼이 이 값으로 미리보기를 고른다** —
+   * 같은 media 행이 사진일 수도 영상일 수도 있고, 화면에서 그 둘은 다른 태그다.
+   */
+  mime: string
   width: number | null
   height: number | null
 }
 
+/**
+ * 치수(`width`/`height`)는 **전처리 단계에서만** 알 수 있다 — 이미지는 캔버스가, 영상은
+ * `<video>` 메타데이터가 준다. 서버의 `HeadObject` 는 바이트 수와 타입만 보므로 여기서
+ * 실어 보내지 않으면 `media.width`/`height` 가 null 로 남고, 그러면 `getLandingPanels()` 가
+ * 그 패널을 버린다. presign 과 confirm 양쪽에 같은 값을 싣는 이유가 그것이다.
+ */
 export async function uploadFile(file: File, options: UploadOptions): Promise<UploadResult> {
   const prepared = await prepareUpload(file, options.kind)
 
@@ -73,6 +84,7 @@ export async function uploadFile(file: File, options: UploadOptions): Promise<Up
     mediaId: confirmed.id,
     url: confirmed.url,
     size: confirmed.size,
+    mime: confirmed.mime,
     width: confirmed.width,
     height: confirmed.height,
   }

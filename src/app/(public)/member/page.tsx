@@ -6,8 +6,17 @@ import { groupBySquad, listMembers } from './_data'
 import styles from './page.module.css'
 
 /**
- * ISR 을 쓰지 않는다. published=false 전환이 revalidate 주기 동안(+stale-while-revalidate)
- * 명단에 그대로 노출돼 E5 를 깬다 (rocket/[slug]/page.tsx 와 같은 근거).
+ * ISR 을 쓰지 않는다. **다만 이유가 바뀌었다 (2026-09-06).**
+ *
+ * 예전 근거는 "published=false 가 revalidate 주기 동안 명단에 남아 E5 를 깬다"였다. 그건 이제
+ * 근거가 아니다 — `_actions/members.ts` 의 세 mutation 전부가 `revalidatePath('/member')` 를
+ * 부르므로 시간 기반이 아닌 온디맨드 무효화가 걸린다(창이 0이다).
+ *
+ * 지금 막는 것은 **빌드다.** `/member` 는 동적 세그먼트가 없어서 `revalidate` 를 주면 빌드 시점에
+ * 프리렌더되고 `listMembers()` 가 그대로 DB 로 나간다. 죽은 포트 빌드에서 `/` 가 같은 이유로
+ * ECONNREFUSED 로 죽는 것을 실측했다(`page.tsx` 주석에 명령과 출력이 있다).
+ * 배포 빌드를 RDS 도달성에 묶지 않는다는 규칙이 TTFB 보다 위다 (D27).
+ * `generateStaticParams(): []` 우회는 동적 세그먼트가 있는 라우트에만 쓸 수 있다.
  */
 export const dynamic = 'force-dynamic'
 
