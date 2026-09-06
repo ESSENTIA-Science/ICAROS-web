@@ -119,7 +119,19 @@ function maintenanceHtml(): string {
 }
 
 export function middleware(req: NextRequest): NextResponse {
-  if (!isShutterDown()) return NextResponse.next()
+  /**
+   * 진단 헤더. **미들웨어가 도는가**와 **환경변수가 닿는가**는 증상이 똑같다 —
+   * 둘 다 "셔터가 안 내려간다"로만 보인다. 헤더가 없으면 전자, `unset` 이면 후자다.
+   * 값 자체는 비밀이 아니다(on/off/unset).
+   */
+  const raw = (process.env.MAINTENANCE_MODE ?? '').trim().toLowerCase()
+  const probe = raw === '' ? 'unset' : raw
+
+  if (!isShutterDown()) {
+    const pass = NextResponse.next()
+    pass.headers.set('x-icaros-shutter', probe)
+    return pass
+  }
 
   const { pathname, searchParams } = req.nextUrl
 
@@ -161,6 +173,7 @@ export function middleware(req: NextRequest): NextResponse {
       // 셔터를 올린 뒤에도 점검 화면이 캐시에 남아 있으면 올린 것이 올린 것이 아니다.
       'Cache-Control': 'no-store, must-revalidate',
       'X-Robots-Tag': 'noindex',
+      'x-icaros-shutter': probe,
     },
   })
 }
