@@ -50,6 +50,13 @@
       "when": 1787801629324,
       "tag": "0006_wide_old_lace",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788712479851,
+      "tag": "0007_smiling_toad_men",
+      "breakpoints": true
     }
   ]
 }

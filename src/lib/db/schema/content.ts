@@ -23,6 +23,44 @@ export const pageSections = icaros.table(
 )
 
 /**
+ * 기체 분류 — `rocket_series` **위에 얹는 한 층**.
+ *
+ * 공개 화면이 VEHICLES 로 가면서 로켓 하나만 있던 자리에 위성·UAV 가 나란히 선다.
+ * 그런데 `rocket_series` 는 평평한 목록이라(`ICX 1/2 Series`·`ICX MV Series`) 그 셋을
+ * 표현할 자리가 없었다. 시리즈를 늘려 `UAV Series` 를 끼워 넣는 방법도 있었지만,
+ * 그러면 "계열"과 "종류"가 같은 목록에 섞여 정렬 하나로 둘 다 표현해야 한다.
+ * 층을 하나 올리는 쪽이 싸다 — 시리즈 스키마는 그대로 두고 부모만 붙인다.
+ *
+ * 모양은 `rocket_series` 와 의도적으로 같다. 같은 종류의 것이 같은 모양이면
+ * `/admin` 의 편집 폼·정렬·검증을 그대로 재사용할 수 있다.
+ *
+ * **`id` 는 만든 뒤 바꿀 수 없다** — `rocket_series.id` 와 같은 이유다.
+ * 이 값이 공개 URL(`/vehicles/rockets`)에 그대로 나가므로, 바꾸면 그 분류를 가리키던
+ * 링크·북마크가 전부 죽는다. 표시에 쓰이는 것은 `label` 이니 실무상 아쉬울 일이 없다.
+ *
+ * 미디어는 갖지 않는다. **나중에 분류별 대표 이미지를 붙인다면 그 컬럼은 `media.id` 를
+ * 가리키게 되고, 그 순간 `src/lib/s3/media-references.ts` 의 `MEDIA_FK_COLUMNS` 에
+ * 등록해야 한다** — 빠뜨리면 정리 cron 이 살아 있는 사진을 지운다 (D28).
+ * `db:verify` 가 잡아 주기는 하지만, 잡히기 전에 여기를 읽는 편이 낫다.
+ */
+export const vehicleTypes = icaros.table(
+  'vehicle_types',
+  {
+    /** URL 에 나가는 값. 'rockets' | 'satellites' | 'uavs'. */
+    id: text('id').primaryKey(),
+    label: text('label').notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check('vehicle_types_id_ck', sql`${t.id} ~ '^[A-Za-z0-9][A-Za-z0-9-]{0,31}$'`),
+    check('vehicle_types_label_ck', sql`length(btrim(${t.label})) > 0`),
+    index('vehicle_types_order_idx').on(t.sortOrder),
+  ]
+)
+
+/**
  * 로켓 카테고리(시리즈).
  *
  * 원래는 `rockets.series` 의 CHECK `in ('A','B')` 와 `components/rocket/series.ts` 의 배열,
@@ -39,6 +77,20 @@ export const rocketSeries = icaros.table(
     /** URL 에 나가는 값. 기존 데이터가 'A'·'B' 라 대문자를 허용한다. */
     id: text('id').primaryKey(),
     label: text('label').notNull(),
+    /**
+     * 상위 분류. `rockets.series` 가 `rocket_series` 를 가리키는 방식과 **똑같다** —
+     * `restrict` 인 이유도 같다: cascade 였다면 분류 하나를 지우는 순간 그 안의 시리즈가,
+     * 그 시리즈에 달린 기체까지 연쇄로 사라진다. 비우고 나서 지우게 만든다.
+     *
+     * `default 'rockets'` 는 백필용이다. 이 컬럼이 생길 때 존재하던 시리즈는 전부 로켓이라
+     * 기본값이 그대로 정답이고, 그래서 NOT NULL 을 한 번에 걸 수 있다.
+     */
+    typeId: text('type_id')
+      .notNull()
+      .default('rockets')
+      .references(() => vehicleTypes.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    /** 시리즈 설명. `rockets.description_md` 와 같은 성격 — 같은 렌더러를 쓴다. */
+    descriptionMd: text('description_md'),
     sortOrder: integer('sort_order').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -118,6 +170,12 @@ export const members = icaros.table(
     role: text('role'),
     squad: text('squad'),                  // 추진공학부 / 전자부 / 비행제어부 / ...
     school: text('school'),
+    /**
+     * 멤버 카드 옆에 붙는 짧은 소개글. `rockets.description_md` 와 같은 성격이라
+     * 같은 렌더러(`react-markdown`)를 그대로 쓴다 — 문법을 두 벌 만들지 않는다.
+     * nullable 이다: 소개글이 없는 부원이 카드에서 빠지면 안 된다.
+     */
+    bioMd: text('bio_md'),
     imageMediaId: uuid('image_media_id'),
     legacyImagePath: text('legacy_image_path'),  // 전환용 — rockets 와 동일
     published: boolean('published').notNull().default(true),

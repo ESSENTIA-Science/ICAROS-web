@@ -14,9 +14,11 @@ import {
 } from '../_data/rockets'
 import { adminHref, type AdminSubview } from '../_tabs'
 import RocketSeriesPanel from './RocketSeriesPanel'
+import VehicleTypesPanel from './VehicleTypesPanel'
 
 const LIST_HREF = adminHref({ tab: 'rockets' })
 const SERIES_HREF = adminHref({ tab: 'rockets', sub: 'series' })
+const TYPES_HREF = adminHref({ tab: 'rockets', sub: 'types' })
 
 /** 목록 한 줄에 붙는 요약. 값이 없는 항목은 아예 넣지 않는다 — `— m` 같은 빈 단위를 보여 주지 않는다. */
 function specSummary(r: AdminRocketListItem): string {
@@ -45,10 +47,18 @@ export default async function RocketsPanel({
   deleteId: string | undefined
   saved: string | undefined
 }) {
-  // 카테고리 관리는 같은 탭의 하위 화면이다. 판정을 맨 앞에 두어 아래 분기가 섞이지 않게 한다.
+  /**
+   * 택소노미 관리는 둘 다 같은 탭의 하위 화면이다. 판정을 맨 앞에 두어 아래 분기가 섞이지 않게 한다.
+   * `sub` 는 `parseSubview` 가 이미 좁혀 놓은 값이라 여기서 다시 검증하지 않는다.
+   */
   if (sub === 'series') {
     return (
       <RocketSeriesPanel create={create} editId={editId} deleteId={deleteId} saved={saved} />
+    )
+  }
+  if (sub === 'types') {
+    return (
+      <VehicleTypesPanel create={create} editId={editId} deleteId={deleteId} saved={saved} />
     )
   }
 
@@ -57,16 +67,16 @@ export default async function RocketsPanel({
 
   if (create) {
     const seriesOptions = await listRocketSeriesOptions()
-    // 카테고리가 없으면 로켓을 만들 수 없다. 폼을 띄워 놓고 저장에서 막는 것보다
+    // 시리즈가 없으면 기체를 만들 수 없다. 폼을 띄워 놓고 저장에서 막는 것보다
     // 여기서 할 일을 알려 주는 편이 낫다 — 저장 실패 문구로는 무엇을 해야 할지 안 보인다.
     if (seriesOptions.length === 0) {
       return (
         <>
           <Notice tone="error">
-            등록된 카테고리가 없어 로켓을 만들 수 없습니다. 카테고리를 먼저 하나 추가해 주세요.
+            등록된 시리즈가 없어 기체를 만들 수 없습니다. 시리즈를 먼저 하나 추가해 주세요.
           </Notice>
           <Link className={`${ui.btn} ${ui.btnPrimary}`} href={SERIES_HREF}>
-            카테고리 관리
+            시리즈 관리
           </Link>
         </>
       )
@@ -75,7 +85,7 @@ export default async function RocketsPanel({
     return (
       <>
         <div className={ui.panelHead}>
-          <h2 className={ui.panelTitle}>새 로켓</h2>
+          <h2 className={ui.panelTitle}>새 기체</h2>
         </div>
         <div className={ui.card}>
           <RocketForm
@@ -114,7 +124,7 @@ export default async function RocketsPanel({
       return (
         <>
           <Notice tone="error">
-            해당 로켓을 찾을 수 없습니다. 다른 곳에서 이미 삭제되었을 수 있습니다.
+            해당 기체를 찾을 수 없습니다. 다른 곳에서 이미 삭제되었을 수 있습니다.
           </Notice>
           <Link className={ui.btn} href={LIST_HREF}>
             목록으로
@@ -135,7 +145,7 @@ export default async function RocketsPanel({
           <div>
             <h2 className={ui.panelTitle}>{rocket.name}</h2>
             <p className={ui.panelLede}>
-              <span className={ui.mono}>/rocket/{rocket.id}</span>
+              <span className={ui.mono}>/vehicles/{rocket.id}</span>
             </p>
           </div>
         </div>
@@ -182,27 +192,31 @@ export default async function RocketsPanel({
       <div className={ui.panelHead}>
         <div>
           <h2 className={ui.panelTitle} lang="en">
-            Rockets
+            Vehicles
           </h2>
           <p className={ui.panelLede}>
-            공개 목록은 시리즈별로 나뉘고 정렬순서를 따릅니다. 비공개 로켓은 목록과 직접 URL
-            양쪽에서 보이지 않습니다.
+            공개 목록(<span className={ui.mono}>/vehicles</span>)은 분류 → 시리즈 두 줄 탭으로
+            나뉘고 각 시리즈 안에서 정렬순서를 따릅니다. 비공개 기체는 목록과 직접 URL 양쪽에서
+            보이지 않습니다.
           </p>
         </div>
         <div className={ui.rowActions}>
+          <Link className={ui.btn} href={TYPES_HREF}>
+            분류 관리
+          </Link>
           <Link className={ui.btn} href={SERIES_HREF}>
-            카테고리 관리
+            시리즈 관리
           </Link>
           <Link
             className={`${ui.btn} ${ui.btnPrimary}`}
             href={adminHref({ tab: 'rockets', create: true })}
           >
-            새 로켓
+            새 기체
           </Link>
         </div>
       </div>
 
-      {saved === 'deleted' ? <Notice tone="ok">로켓을 삭제했습니다.</Notice> : null}
+      {saved === 'deleted' ? <Notice tone="ok">기체를 삭제했습니다.</Notice> : null}
       {saved !== undefined && saved !== 'deleted' ? (
         <Notice tone="ok">저장했습니다. 공개 페이지에 반영되었습니다.</Notice>
       ) : null}
@@ -218,12 +232,12 @@ export default async function RocketsPanel({
       ) : null}
 
       {deleteId !== undefined && !target ? (
-        <Notice tone="error">삭제하려는 로켓을 찾을 수 없습니다.</Notice>
+        <Notice tone="error">삭제하려는 기체를 찾을 수 없습니다.</Notice>
       ) : null}
 
       <div className={ui.list}>
         {rockets.length === 0 ? (
-          <p className={ui.empty}>등록된 로켓이 없습니다.</p>
+          <p className={ui.empty}>등록된 기체가 없습니다.</p>
         ) : (
           rockets.map((r) => (
             <div className={ui.row} key={r.id}>

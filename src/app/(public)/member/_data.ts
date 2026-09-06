@@ -13,6 +13,12 @@ export type MemberDto = {
   role: string | null
   squad: string | null
   school: string | null
+  /**
+   * 카드 옆에 붙는 개인 소개글 (Markdown). 없으면 null 이고, 뷰는 그 자리에 **아무것도**
+   * 그리지 않는다 — 27명 중 대부분이 당분간 비어 있으므로 "소개 없음" 같은 자리표시자를
+   * 두면 명단 전체가 빈 칸의 격자가 된다.
+   */
+  bioMd: string | null
   imageSrc: string
   /**
    * 실제 사진인지, 27명 중 23명이 공유하는 플레이스홀더인지.
@@ -46,6 +52,7 @@ export async function listMembers(): Promise<MemberDto[]> {
       role: schema.members.role,
       squad: schema.members.squad,
       school: schema.members.school,
+      bioMd: schema.members.bioMd,
       // 신규(S3) 와 레거시(레포 public/) 두 세대가 공존한다. P9 가 레거시를 옮기면 뒤엣것을 뺀다.
       // media 를 left join 해 ready + 미삭제일 때만 신규 경로를 쓴다 — 조인 없이 컬럼만 읽으면
       // 미디어가 정리된 뒤에도 죽은 URL 을 계속 내보낸다.
@@ -72,6 +79,8 @@ export async function listMembers(): Promise<MemberDto[]> {
       role: blankToNull(r.role),
       squad: blankToNull(r.squad),
       school: blankToNull(r.school),
+      // 공백만 남은 본문은 "없음"과 같다. trim 은 앞뒤만 깎으므로 문단 구분 개행은 살아 있다.
+      bioMd: blankToNull(r.bioMd),
       imageSrc,
       hasPhoto: imageSrc !== MEMBER_PLACEHOLDER,
     }

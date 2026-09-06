@@ -87,22 +87,22 @@ const CHECKS: readonly Check[] = [
     containsAny: ['data-scrim=', 'aria-labelledby='],
     note: '랜딩 — 패널 또는 섹션이 최소 1개',
   },
-  { path: '/rocket', db: true, expect: 200, note: '기체 목록 · 시리즈 탭' },
+  { path: '/vehicles', db: true, expect: 200, note: '기체 목록 · 분류·시리즈 탭' },
   { path: '/member', db: true, expect: 200, contains: 'data-reveal-item="', note: '멤버 — 카드 최소 1장' },
   { path: '/posts', db: true, expect: 200, note: 'Community 병합 피드' },
   { path: '/admin', db: true, expect: 200, note: '로그인 화면 (인증 게이트)' },
-  { path: '/rocket/nonexistent-slug-smoke', db: true, expect: 404, note: '비공개·부재 기체' },
+  { path: '/vehicles/nonexistent-slug-smoke', db: true, expect: 404, note: '비공개·부재 기체' },
 ]
 
 /**
  * 동적 상세 라우트는 **실제 것 하나를 목록에서 찾아** 확인한다.
  *
  * 슬러그를 하드코딩하면 그 항목이 사라지는 날 스모크가 거짓으로 실패하고, 아예 빼 두면
- * 상세 페이지가 깨져도 통과한다. 위 목록에 `/rocket/nonexistent…`(404)만 있던 것이 그 상태였다 —
+ * 상세 페이지가 깨져도 통과한다. 위 목록에 `/vehicles/nonexistent…`(404)만 있던 것이 그 상태였다 —
  * **없는 것은 확인하는데 있는 것은 확인하지 않았다.**
  */
 const DYNAMIC: readonly { list: string; pattern: RegExp; note: string }[] = [
-  { list: '/rocket', pattern: /\/rocket\/([a-z0-9-]+)/, note: '기체 상세' },
+  { list: '/vehicles', pattern: /\/vehicles\/([a-z0-9-]+)/, note: '기체 상세' },
   { list: '/posts', pattern: /\/posts\/legacy\/([a-z0-9-]+)/, note: '레거시 글 상세' },
   { list: '/posts', pattern: /href="\/posts\/([0-9a-f-]{36})"/, note: '상류 글 상세' },
 ]

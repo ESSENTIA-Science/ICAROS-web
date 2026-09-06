@@ -620,13 +620,16 @@ function toHotspotValues(modelId: string, hotspots: readonly ParsedHotspot[]) {
 }
 
 /**
- * 3D 는 홈 히어로(B12)와 로켓 상세 양쪽에 걸린다.
- * 지금은 force-dynamic 이라 즉시 반영되지만, ISR 로 바꿀 때를 대비해 배선해 둔다.
+ * 3D 는 홈 히어로(B12)와 기체 상세 양쪽에 걸린다.
+ *
+ * 경로는 `/vehicles` 다 — `/rocket` 라우트는 사라졌고 301 만 남았다. 옛 경로로 무효화하면
+ * 오타처럼 조용히 아무것도 지우지 않는다. 홈과 목록은 force-dynamic 이지만
+ * **상세(`/vehicles/[slug]`)는 SSG** 라 마지막 줄이 유일한 무효화 수단이다.
  */
 function revalidateScene(): void {
   revalidatePath('/')
-  revalidatePath('/rocket')
-  revalidatePath('/rocket/[slug]', 'page')
+  revalidatePath('/vehicles')
+  revalidatePath('/vehicles/[slug]', 'page')
 }
 
 function describeWriteError(err: unknown): ActionResult {

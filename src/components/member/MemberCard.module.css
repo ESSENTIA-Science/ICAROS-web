@@ -1,4 +1,34 @@
-.card { display: grid; gap: var(--sp-3); align-content: start; }
+.card { display: grid; align-content: start; row-gap: var(--sp-5); }
+
+/**
+ * 소개글이 있는 카드만 **행을 통째로** 쓴다.
+ *
+ * 요구의 출발점은 "1명뿐인 부서에서 내 옆이 비어 있다"였다. 격자가
+ * `repeat(auto-fill, minmax(15rem, 1fr))` 이라 카드 한 장이면 오른쪽 3~5칸이 그냥 빈다.
+ * 그 자리를 글이 쓰게 하는 것이 전부다.
+ *
+ * **`span 2` 가 아니라 `1 / -1` 인 이유.** 자동 배치에서 `span N` 은 열이 모자라면
+ * *암시적 열을 만들어* 격자의 열 수 자체를 늘린다 — 좁은 화면에서 옆 카드들까지 폭이
+ * 어긋난다. `-1` 은 **명시적 격자의 끝**이라 열을 절대 새로 만들지 않는다.
+ * 열이 1개뿐인 상황에서도 그냥 한 칸이 되어 조용히 접힌다.
+ *
+ * **소개글이 있는 사람과 없는 사람이 섞여도 무너지지 않는다.** 없는 카드는 평소대로 한 칸이고,
+ * 있는 카드만 자기 행을 가져간다. 최악의 경우 바로 앞 행 끝에 빈 칸이 남을 뿐이다.
+ * `grid-auto-flow: dense` 로 그 구멍을 메우지 않는 이유: dense 는 뒤 카드를 앞으로 끌어와
+ * **화면 순서와 DOM 순서를 어긋나게** 한다. 이 명단의 순서는 sort_order 가 정한 조직도 순서고,
+ * 키보드·스크린리더가 읽는 순서가 그것과 달라지면 안 된다. 구멍 하나가 더 싸다.
+ */
+.card[data-bio] {
+  grid-column: 1 / -1;
+  /* 사진 칸은 옆 카드와 **같은 폭**으로 남긴다. `--member-col` 은 격자를 만드는 쪽
+     (`member/page.module.css` 의 `.grid`)이 정의한다 — 한쪽만 고쳐 어긋나지 않도록
+     같은 값을 상속받는다. 정의가 사라져도 폴백으로 격자 최소폭과 같은 값이 된다. */
+  grid-template-columns: minmax(0, var(--member-col, 15rem)) minmax(0, 1fr);
+  column-gap: var(--grid-gap-x);
+}
+
+/* 사진 + 이름/역할/학교. 소개글 유무와 무관하게 이 덩어리의 조판은 항상 같다 */
+.main { display: grid; gap: var(--sp-3); align-content: start; }
 
 .figure {
   position: relative;
@@ -53,4 +83,85 @@
   font-size: var(--fs-caption);
   line-height: var(--lh-body-s);
   color: var(--fg-muted);
+}
+
+/**
+ * 소개글 본문. `RocketDescription.module.css` 의 `.prose` 와 같은 규칙 묶음이되
+ * **카드 옆에 서는 크기**로 낮춘 것이다 (본문 --fs-body-l → --fs-body).
+ *
+ * 폭을 `--measure` 로 묶는다: 넓은 화면에서 이 칸은 80rem 까지 벌어지는데, 그대로 두면
+ * 한 줄이 읽기 한계를 훌쩍 넘긴다. 남는 자리는 그냥 비워 둔다.
+ */
+.bio {
+  max-width: var(--measure);
+  color: var(--fg-muted);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+}
+
+/* 모듈 CSS 가 globals.css 의 `:lang(ko)` 를 특이도로 이긴다 — 한글 자간을 여기서 못 박는다 */
+.bio:lang(ko) { letter-spacing: 0; }
+
+.bio > * + * { margin-top: var(--sp-4); }
+.bio > :first-child { margin-top: 0; }
+
+/* 이미지만 있던 문단은 img 를 걷어내고 나면 빈 <p> 로 남는다 (실측). 여백만 만들고 끝나므로 접는다 */
+.bio p:empty { display: none; }
+
+/* 카드 옆 한 문단짜리 글에 제목이 커질 자리는 없다. 굵기와 밝기로만 구분한다 */
+.bio :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--fg);
+  font-family: var(--ff-body);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-body);
+  letter-spacing: 0;
+  margin-top: var(--sp-5);
+}
+
+.bio strong { color: var(--fg); font-weight: var(--fw-strong); }
+
+.bio a {
+  color: var(--sig-ink);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.bio :is(ul, ol) {
+  padding-left: var(--sp-5);
+  list-style: revert;
+}
+.bio li + li { margin-top: var(--sp-2); }
+
+/* mono 팔레트에서 `--sig` 는 흰색이다 — 인용 막대에 쓰면 본문보다 밝아진다. 규칙선으로 낮춘다 */
+.bio blockquote {
+  border-left: 1px solid var(--rule-strong);
+  padding-left: var(--sp-4);
+}
+
+/* 같은 이유로 배경 칩을 쓰지 않는다: mono 에서 `--bg-sunken` 은 배경과 같은 검정이다 */
+.bio code {
+  font-family: var(--ff-mono);
+  font-size: 0.9em;
+  color: var(--fg);
+}
+
+@media (max-width: 999px) {
+  /* 격자가 2~3열로 줄어든다. 사진 칸을 15rem 으로 붙들고 있으면 글 칸이 먼저 짜부라진다.
+     조판 규칙은 그대로 두고 **변수만** 카드 안에서 좁힌다 — 위 선언이 그대로 다시 계산된다 */
+  .card[data-bio] { --member-col: 12rem; }
+}
+
+@media (max-width: 599px) {
+  /**
+   * 2열 격자다 — 옆에 글을 세울 가로 폭이 실제로 없다. 억지로 나누면 글 칸이 9~10글자로
+   * 접힌다. 그래서 아래로 내린다. 대신 사진·이름은 **정확히 한 칸 폭**에 남겨
+   * 옆 카드들과 크기가 어긋나지 않게 한다.
+   */
+  .card[data-bio] {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--sp-4);
+  }
+  .card[data-bio] .main { max-width: calc((100% - var(--grid-gap-x)) / 2); }
+  .bio { font-size: var(--fs-body-s); }
 }

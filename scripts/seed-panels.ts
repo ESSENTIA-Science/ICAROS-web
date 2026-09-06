@@ -98,7 +98,7 @@ const PANELS = [
     headline: 'Two launches.\nBoth recovered.',
     body: '2026-07-18 알뜨르에서 ICX-1A, 2026-08-17 금악에서 RAON. 둘 다 점화와 회수에 성공했고, RAON 은 사출장치가 오작동해 목표 고도에는 닿지 못했습니다.',
     ctaLabel: '기체 전체 보기',
-    ctaHref: '/rocket',
+    ctaHref: '/vehicles',
   },
   {
     file: 'uav-tvc-assembly.webp',
@@ -112,7 +112,7 @@ const PANELS = [
     headline: 'Landing is the\nharder half.',
     body: 'EDF 추력편향 기체는 로켓의 재착륙 기술을 확보하려고 시작했습니다. 2026-08-05 자동 호버링까지 왔습니다.',
     ctaLabel: '기체 전체 보기',
-    ctaHref: '/rocket',
+    ctaHref: '/vehicles',
   },
   {
     file: 'crew-altteureu.webp',

@@ -231,6 +231,7 @@ function buildSection(row: SectionRow, c: SiteContent, ctx: BuildContext): Secti
         outro: c['donate.outro'],
         current: toNumber(c['donation.current']),
         goal: toNumber(c['donation.goal']),
+        roundLabel: c['donation.round_label'],
         ctaLabel: c['donate.cta_label'],
         ctaHref: ctx.donateCtaHref,
       }

@@ -111,6 +111,16 @@ export const LANDING_GROUPS: readonly LandingGroup[] = [
         required: true,
       },
       { key: 'donation.current', label: '현재 모금액 (원)', kind: 'number', required: true },
+      {
+        key: 'donation.round_label',
+        label: '후원 차수 표기',
+        kind: 'text',
+        hint:
+          '금액 옆에 작게 붙는 표기입니다. 예: 1–3차. ' +
+          '여러 차수를 합쳐 받는 중이면 그대로 적으면 됩니다. 비워 두면 아무것도 표시되지 않습니다.',
+        // 차수를 쓰지 않는 시기가 정상 상태다 — required 로 두면 그때 랜딩 저장이 통째로 막힌다.
+        required: false,
+      },
     ],
   },
   {

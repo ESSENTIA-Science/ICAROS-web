@@ -4,13 +4,17 @@ import { cache } from 'react'
 import { and, asc, eq, isNull } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
 import { mediaUrl } from '@/lib/image/contract'
-import type { RocketSeries, RocketSeriesOption } from '@/components/rocket/series'
+import type {
+  RocketSeries,
+  VehicleTaxonomy,
+  VehicleType,
+} from '@/components/rocket/series'
 
 /**
- * 공개 로켓 DAL. 라우트 밖으로 원본 행을 내보내지 않고 DTO 만 돌려준다.
+ * 공개 기체 DAL. 라우트 밖으로 원본 행을 내보내지 않고 DTO 만 돌려준다.
  *
  * `published = false` 는 목록·상세·generateStaticParams 세 경로 모두에서 걸러진다 (C8).
- * 한 군데라도 빠지면 비공개 로켓이 직접 URL 로 새기 때문에 필터를 헬퍼 하나로 모았다.
+ * 한 군데라도 빠지면 비공개 기체가 직접 URL 로 새기 때문에 필터를 헬퍼 하나로 모았다.
  */
 const isPublic = eq(schema.rockets.published, true)
 
@@ -30,6 +34,12 @@ export type RocketListItem = {
   series: RocketSeries
   /** 조인해서 같이 들고 온다. 라벨을 쓰려고 화면에서 시리즈 목록을 또 읽지 않도록. */
   seriesLabel: string
+  /**
+   * 시리즈의 상위 분류. 목록 격자는 쓰지 않고 **상세의 뒤로가기 링크**가 쓴다 —
+   * 기체가 어느 탭에서 왔는지는 시리즈만으로는 알 수 없다.
+   * 조인이 비면(시리즈 행이 사라진 이상 상태) null 이고, 링크는 `/vehicles` 로 접힌다.
+   */
+  typeId: VehicleType | null
   imageSrc: string | null
   maxAltitudeM: string | null
   sizeM: string | null
@@ -73,6 +83,7 @@ const listColumns = {
   name: schema.rockets.name,
   series: schema.rockets.series,
   seriesLabel: schema.rocketSeries.label,
+  typeId: schema.rocketSeries.typeId,
   coverMediaId: schema.media.id,
   legacyImagePath: schema.rockets.legacyImagePath,
   maxAltitudeM: schema.rockets.maxAltitudeM,
@@ -85,6 +96,7 @@ type RawListRow = {
   name: string
   series: string
   seriesLabel: string | null
+  typeId: string | null
   coverMediaId: string | null
   legacyImagePath: string | null
   maxAltitudeM: string | null
@@ -99,6 +111,7 @@ function toListItem(row: RawListRow): RocketListItem {
     series: row.series,
     // FK 가 있으니 조인은 항상 맞지만, left join 이라 타입은 null 가능이다.
     seriesLabel: row.seriesLabel ?? row.series,
+    typeId: row.typeId,
     imageSrc: resolveImageSrc(row.coverMediaId, row.legacyImagePath),
     maxAltitudeM: trimNumeric(row.maxAltitudeM),
     sizeM: trimNumeric(row.sizeM),
@@ -134,19 +147,36 @@ export async function listRocketsBySeries(series: RocketSeries): Promise<RocketL
 }
 
 /**
- * 카테고리 목록. **`/rocket` 탭의 원본**이다.
+ * 분류 + 시리즈. **`/vehicles` 두 줄 탭의 원본**이다.
+ *
+ * 둘을 한 함수로 묶은 이유: 부모-자식 판정을 하는 함수(`seriesOfType`·`parseVehicleType`)가
+ * 전부 두 목록을 **같이** 본다. 따로 읽어 오게 두면 호출부마다 둘 중 하나를 빠뜨릴 수 있고,
+ * 그러면 "분류는 있는데 시리즈가 안 보인다"가 조용히 생긴다.
  *
  * `cache()` 로 감싼 이유는 한 요청 안에서 여러 곳이 부르기 때문이다 —
  * `generateMetadata` 가 canonical 을 정하려고, 페이지가 탭을 그리려고, 상세가 뒤로가기
  * 링크를 만들려고 각각 부른다. 요청 단위 캐시라 관리 화면 수정이 늦게 반영되지는 않는다.
+ *
+ * 두 쿼리를 `Promise.all` 로 묶지 않는다. 커넥션을 동시에 둘 잡는 것이 이득보다 크다 —
+ * 인스턴스당 풀이 작고 Fluid Compute 는 인스턴스를 여러 개 띄운다 (D26).
  */
-export const listRocketSeries = cache(async (): Promise<RocketSeriesOption[]> => {
-  const rows = await db
-    .select({ id: schema.rocketSeries.id, label: schema.rocketSeries.label })
+export const listVehicleTaxonomy = cache(async (): Promise<VehicleTaxonomy> => {
+  const types = await db
+    .select({ id: schema.vehicleTypes.id, label: schema.vehicleTypes.label })
+    .from(schema.vehicleTypes)
+    .orderBy(asc(schema.vehicleTypes.sortOrder), asc(schema.vehicleTypes.id))
+
+  const series = await db
+    .select({
+      id: schema.rocketSeries.id,
+      label: schema.rocketSeries.label,
+      typeId: schema.rocketSeries.typeId,
+      descriptionMd: schema.rocketSeries.descriptionMd,
+    })
     .from(schema.rocketSeries)
     .orderBy(asc(schema.rocketSeries.sortOrder), asc(schema.rocketSeries.id))
 
-  return rows
+  return { types, series }
 })
 
 /**
@@ -205,7 +235,14 @@ export const getRocket = cache(async (slug: string): Promise<RocketDetail | null
   }
 })
 
-/** generateStaticParams 용. 비공개는 프리렌더 목록에도 넣지 않는다. */
+/**
+ * generateStaticParams 용. 비공개는 프리렌더 목록에도 넣지 않는다 (C8).
+ *
+ * **지금은 아무도 부르지 않는다** — `[slug]/page.tsx` 의 `generateStaticParams()` 가 `[]` 를
+ * 반환하기 때문이다(빌드가 RDS 도달성을 요구하지 않게 하려고). 그래도 지우지 않는다:
+ * 언젠가 프리렌더 목록을 실제로 채우게 될 때 여기 없으면 호출부가 쿼리를 새로 쓰게 되고,
+ * 그 쿼리에 `published` 필터가 빠지는 것이 정확히 C8 이 막으려는 사고다.
+ */
 export async function listPublishedRocketSlugs(): Promise<string[]> {
   const rows = await db
     .select({ slug: schema.rockets.id })

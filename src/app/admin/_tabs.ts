@@ -5,7 +5,18 @@
 export const ADMIN_TABS = [
   { id: 'posts', label: 'Posts' },
   { id: 'panels', label: 'Panels' },
-  { id: 'rockets', label: 'Rockets' },
+  /**
+   * 라벨은 Vehicles 인데 **id 는 `rockets` 그대로다.**
+   *
+   * 공개 라우트가 `/rocket` → `/vehicles` 로 옮겨 갈 때는 301 을 남길 수 있었지만
+   * `?tab=` 에는 그럴 자리가 없다 — `parseTab` 이 모르는 값을 **조용히 기본 탭으로 접는다.**
+   * 지금 기본 탭이 마침 이 탭이라 옛 `?tab=rockets` 북마크가 우연히 맞게 떨어지지만,
+   * 그건 `DEFAULT_TAB` 을 언젠가 옮기는 순간 사라지는 우연이다. 그때 증상은
+   * "북마크가 엉뚱한 탭을 연다"이고 원인은 이 줄에 있는데 여기를 보게 될 이유가 없다.
+   *
+   * id 는 화면에 나오지 않는다(라벨이 나온다). 바꿔서 얻는 것이 없다.
+   */
+  { id: 'rockets', label: 'Vehicles' },
   { id: 'members', label: 'Members' },
   { id: 'landing', label: 'Landing' },
 ] as const
@@ -35,12 +46,14 @@ export function firstParam(raw: string | string[] | undefined): string | undefin
 }
 
 /**
- * 탭 안의 하위 화면. 지금은 Rockets 탭의 카테고리 관리 하나뿐이다.
+ * 탭 안의 하위 화면. 둘 다 Vehicles 탭의 택소노미 관리다 —
+ * `series` 는 시리즈(`rocket_series`), `types` 는 그 상위 분류(`vehicle_types`).
  *
- * 탭을 새로 만들지 않은 이유: 카테고리는 로켓을 등록하려고 들어가는 곳이지 그 자체가
- * 목적지가 아니다. 최상위 탭으로 올리면 평소에 쓰지 않는 탭이 하나 늘어난다.
+ * 탭을 새로 만들지 않은 이유: 둘 다 기체를 등록하려고 들어가는 곳이지 그 자체가
+ * 목적지가 아니다. 최상위 탭으로 올리면 평소에 쓰지 않는 탭이 하나(이제 둘) 늘어난다.
+ * 분류는 시리즈보다 더 드물게 바뀌므로 근거가 더 강하다.
  */
-export const ADMIN_SUBVIEWS = ['series'] as const
+export const ADMIN_SUBVIEWS = ['series', 'types'] as const
 
 export type AdminSubview = (typeof ADMIN_SUBVIEWS)[number]
 
@@ -51,7 +64,7 @@ export function parseSubview(raw: string | string[] | undefined): AdminSubview |
 
 export type AdminHref = {
   tab: AdminTab
-  /** 탭 안의 하위 화면 (`?sub=series`). 없으면 탭의 기본 화면. */
+  /** 탭 안의 하위 화면 (`?sub=series` · `?sub=types`). 없으면 탭의 기본 화면. */
   sub?: AdminSubview
   /** 새 항목 폼 열기 */
   create?: boolean

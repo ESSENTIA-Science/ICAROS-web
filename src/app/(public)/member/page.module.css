@@ -49,9 +49,16 @@
   color: var(--fg);
 }
 
+/**
+ * 카드 격자. `--member-col` 은 한 칸의 최소 폭이고 **카드 쪽에서도 읽는다** —
+ * 소개글이 있는 카드는 행을 통째로 쓰면서 사진 칸만 이 폭으로 남기기 때문이다
+ * (`components/member/MemberCard.module.css` 의 `.card[data-bio]`).
+ * 커스텀 프로퍼티는 상속되므로 값이 한 곳에만 적힌다 — 숫자를 두 벌 두면 반드시 어긋난다.
+ */
 .grid {
+  --member-col: 15rem;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--member-col), 1fr));
   column-gap: var(--grid-gap-x);
   row-gap: var(--sp-8);
 }

@@ -43,8 +43,14 @@ export const PANEL_HEIGHTS = ['full', 'tall', 'half'] as const
 /**
  * CTA 가 갈 수 있는 곳. **코드가 정하고 CMS 는 고르기만 한다.**
  * 여기 없는 경로를 추가하려면 라우트를 먼저 만들어야 한다 — 그게 이 목록의 목적이다.
+ *
+ * ⚠️ **이 배열은 코드에서만 바꿀 수 없다.** 값이 `page_panels_cta_href_ck` CHECK 에 그대로
+ * 박히므로, 항목을 **빼거나 이름을 바꿀 때는** 그 값을 쓰고 있는 행을 먼저 `UPDATE` 하는
+ * 마이그레이션이 필요하다. 순서를 뒤집으면(CHECK 를 먼저 조이면) 남아 있는 행 때문에
+ * 마이그레이션이 통째로 실패한다 — `/rocket` → `/vehicles` 전환(0007)이 그 경우였다.
+ * 항목을 **더하기만** 할 때는 CHECK 가 느슨해지는 방향이라 데이터 이동이 필요 없다.
  */
-export const PANEL_CTA_HREFS = ['/rocket', '/member', '/posts', '#support', '#contact'] as const
+export const PANEL_CTA_HREFS = ['/vehicles', '/member', '/posts', '#support', '#contact'] as const
 
 export type PanelScrim = (typeof PANEL_SCRIMS)[number]
 export type PanelAnchor = (typeof PANEL_ANCHORS)[number]

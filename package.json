@@ -27,6 +27,7 @@
     "db:migrate:drizzle": "drizzle-kit migrate",
     "seed:panels": "tsx scripts/seed-panels.ts",
     "panels:publish": "tsx scripts/db/publish-panels.ts",
+    "seed:w5": "tsx scripts/db/seed-w5.ts",
     "db:inspect-public": "tsx scripts/db/inspect-public.ts",
     "migrate:archive-images": "tsx scripts/migrate/archive-legacy-images.ts",
     "migrate:legacy-posts": "tsx scripts/migrate/import-legacy-posts.ts"

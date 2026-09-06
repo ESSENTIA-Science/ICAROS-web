@@ -38,11 +38,11 @@ function unescapeUrl(u: string): string {
 }
 
 async function collectPages(): Promise<Set<string>> {
-  const pages = new Set(['/', '/rocket', '/member', '/posts'])
+  const pages = new Set(['/', '/vehicles', '/member', '/posts'])
 
-  const rocket = await get('/rocket')
-  for (const m of rocket.body.matchAll(/\/rocket\/([a-z0-9-]+)/g)) if (m[1]) pages.add(`/rocket/${m[1]}`)
-  for (const m of rocket.body.matchAll(/\?series=([A-Za-z0-9-]+)/g)) if (m[1]) pages.add(`/rocket?series=${m[1]}`)
+  const rocket = await get('/vehicles')
+  for (const m of rocket.body.matchAll(/\/vehicles\/([a-z0-9-]+)/g)) if (m[1]) pages.add(`/vehicles/${m[1]}`)
+  for (const m of rocket.body.matchAll(/\?series=([A-Za-z0-9-]+)/g)) if (m[1]) pages.add(`/vehicles?series=${m[1]}`)
 
   // 페이지는 0-indexed 다 (`/posts` = page 0). 1-indexed 로 세면 한 페이지를 통째로 놓친다.
   for (let page = 0; page <= 8; page += 1) {

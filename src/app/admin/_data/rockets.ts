@@ -2,7 +2,7 @@ import 'server-only'
 
 import { asc, eq, sql } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
-import type { RocketSeriesOption } from '@/components/rocket/series'
+import type { RocketSeriesOption, VehicleTypeOption } from '@/components/rocket/series'
 import { versionExpr } from '../_lib/version'
 
 /**
@@ -25,11 +25,39 @@ export type AdminEngineRow = {
 export type AdminSeriesRow = {
   id: string
   label: string
+  /** 상위 분류 id (`vehicle_types.id`). NOT NULL 이라 항상 값이 있다. */
+  typeId: string
+  /** 조인해서 같이 들고 온다 — 목록에 라벨을 그리려고 분류 목록을 또 읽지 않도록. */
+  typeLabel: string
+  /** 시리즈 설명(마크다운). 값이 없으면 null. */
+  descriptionMd: string
   sortOrder: number
   /** 이 카테고리에 붙은 로켓 수 — 공개·비공개를 모두 센다. 삭제 가능 여부를 이 값이 정한다. */
   rocketCount: number
   /** 낙관적 잠금 토큰 (F12). */
   version: string
+}
+
+export type AdminVehicleTypeRow = {
+  id: string
+  label: string
+  sortOrder: number
+  /** 이 분류에 붙은 시리즈 수. FK 가 `restrict` 라 이 값이 0 이 아니면 삭제되지 않는다. */
+  seriesCount: number
+  /** 낙관적 잠금 토큰 (F12). */
+  version: string
+}
+
+/**
+ * 로켓 폼의 시리즈 select 용 — 분류로 묶어 그리려고 부모 정보를 같이 들고 온다.
+ *
+ * `RocketSeriesOption` 을 넓히지 않고 여기에 따로 둔 이유는 그 타입이 공개 화면과 공용이기
+ * 때문이다(`components/rocket/series.ts` 주석). 관리 화면에만 필요한 필드를 그쪽에 밀어 넣으면
+ * 공개 목록이 쓰지도 않는 컬럼을 매 요청 읽게 된다.
+ */
+export type AdminSeriesChoice = RocketSeriesOption & {
+  typeId: string
+  typeLabel: string
 }
 
 export type AdminRocketListItem = {
@@ -196,11 +224,21 @@ export async function listRocketSeriesForAdmin(): Promise<AdminSeriesRow[]> {
       .select({
         id: schema.rocketSeries.id,
         label: schema.rocketSeries.label,
+        typeId: schema.rocketSeries.typeId,
+        typeLabel: schema.vehicleTypes.label,
+        descriptionMd: schema.rocketSeries.descriptionMd,
         sortOrder: schema.rocketSeries.sortOrder,
         version: versionExpr(schema.rocketSeries.updatedAt),
       })
       .from(schema.rocketSeries)
-      .orderBy(asc(schema.rocketSeries.sortOrder), asc(schema.rocketSeries.id)),
+      .leftJoin(schema.vehicleTypes, eq(schema.vehicleTypes.id, schema.rocketSeries.typeId))
+      // 분류 순서가 먼저다 — 목록이 분류별로 뭉쳐 보여야 부모-자식 관계가 눈에 들어온다.
+      .orderBy(
+        asc(schema.vehicleTypes.sortOrder),
+        asc(schema.rocketSeries.typeId),
+        asc(schema.rocketSeries.sortOrder),
+        asc(schema.rocketSeries.id)
+      ),
     db
       .select({ series: schema.rockets.series, n: sql<number>`count(*)::int` })
       .from(schema.rockets)
@@ -208,15 +246,38 @@ export async function listRocketSeriesForAdmin(): Promise<AdminSeriesRow[]> {
   ])
 
   const bySeries = new Map(counts.map((c) => [c.series, c.n]))
-  return rows.map((r) => ({ ...r, rocketCount: bySeries.get(r.id) ?? 0 }))
+  // left join 이라 타입은 null 가능이다. FK 가 NOT NULL 이라 실제로는 항상 채워진다.
+  return rows.map((r) => ({
+    ...r,
+    typeLabel: r.typeLabel ?? r.typeId,
+    descriptionMd: r.descriptionMd ?? '',
+    rocketCount: bySeries.get(r.id) ?? 0,
+  }))
 }
 
-/** 폼의 시리즈 select 용. 라벨만 있으면 되므로 개수는 세지 않는다. */
-export async function listRocketSeriesOptions(): Promise<RocketSeriesOption[]> {
-  return db
-    .select({ id: schema.rocketSeries.id, label: schema.rocketSeries.label })
+/**
+ * 로켓 폼의 시리즈 select 용. 개수는 세지 않지만 **분류는 같이 읽는다** —
+ * select 를 `<optgroup>` 으로 묶으려면 각 시리즈가 어느 분류에 속하는지 알아야 한다.
+ * 정렬은 목록과 같다: 분류 순서 → 시리즈 순서. 그래야 그룹이 쪼개지지 않는다.
+ */
+export async function listRocketSeriesOptions(): Promise<AdminSeriesChoice[]> {
+  const rows = await db
+    .select({
+      id: schema.rocketSeries.id,
+      label: schema.rocketSeries.label,
+      typeId: schema.rocketSeries.typeId,
+      typeLabel: schema.vehicleTypes.label,
+    })
     .from(schema.rocketSeries)
-    .orderBy(asc(schema.rocketSeries.sortOrder), asc(schema.rocketSeries.id))
+    .leftJoin(schema.vehicleTypes, eq(schema.vehicleTypes.id, schema.rocketSeries.typeId))
+    .orderBy(
+      asc(schema.vehicleTypes.sortOrder),
+      asc(schema.rocketSeries.typeId),
+      asc(schema.rocketSeries.sortOrder),
+      asc(schema.rocketSeries.id)
+    )
+
+  return rows.map((r) => ({ ...r, typeLabel: r.typeLabel ?? r.typeId }))
 }
 
 /** 새 카테고리의 기본 정렬순서 — 마지막 뒤. 중복이 허용되므로 편의값일 뿐이다. */
@@ -224,5 +285,56 @@ export async function nextRocketSeriesSortOrder(): Promise<number> {
   const rows = await db
     .select({ next: sql<number>`coalesce(max(${schema.rocketSeries.sortOrder}), -1) + 1` })
     .from(schema.rocketSeries)
+  return rows[0]?.next ?? 0
+}
+
+// ── 분류 (`vehicle_types`) ──────────────────────────────────────────────────
+
+/**
+ * 분류 목록 + 각 분류에 붙은 시리즈 수.
+ *
+ * 시리즈 수를 같이 세는 이유는 시리즈에서 로켓 수를 세는 이유와 같다 — **삭제 버튼을
+ * 미리 막기 위해서**다. `rocket_series.type_id` FK 가 `restrict` 라 DB 가 어차피 거부하지만,
+ * 눌러 보고 나서 거부당하는 것과 처음부터 못 누르는 것은 다르다.
+ */
+export async function listVehicleTypesForAdmin(): Promise<AdminVehicleTypeRow[]> {
+  const [rows, counts] = await Promise.all([
+    db
+      .select({
+        id: schema.vehicleTypes.id,
+        label: schema.vehicleTypes.label,
+        sortOrder: schema.vehicleTypes.sortOrder,
+        version: versionExpr(schema.vehicleTypes.updatedAt),
+      })
+      .from(schema.vehicleTypes)
+      .orderBy(asc(schema.vehicleTypes.sortOrder), asc(schema.vehicleTypes.id)),
+    db
+      .select({ typeId: schema.rocketSeries.typeId, n: sql<number>`count(*)::int` })
+      .from(schema.rocketSeries)
+      .groupBy(schema.rocketSeries.typeId),
+  ])
+
+  const byType = new Map(counts.map((c) => [c.typeId, c.n]))
+  return rows.map((r) => ({ ...r, seriesCount: byType.get(r.id) ?? 0 }))
+}
+
+/**
+ * 시리즈 폼의 분류 select 용.
+ *
+ * 여기서는 공용 `VehicleTypeOption`(`{ id, label }`)을 그대로 쓴다 — 관리 화면이 더
+ * 필요로 하는 것이 없다. 시리즈 쪽(`AdminSeriesChoice`)과 달리 넓힐 이유가 없다는 뜻이다.
+ */
+export async function listVehicleTypeOptions(): Promise<VehicleTypeOption[]> {
+  return db
+    .select({ id: schema.vehicleTypes.id, label: schema.vehicleTypes.label })
+    .from(schema.vehicleTypes)
+    .orderBy(asc(schema.vehicleTypes.sortOrder), asc(schema.vehicleTypes.id))
+}
+
+/** 새 분류의 기본 정렬순서 — 마지막 뒤. 중복이 허용되므로 편의값일 뿐이다. */
+export async function nextVehicleTypeSortOrder(): Promise<number> {
+  const rows = await db
+    .select({ next: sql<number>`coalesce(max(${schema.vehicleTypes.sortOrder}), -1) + 1` })
+    .from(schema.vehicleTypes)
   return rows[0]?.next ?? 0
 }

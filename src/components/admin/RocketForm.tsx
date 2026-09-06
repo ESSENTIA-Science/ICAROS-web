@@ -8,7 +8,7 @@ import type { RocketSeriesOption } from '@/components/rocket/series'
 // 상한은 브라우저·서버가 같은 파일을 본다. 여기에 숫자를 다시 적으면 두 벌이 갈라진다.
 import { MAX_GALLERY_IMAGES } from '@/lib/image/policy'
 import EngineEditor, { type EngineInit } from './EngineEditor'
-import { SelectField, TextField, ToggleField } from './Fields'
+import { TextField, ToggleField } from './Fields'
 import GalleryField from './GalleryField'
 import MarkdownField from './MarkdownField'
 import MediaField from './MediaField'
@@ -37,7 +37,87 @@ export type RocketFormValues = {
 const NO_ERRORS: Readonly<Record<string, string>> = {}
 
 /**
- * 로켓 생성·수정 폼.
+ * 시리즈 select 한 칸의 값.
+ *
+ * `RocketSeriesOption`(`{ id, label }`)을 **넓히지 않고** 여기서 교차로 얹는다 —
+ * 그 타입은 공개 화면과 공용이라 관리 화면 사정으로 필드를 늘리면 안 된다
+ * (`components/rocket/series.ts` 주석). 서버가 넘기는 `AdminSeriesChoice` 와 구조가 같다.
+ *
+ * `_data/rockets.ts` 에서 직접 import 하지 않는 이유: 그 모듈은 `import 'server-only'` 다.
+ * 타입만 가져오면 실제로는 지워지지만, 클라이언트 잎이 서버 전용 모듈을 가리키는 줄을
+ * 남겨 두면 다음 사람이 값을 하나 더 가져오려다 번들을 깬다.
+ */
+type SeriesChoice = RocketSeriesOption & {
+  typeId: string
+  typeLabel: string
+}
+
+/**
+ * 시리즈 select — 분류별 `<optgroup>`.
+ *
+ * `Fields.tsx` 의 `SelectField` 는 평평한 목록만 그린다. 그 파일에 그룹 지원을 넣지 않고
+ * 여기서 한 칸을 직접 그리는 쪽을 골랐다: 이 콘솔에서 그룹이 필요한 select 는 지금 이것
+ * 하나뿐이라, 공용 프리미티브에 옵션을 늘리면 쓰지 않는 분기가 영구히 남는다.
+ * 라벨·힌트·오류의 `aria-describedby` 배선은 `SelectField` 와 같은 모양으로 맞춰 둔다.
+ *
+ * **그룹핑은 서버가 넘긴 순서를 그대로 따른다.** 여기서 다시 정렬하지 않는다 —
+ * 정렬 규칙이 두 곳에 생기면 관리 화면의 `sort_order` 가 안 먹는 자리가 하나 나온다.
+ * `_data/rockets.ts` 가 분류 순서 → 시리즈 순서로 뽑으므로 같은 분류가 흩어지지 않는다.
+ */
+function SeriesSelect({
+  options,
+  defaultValue,
+  error,
+}: {
+  options: readonly SeriesChoice[]
+  defaultValue: string
+  error: string | undefined
+}) {
+  const id = 'f-series'
+  const groups: { typeId: string; typeLabel: string; items: SeriesChoice[] }[] = []
+  for (const s of options) {
+    const last = groups[groups.length - 1]
+    if (last && last.typeId === s.typeId) last.items.push(s)
+    else groups.push({ typeId: s.typeId, typeLabel: s.typeLabel, items: [s] })
+  }
+
+  return (
+    <>
+      <label className={ui.label} htmlFor={id}>
+        시리즈
+        <span className={ui.required} aria-hidden="true">
+          *
+        </span>
+      </label>
+      <select
+        className={`${ui.select}${error ? ` ${ui.inputError}` : ''}`}
+        id={id}
+        name="series"
+        defaultValue={defaultValue}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-error` : undefined}
+      >
+        {groups.map((g) => (
+          <optgroup key={g.typeId} label={g.typeLabel}>
+            {g.items.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.id} — {s.label}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      {error ? (
+        <p className={ui.error} id={`${id}-error`}>
+          {error}
+        </p>
+      ) : null}
+    </>
+  )
+}
+
+/**
+ * 기체 생성·수정 폼.
  *
  * `<form action={…}>` 에 서버 액션을 직접 물린다 — JS 가 없어도 제출이 되고,
  * JS 가 있으면 `useActionState` 가 결과를 같은 자리에 그린다. 성공하면 액션이 redirect 하므로
@@ -62,11 +142,12 @@ export default function RocketForm({
   storageReady: boolean
   cancelHref: string
   /**
-   * 카테고리 목록. **서버가 그 요청에서 읽어 넘긴다** — 예전에는 이 파일이
+   * 시리즈 목록. **서버가 그 요청에서 읽어 넘긴다** — 예전에는 이 파일이
    * `SERIES` 상수를 import 했고, 그래서 카테고리를 늘리려면 배포가 필요했다.
+   * 순서도 서버가 정한 그대로 쓴다(분류 순서 → 시리즈 순서).
    */
-  seriesOptions: readonly RocketSeriesOption[]
-  /** 카테고리 관리 화면 주소. select 밑에 링크로 붙는다. */
+  seriesOptions: readonly SeriesChoice[]
+  /** 시리즈 관리 화면 주소. select 밑에 링크로 붙는다. */
   seriesHref: string
 }) {
   const action = mode === 'create' ? createRocketAction : updateRocketAction
@@ -87,7 +168,7 @@ export default function RocketForm({
           hint={
             mode === 'edit'
               ? '주소가 되는 값이라 수정할 수 없습니다. 바꾸려면 새로 만들고 기존 항목을 삭제해 주세요.'
-              : '공개 주소 /rocket/<식별자> 에 그대로 쓰입니다. 영소문자·숫자·하이픈, 2~48자.'
+              : '공개 주소 /vehicles/<식별자> 에 그대로 쓰입니다. 영소문자·숫자·하이픈, 2~48자.'
           }
           readOnly={mode === 'edit'}
           mono
@@ -107,23 +188,20 @@ export default function RocketForm({
 
       <div className={ui.grid}>
         <div className={ui.field}>
-          <SelectField
-            name="series"
-            label="카테고리"
+          <SeriesSelect
+            options={seriesOptions}
             defaultValue={values.series}
-            options={seriesOptions.map((s) => ({ value: s.id, label: `${s.id} — ${s.label}` }))}
-            required
             error={fieldErrors['series']}
           />
           {/*
-            카테고리 추가·수정·삭제는 별도 화면이다. 폼은 중첩할 수 없어서 여기에 인라인으로
+            시리즈 추가·수정·삭제는 별도 화면이다. 폼은 중첩할 수 없어서 여기에 인라인으로
             넣으려면 제출을 JS 로 가로채야 하고, 그러면 이 콘솔에서 유일하게 JS 없이는
             동작하지 않는 화면이 된다.
             떠나면 입력이 날아가므로 그 사실을 링크 옆에 적는다 — 눌러 본 뒤에 알게 되면 늦다.
           */}
           <p className={ui.hint}>
-            <Link href={seriesHref}>카테고리 관리</Link> — 추가·이름 수정·삭제. 이동하면 지금
-            입력한 내용은 저장되지 않습니다.
+            <Link href={seriesHref}>시리즈 관리</Link> — 추가·이름 수정·삭제, 상위 분류 변경.
+            이동하면 지금 입력한 내용은 저장되지 않습니다.
           </p>
         </div>
         {/*
@@ -131,7 +209,7 @@ export default function RocketForm({
 
           `(series, sort_order)` 에 unique 제약이 있어서, 폼이 미리 계산한 값을 넣어 두면
           사용자가 시리즈 select 를 바꿨을 때 그 값이 그대로 남아 충돌한다.
-          그 증상은 화면에서 "로켓이 추가가 안 된다"로 나타나고 원인은 보이지 않는다.
+          그 증상은 화면에서 "기체가 추가가 안 된다"로 나타나고 원인은 보이지 않는다.
           순서는 만든 뒤 수정 화면에서 바꾸면 된다.
         */}
         {mode === 'edit' ? (
@@ -217,7 +295,7 @@ export default function RocketForm({
       <EngineEditor initial={values.engines} fieldErrors={fieldErrors} />
 
       <div className={ui.actions}>
-        <SubmitButton>{mode === 'create' ? '로켓 추가' : '변경사항 저장'}</SubmitButton>
+        <SubmitButton>{mode === 'create' ? '기체 추가' : '변경사항 저장'}</SubmitButton>
         <Link className={ui.btn} href={cancelHref}>
           취소
         </Link>

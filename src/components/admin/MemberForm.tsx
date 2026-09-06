@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { createMemberAction, updateMemberAction } from '@/app/admin/_actions/members'
 import type { FormState } from '@/app/admin/_actions/result'
 import { TextField, ToggleField } from './Fields'
+import MarkdownField from './MarkdownField'
 import MediaField from './MediaField'
 import type { MediaPreview } from './media-upload'
 import { ActionNotice } from './Notice'
@@ -19,6 +20,12 @@ export type MemberFormValues = {
   school: string
   sortOrder: number
   published: boolean
+  /**
+   * 카드 옆 소개글 (Markdown). **optional 로 두지 말 것** — 넘기지 않으면 편집 폼이 빈
+   * 칸을 그리고, 저장하는 순간 기존 소개글이 조용히 지워진다. 필수로 두면 폼에 필드를
+   * 붙이고 패널 배선을 빠뜨리는 순간 타입 검사가 잡는다 (D28 과 같은 종류의 누락).
+   */
+  bioMd: string
   /** 프로필 사진. 없으면 legacyImagePath, 그것도 없으면 공개 페이지가 플레이스홀더를 쓴다 (E6). */
   image: MediaPreview | null
   legacyImagePath: string | null
@@ -122,6 +129,16 @@ export default function MemberForm({
         legacyPath={values.legacyImagePath}
         storageReady={storageReady}
         error={fieldErrors['imageMediaId']}
+      />
+
+      <MarkdownField
+        name="bioMd"
+        label="소개글 (Markdown)"
+        defaultValue={values.bioMd}
+        rows={8}
+        maxLength={2000}
+        hint="공개 명단에서 카드 옆에 표시됩니다. 부원 다수가 미성년자입니다 — 이름·역할·학교 외의 신원 정보(생년월일·연락처·주소·학년·반·SNS 계정 등)는 넣지 마세요. 이미지는 표시되지 않습니다."
+        error={fieldErrors['bioMd']}
       />
 
       <ToggleField

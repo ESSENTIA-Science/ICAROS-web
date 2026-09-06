@@ -81,7 +81,7 @@ const rocketSchema = z.object({
   series: z
     .string()
     .trim()
-    .regex(/^[A-Za-z0-9][A-Za-z0-9-]{0,31}$/, '카테고리를 선택해 주세요.'),
+    .regex(/^[A-Za-z0-9][A-Za-z0-9-]{0,31}$/, '시리즈를 선택해 주세요.'),
   /**
    * 생성 폼은 이 필드를 보내지 않는다 — 서버가 해당 시리즈 끝에 붙인다.
    * `(series, sort_order)` unique 제약 때문에, 폼이 미리 계산한 값을 들고 있다가
@@ -209,10 +209,19 @@ function toEngineValues(rocketId: string, engines: readonly ParsedEngine[]) {
   }))
 }
 
-/** 공개 로켓 화면 전부. 지금은 force-dynamic 이라 즉시 반영되지만, ISR 로 바꿀 때를 대비해 배선해 둔다. */
+/**
+ * 공개 기체 화면 전부. **경로는 `/vehicles` 다** — `/rocket` 은 라우트가 사라졌고
+ * `next.config.ts` 의 301 만 남았다. 옛 경로로 무효화하면 조용히 아무것도 지우지 않는다.
+ *
+ * 목록(`/vehicles`)은 `force-dynamic` 이라 이 줄이 없어도 즉시 반영된다. 하지만
+ * **상세(`/vehicles/[slug]`)는 `revalidate = false` + 빈 `generateStaticParams` 로
+ * 진짜 SSG 다** — 이 줄이 유일한 무효화 수단이고, 빠지면 저장해도 공개 화면이 영원히 낡는다.
+ *
+ * 두 번째 인자 `'page'` 를 빼지 말 것. 동적 세그먼트는 그게 있어야 전건이 비워진다.
+ */
 function revalidateRockets(): void {
-  revalidatePath('/rocket')
-  revalidatePath('/rocket/[slug]', 'page')
+  revalidatePath('/vehicles')
+  revalidatePath('/vehicles/[slug]', 'page')
 }
 
 function describeWriteError(err: unknown): ActionResult {
@@ -232,8 +241,8 @@ function describeWriteError(err: unknown): ActionResult {
   // 존재하지 않는 카테고리. select 는 서버가 그린 목록이라 정상 조작으로는 안 나오지만,
   // 폼을 열어 둔 사이에 다른 탭에서 그 카테고리를 지우면 도달한다.
   if (code === PG_FOREIGN_KEY_VIOLATION && constraint === 'rockets_series_rocket_series_id_fk') {
-    return fail('선택한 카테고리가 더 이상 존재하지 않습니다. 새로고침한 뒤 다시 선택해 주세요.', {
-      series: '없는 카테고리입니다.',
+    return fail('선택한 시리즈가 더 이상 존재하지 않습니다. 새로고침한 뒤 다시 선택해 주세요.', {
+      series: '없는 시리즈입니다.',
     })
   }
   if (code === PG_UNIQUE_VIOLATION) {

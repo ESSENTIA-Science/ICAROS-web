@@ -43,6 +43,29 @@ const nextConfig: NextConfig = {
      */
     imageSizes: [128, 256, 384],
   },
+  /**
+   * `/rocket` → `/vehicles` (2026-09-07). 로켓 하나였던 자리가 로켓·위성·UAV 셋으로 갈렸다.
+   *
+   * **영구 리다이렉트(`permanent: true`)다.** 이 경로는 2026-07 부터 공개돼 있었고
+   * 인스타그램·발사 기록에 링크가 나가 있다 — 임시로 두면 색인이 옛 주소에 남는다.
+   * 실제로 나가는 상태 코드는 **308** 이다(실측). Next 의 `permanent: true` 는 301 이 아니라
+   * 308 을 쓴다 — 메서드를 보존하는 점만 다르고 색인 이전은 301 과 같게 처리된다.
+   * 굳이 301 이 필요하면 `permanent` 대신 `statusCode: 301` 을 준다.
+   *
+   * **쿼리스트링은 Next 가 보존한다.** `destination` 에 `?` 가 없으면 원 요청의 쿼리가 그대로
+   * 붙는다(실측: `curl -sI '/rocket?series=B'` → `location: /vehicles?series=B`).
+   * 그래서 옛 `/rocket?series=B` 북마크가 살아 있고, `?type=` 없이 온 `?series=` 는
+   * `parseVehicleType()` 이 그 시리즈의 분류로 데려간다.
+   *
+   * `:slug` 는 한 세그먼트만 먹는다 — `/rocket/a/b` 는 매칭되지 않고 404 로 간다. 옳다,
+   * 그런 주소는 원래도 없었다.
+   */
+  async redirects() {
+    return [
+      { source: '/rocket', destination: '/vehicles', permanent: true },
+      { source: '/rocket/:slug', destination: '/vehicles/:slug', permanent: true },
+    ]
+  },
   async headers() {
     return [
       {

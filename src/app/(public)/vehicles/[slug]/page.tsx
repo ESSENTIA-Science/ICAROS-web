@@ -5,12 +5,12 @@ import { notFound } from 'next/navigation'
 import EngineTable from '@/components/rocket/EngineTable'
 import InView from '@/components/rocket/InView'
 import RevealNoScript from '@/components/rocket/RevealNoScript'
-import RocketDescription from '@/components/rocket/RocketDescription'
+import Prose from '@/components/rocket/Prose'
 import ScrollRegion from '@/components/rocket/ScrollRegion'
 import SpecList from '@/components/rocket/SpecList'
-import { seriesHref } from '@/components/rocket/series'
+import { typeLabel, vehiclesHref } from '@/components/rocket/series'
 import { textLang } from '@/components/landing/text-lang'
-import { getRocket, listRocketSeries } from '../_data'
+import { getRocket, listVehicleTaxonomy } from '../_data'
 import styles from './page.module.css'
 
 type Params = { slug: string }
@@ -22,7 +22,7 @@ type Params = { slug: string }
  * 예전 주석은 "ISR 을 쓰지 않는다 — published=false 가 revalidate 주기 동안 노출돼 C8 을 깬다.
  * 어드민이 revalidatePath 를 붙이기 전까지는"이라고 적혀 있었다. **그 전제가 이제 성립하지 않는다.**
  * `_actions/rockets.ts`·`rocket-series.ts`·`scene.ts` 세 파일이 모든 mutation 끝에
- * `revalidatePath('/rocket/[slug]', 'page')` 를 부른다(= 이 라우트의 모든 slug 를 한 번에 비운다).
+ * `revalidatePath('/vehicles/[slug]', 'page')` 를 부른다(= 이 라우트의 모든 slug 를 한 번에 비운다).
  * 공개 여부가 바뀌는 경로가 전부 그 셋을 지나므로 노출 창(window)이 0이다.
  * CLAUDE.md 지뢰 "ISR 로 공개 여부를 감싸지 말 것"이 경고한 것은 **시간 기반** revalidate 다.
  */
@@ -67,18 +67,18 @@ export async function generateMetadata({
   return {
     title: rocket.name,
     description,
-    alternates: { canonical: `/rocket/${rocket.slug}` },
+    alternates: { canonical: `/vehicles/${rocket.slug}` },
     openGraph: {
       type: 'article',
       title: `${rocket.name} · ICAROS`,
       description,
-      url: `/rocket/${rocket.slug}`,
+      url: `/vehicles/${rocket.slug}`,
       ...(rocket.imageSrc ? { images: [rocket.imageSrc] } : {}),
     },
   }
 }
 
-export default async function RocketDetailPage({ params }: { params: Promise<Params> }) {
+export default async function VehicleDetailPage({ params }: { params: Promise<Params> }) {
   const { slug } = await params
   const rocket = await getRocket(slug)
   // notFound() 는 이 컴포넌트가 직접 await 한 뒤에 던져야 한다. 이 위(또는 이 안)에 Suspense
@@ -86,11 +86,18 @@ export default async function RocketDetailPage({ params }: { params: Promise<Par
   // 이 라우트에 loading.tsx 를 만들거나 이 호출을 Suspense 로 감싸지 말 것.
   if (!rocket) notFound()
 
-  // 기본 카테고리는 `?series=` 없이 `/rocket` 으로 돌아간다 — 목록 페이지의 canonical 과 같은 규칙.
-  const backHref = seriesHref(rocket.series, await listRocketSeries())
+  // 뒤로가기는 **이 기체가 실제로 서 있는 탭**으로 돌아간다 — 분류·시리즈 둘 다 맞춰야 한다.
+  // 기본 조합이면 쿼리를 붙이지 않는다(목록 페이지의 canonical 과 같은 규칙).
+  const tax = await listVehicleTaxonomy()
+  const backHref = vehiclesHref(rocket.typeId, rocket.series, tax)
+  // 분류 라벨을 아이브로에 함께 세운다. 시리즈만으로는 위성인지 로켓인지 알 수 없다.
+  const eyebrow =
+    rocket.typeId === null
+      ? rocket.seriesLabel
+      : `${typeLabel(rocket.typeId, tax.types)} · ${rocket.seriesLabel}`
   // 설명 스크롤 영역의 이름을 제목에서 빌려 온다. slug 는 PK 라 한 문서에서 유일하다
   // (EngineTable 의 scopeId 와 같은 사정 — 서버 컴포넌트라 useId() 를 쓸 수 없다).
-  const overviewId = `rocket-${rocket.slug}-overview`
+  const overviewId = `vehicle-${rocket.slug}-overview`
 
   return (
     /* 섹션은 하나다. 예전엔 히어로(ink) + 상세(paper) 둘이었지만 `mono` 아래에서는
@@ -110,7 +117,8 @@ export default async function RocketDetailPage({ params }: { params: Promise<Par
               (제원이 h1 보다 먼저 읽히면 리더 모드·스크린리더에서 이름 없는 숫자가 먼저 온다.) */}
           <div className={styles.grid}>
             <header className={styles.head}>
-              <p className="eyebrow" lang="en">{rocket.seriesLabel}</p>
+              {/* 라벨은 CMS 자유 텍스트다 — 언어를 값에서 판별한다 */}
+              <p className="eyebrow" lang={textLang(eyebrow)}>{eyebrow}</p>
               {/* 기체명은 CMS 자유 텍스트다 — 언어를 값에서 판별한다 */}
               <h1 className={styles.title} lang={textLang(rocket.name)}>{rocket.name}</h1>
             </header>
@@ -162,7 +170,7 @@ export default async function RocketDetailPage({ params }: { params: Promise<Par
                     labelledBy={overviewId}
                     hint="↓ 아래로 더 있습니다"
                   >
-                    <RocketDescription markdown={rocket.descriptionMd} />
+                    <Prose markdown={rocket.descriptionMd} />
                   </ScrollRegion>
                 </InView>
               ) : null}

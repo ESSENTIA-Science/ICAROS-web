@@ -13,6 +13,11 @@ export type DonateContent = {
   outro: string | undefined
   current: number
   goal: number
+  /**
+   * 금액 옆에 붙는 후원 차수 표기(`1–3차` 처럼). CMS 자유 텍스트라 형식을 강제하지 않는다.
+   * 차수를 쓰지 않는 시기가 정상이므로 **비면 표기가 사라지는 것이 정상 동작**이다.
+   */
+  roundLabel: string | undefined
   ctaLabel: string | undefined
   ctaHref: string | undefined
 }
@@ -24,14 +29,25 @@ export type DonateContent = {
 function parts(c: DonateContent) {
   const hasText = Boolean(c.intro || c.usageTitle) || c.usageItems.length > 0
   const hasFigures = c.goal > 0 || c.current > 0
+  /**
+   * 차수는 금액을 **수식하는** 라벨이라 금액 밴드에 종속시킨다 (`hasFigures &&`).
+   * 금액이 둘 다 0인데 "1–3차" 만 남은 상태는 아무 정보가 아니고, 그것으로 밴드를 세우면
+   * 0원이 화면 폭만 한 숫자로 그려진다 — 차수가 단독으로 섹션을 살리면 안 되는 이유다.
+   */
+  const hasRound = hasFigures && Boolean(c.roundLabel)
   // 분모가 없으면 진행률이 성립하지 않는다 — 막대와 퍼센트는 목표가 있을 때만
   const hasMeter = c.goal > 0
   const hasCta = Boolean(c.ctaLabel && c.ctaHref)
   const hasNote = Boolean(c.quote || c.outro) || hasCta
-  return { hasText, hasFigures, hasMeter, hasCta, hasNote }
+  return { hasText, hasFigures, hasRound, hasMeter, hasCta, hasNote }
 }
 
-/** 빈 섹션 규칙. 어느 덩어리에도 내용이 없으면 섹션을 그리지 않는다. */
+/**
+ * 빈 섹션 규칙. 어느 덩어리에도 내용이 없으면 섹션을 그리지 않는다.
+ *
+ * `hasRound` 는 **의도적으로 빠져 있다.** 정의상 `hasFigures` 를 함의하므로 더해도 결과가 같고,
+ * 더하는 순간 "차수만 있으면 섹션이 선다"로 읽혀 다음 사람이 `hasFigures &&` 를 떼게 된다.
+ */
 export function hasDonateContent(c: DonateContent): boolean {
   const p = parts(c)
   return p.hasText || p.hasFigures || p.hasNote
@@ -59,10 +75,11 @@ export default function Donate({
   index: number
   theme?: SectionTheme
 }) {
-  const { hasText, hasFigures, hasMeter, hasNote } = parts(content)
+  const { hasText, hasFigures, hasRound, hasMeter, hasNote } = parts(content)
   if (!hasText && !hasFigures && !hasNote) return null
 
-  const { intro, usageTitle, usageItems, quote, outro, current, goal, ctaLabel, ctaHref } = content
+  const { intro, usageTitle, usageItems, quote, outro, ctaLabel, ctaHref } = content
+  const { current, goal, roundLabel } = content
 
   // 목표가 0 이거나 값이 깨져 있어도 0~100 밖으로 나가지 않는다
   const ratio = goal > 0 ? (current / goal) * 100 : 0
@@ -81,6 +98,19 @@ export default function Donate({
             <div className={styles.figures}>
               <span className={styles.current}>{krw.format(current)}</span>
               {goal > 0 ? <span className={styles.goal}>/ {krw.format(goal)}</span> : null}
+
+              {/* 차수 표기. 큰 숫자 옆의 작은 기술 텍스트 — 이 섹션의 조판 원리 그대로다 (03 §3).
+                  `aria-valuetext` 가 아니라 실제 텍스트로 둔다: 차수는 진행률 막대의 **값**이 아니고,
+                  막대는 `goal > 0` 일 때만 존재해서 목표 미설정 시 표기가 접근성 트리에서만 사라진다.
+                  대신 숫자에 곧바로 붙어 읽히지 않도록 sr 전용 이름을 앞에 세운다. */}
+              {hasRound && roundLabel ? (
+                <>
+                  <span className="sr-only">후원 차수</span>
+                  <span className={styles.round} lang={textLang(roundLabel)}>
+                    {roundLabel}
+                  </span>
+                </>
+              ) : null}
             </div>
 
             {hasMeter ? (

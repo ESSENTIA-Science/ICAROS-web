@@ -21,7 +21,9 @@ import { CONFLICT, DENIED, MALFORMED, fail, type ActionResult, type FormState } 
 import {
   PG_FOREIGN_KEY_VIOLATION,
   PG_UNIQUE_VIOLATION,
+  emptyToNull,
   formToRecord,
+  normalizeNewlines,
   pgError,
   zodFieldErrors,
   zodSummary,
@@ -35,6 +37,9 @@ import { adminHref } from '../_tabs'
  * DB CHECK `rocket_series_id_ck` 와 같은 정규식이다. 한쪽만 고치지 말 것.
  */
 const SERIES_ID_SHAPE = /^[A-Za-z0-9][A-Za-z0-9-]{0,31}$/
+
+/** 상위 분류 id. `vehicle_types_id_ck` 와 같은 정규식이다 — 두 테이블의 CHECK 가 글자 그대로 같다. */
+const TYPE_ID_SHAPE = /^[A-Za-z0-9][A-Za-z0-9-]{0,31}$/
 
 class VersionConflict extends Error {}
 class RowGone extends Error {}
@@ -54,31 +59,57 @@ const createSchema = z.object({
     .trim()
     .min(1, '표시 이름을 입력해 주세요.')
     .max(80, '표시 이름은 80자 이내로 입력해 주세요.'),
+  /**
+   * 상위 분류. **빈 값을 허용하지 않는다** — 컬럼이 NOT NULL 이라 빈 문자열을 통과시키면
+   * DB 가 FK 위반으로 거부하고, 그 오류는 "저장에 실패했습니다"로만 보인다.
+   * 값 집합은 여기서 검사하지 않는다: 목록이 행이라 상수로 적을 수 없고,
+   * 존재 여부는 FK 가 판정해 아래 `describeWriteError` 가 문구로 바꾼다.
+   */
+  typeId: z
+    .string()
+    .trim()
+    .regex(TYPE_ID_SHAPE, '분류를 선택해 주세요.'),
+  descriptionMd: z.string().max(20000, '설명은 20,000자 이내로 입력해 주세요.'),
   sortOrder: z.string().trim().regex(/^\d{1,4}$/, '정렬순서는 0~9999 사이의 정수입니다.'),
 })
 
 /** 수정에서는 `id` 를 받지 않는다 — 공개 URL 이라 바꾸면 링크가 죽는다. */
 const updateSchema = createSchema.omit({ id: true })
 
+/**
+ * 시리즈를 고치면 목록 탭 라벨·순서와 상세의 뒤로가기 링크가 같이 바뀐다.
+ * 경로가 `/vehicles` 인 이유와 `'page'` 인자를 빼면 안 되는 이유는 `rockets.ts` 의
+ * 같은 이름 함수 주석에 있다 — 상세는 SSG 라 이 줄이 유일한 무효화 수단이다.
+ */
 function revalidateRockets(): void {
-  revalidatePath('/rocket')
-  revalidatePath('/rocket/[slug]', 'page')
+  revalidatePath('/vehicles')
+  revalidatePath('/vehicles/[slug]', 'page')
 }
 
 function describeWriteError(err: unknown): ActionResult {
   if (err instanceof VersionConflict) return CONFLICT
   if (err instanceof RowGone) {
-    return fail('이 카테고리는 다른 곳에서 이미 삭제되었습니다. 목록으로 돌아가 주세요.')
+    return fail('이 시리즈는 다른 곳에서 이미 삭제되었습니다. 목록으로 돌아가 주세요.')
   }
 
   const { code, constraint } = pgError(err)
   if (code === PG_UNIQUE_VIOLATION && constraint === 'rocket_series_pkey') {
-    return fail('같은 식별자의 카테고리가 이미 있습니다.', {
+    return fail('같은 식별자의 시리즈가 이미 있습니다.', {
       id: '이미 사용 중인 식별자입니다.',
     })
   }
+  // 없는 분류. select 는 서버가 그린 목록이라 정상 조작으로는 안 나오지만,
+  // 폼을 열어 둔 사이에 다른 탭에서 그 분류를 지우면 도달한다 (로켓→카테고리와 같은 상황).
+  if (
+    code === PG_FOREIGN_KEY_VIOLATION &&
+    constraint === 'rocket_series_type_id_vehicle_types_id_fk'
+  ) {
+    return fail('선택한 분류가 더 이상 존재하지 않습니다. 새로고침한 뒤 다시 선택해 주세요.', {
+      typeId: '없는 분류입니다.',
+    })
+  }
 
-  console.error('[admin] 로켓 카테고리 저장 실패')
+  console.error('[admin] 기체 시리즈 저장 실패')
   return fail('저장에 실패했습니다. 잠시 후 다시 시도해 주세요.')
 }
 
@@ -103,6 +134,8 @@ export async function createRocketSeriesAction(
     await db.insert(schema.rocketSeries).values({
       id: parsed.data.id,
       label: parsed.data.label,
+      typeId: parsed.data.typeId,
+      descriptionMd: emptyToNull(normalizeNewlines(parsed.data.descriptionMd)),
       sortOrder: Number(parsed.data.sortOrder),
     })
   } catch (err) {
@@ -149,6 +182,8 @@ export async function updateRocketSeriesAction(
         .update(schema.rocketSeries)
         .set({
           label: parsed.data.label,
+          typeId: parsed.data.typeId,
+          descriptionMd: emptyToNull(normalizeNewlines(parsed.data.descriptionMd)),
           sortOrder: Number(parsed.data.sortOrder),
           updatedAt: sql`now()`,
         })
@@ -211,10 +246,10 @@ export async function deleteRocketSeriesAction(
       await tx.delete(schema.rocketSeries).where(eq(schema.rocketSeries.id, id))
     })
   } catch (err) {
-    if (err instanceof RowGone) return fail('이미 삭제된 카테고리입니다.')
+    if (err instanceof RowGone) return fail('이미 삭제된 시리즈입니다.')
     if (err instanceof LastSeries) {
       return fail(
-        '마지막 카테고리는 삭제할 수 없습니다. 로켓을 등록하려면 카테고리가 최소 하나 있어야 합니다.'
+        '마지막 시리즈는 삭제할 수 없습니다. 기체를 등록하려면 시리즈가 최소 하나 있어야 합니다.'
       )
     }
 
@@ -223,11 +258,11 @@ export async function deleteRocketSeriesAction(
     const { code } = pgError(err)
     if (code === PG_FOREIGN_KEY_VIOLATION) {
       return fail(
-        '이 카테고리에 로켓이 남아 있어 삭제할 수 없습니다. 로켓을 다른 카테고리로 옮기거나 먼저 삭제해 주세요.'
+        '이 시리즈에 기체가 남아 있어 삭제할 수 없습니다. 기체를 다른 시리즈로 옮기거나 먼저 삭제해 주세요.'
       )
     }
 
-    console.error('[admin] 로켓 카테고리 삭제 실패')
+    console.error('[admin] 기체 시리즈 삭제 실패')
     return fail('삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.')
   }
 

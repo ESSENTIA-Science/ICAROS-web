@@ -28,6 +28,8 @@ export type AdminMemberDetail = {
   school: string
   sortOrder: number
   published: boolean
+  /** 카드 옆 소개글(Markdown). 폼은 빈 문자열을 다루므로 null 을 여기서 접는다. */
+  bioMd: string
   /** 프로필 사진. 없으면 legacyImagePath, 그것도 없으면 공개 페이지가 플레이스홀더를 쓴다 (E6). */
   imageMediaId: string | null
   legacyImagePath: string | null
@@ -59,6 +61,7 @@ export async function getMemberForAdmin(id: string): Promise<AdminMemberDetail |
       school: schema.members.school,
       sortOrder: schema.members.sortOrder,
       published: schema.members.published,
+      bioMd: schema.members.bioMd,
       imageMediaId: schema.members.imageMediaId,
       legacyImagePath: schema.members.legacyImagePath,
       version: versionExpr(schema.members.updatedAt),
@@ -78,6 +81,7 @@ export async function getMemberForAdmin(id: string): Promise<AdminMemberDetail |
     school: row.school ?? '',
     sortOrder: row.sortOrder,
     published: row.published,
+    bioMd: row.bioMd ?? '',
     imageMediaId: row.imageMediaId,
     legacyImagePath: row.legacyImagePath,
     version: row.version,

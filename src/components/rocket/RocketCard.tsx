@@ -1,7 +1,8 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import type { RocketListItem } from '@/app/(public)/rocket/_data'
+import type { RocketListItem } from '@/app/(public)/vehicles/_data'
 import { textLang } from '@/components/landing/text-lang'
+import { vehicleHref } from './series'
 import styles from './RocketCard.module.css'
 
 type CardSpec = { label: string; value: string | null; unit: string }
@@ -41,9 +42,9 @@ export default function RocketCard({ rocket }: { rocket: RocketListItem }) {
       </div>
 
       <div className={styles.body}>
-        {/* 목록의 h1 은 "Rockets" 다. 기체명은 그 아래 단계라 h2 로 둔다 */}
+        {/* 목록의 h1 은 "Vehicles" 다. 기체명은 그 아래 단계라 h2 로 둔다 */}
         <h2 className={styles.name} lang={textLang(rocket.name)}>
-          <Link href={`/rocket/${rocket.slug}`} className={styles.link}>
+          <Link href={vehicleHref(rocket.slug)} className={styles.link}>
             {rocket.name}
           </Link>
         </h2>

@@ -35,4 +35,31 @@ export const MEDIA_TEXT_REFERENCES: readonly string[] = [
   // legacy_posts.content_md 는 이관 시점에 박제된 아카이브라 사람이 편집하지 않는다.
   // 그래도 참조는 참조다 — 정리 대상이 되면 레거시 글 사진이 사라진다.
   'legacy_posts.content_md',
+  // 멤버 소개글(0007). 마크다운 자유 텍스트라 `/api/media/{id}` 가 박힐 수 있다.
+  'members.bio_md',
+  // 기체 설명·시리즈 설명. `Prose` 가 이미지를 **실제로 그린다**(`.prose img`).
+  // rockets.description_md 는 이 목록보다 먼저 있었는데도 빠져 있었다 — 2026-09-07 발견.
+  'rockets.description_md',
+  'rocket_series.description_md',
+]
+
+/**
+ * **FK 없이 미디어 id 를 통째로 들고 있는 컬럼.** 세 번째 종류다.
+ *
+ * `MEDIA_FK_COLUMNS` 는 `db:verify` 가 `information_schema` 의 실제 FK 와 대조해 주고,
+ * `MEDIA_TEXT_REFERENCES` 는 본문 안에 URL 로 박히는 자리다. 그런데 그 둘 중 어느 쪽도 아닌
+ * 자리가 있다 — **타입이 달라 FK 를 걸 수 없는 id 컬럼**이다.
+ *
+ * `legacy_posts.cover_media_id` 가 그것이다. `media.id` 는 uuid 인데 이쪽은 text 라
+ * FK 가 성립하지 않는다. 그래서:
+ *   - `db:verify` 의 FK 대조에 **안 걸린다** (FK 가 없으므로)
+ *   - `on delete restrict` 같은 DB 차원의 방어도 **없다**
+ *
+ * 즉 이 목록은 **기계가 검사해 줄 수 없는 유일한 칸**이고, `hasReferences()` 가 여기 적힌 것을
+ * 실제로 조회하는지는 사람이 확인해야 한다. 발견 경위: 2026-09-07, 병행 세션의 교차 점검.
+ * 당시 19행 전부 커버 id 가 본문에도 있어 `content_md` 검사에 **우연히** 걸리고 있었다 —
+ * 본문에 없는 커버를 지정하는 경로가 생기면 그 우연이 끝난다.
+ */
+export const MEDIA_ID_COLUMNS_WITHOUT_FK: readonly { readonly table: string; readonly column: string }[] = [
+  { table: 'legacy_posts', column: 'cover_media_id' },
 ]

@@ -37,6 +37,26 @@
   font-variant-numeric: tabular-nums lining-nums;
 }
 
+/* 후원 차수 — 큰 숫자를 수식하는 작은 라벨. `.goal` 보다 한 단계 진하다:
+   금액 표기의 연장이 아니라 별개의 정보이고, graphite 면에서 `--fg-faint` 는 3.13:1 로
+   작은 글자 대비를 통과하지 못한다. `--fg-muted`(5.14:1) 가 이 크기에서 쓸 수 있는 하한이다. */
+.round {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--tr-mono);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+/* 모듈 클래스가 globals.css 의 `:lang(ko)` 가드를 특이도로 이기므로 여기서 다시 푼다 —
+   한글은 자간 0.02em 을 넘으면 깨지고 uppercase 도 의미가 없다. */
+.round:lang(ko) {
+  font-family: var(--ff-body);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .meterRow {
   display: flex;
   align-items: center;

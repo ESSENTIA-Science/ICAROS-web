@@ -1,4 +1,4 @@
-import type { RocketEngineDto } from '@/app/(public)/rocket/_data'
+import type { RocketEngineDto } from '@/app/(public)/vehicles/_data'
 import { textLang } from '@/components/landing/text-lang'
 import styles from './EngineTable.module.css'
 

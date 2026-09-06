@@ -46,7 +46,9 @@ export const getSiteContentSafe = cache(async (): Promise<SiteContent> => {
  */
 export const NAV_ITEMS = [
   { href: '/#about', key: 'nav.about', fallback: 'About Us' },
-  { href: '/rocket', key: 'nav.rocket', fallback: 'Rockets' },
+  // `key` 는 `nav.rocket` 그대로 둔다 — `site_settings` 의 행 이름이다. 바꾸면 그 행을
+  // 못 찾아 라벨이 조용히 아래 `fallback` 으로 떨어진다(팀이 /admin 에서 고친 값이 사라진다).
+  { href: '/vehicles', key: 'nav.rocket', fallback: 'Vehicles' },
   { href: '/posts', key: 'nav.posts', fallback: 'Posts' },
   { href: '/member', key: 'nav.member', fallback: 'Members' },
 ] as const

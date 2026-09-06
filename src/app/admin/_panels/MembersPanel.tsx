@@ -51,6 +51,7 @@ export default async function MembersPanel({
               school: '',
               sortOrder,
               published: true,
+              bioMd: '',
               image: null,
               legacyImagePath: null,
             }}
@@ -97,6 +98,7 @@ export default async function MembersPanel({
               school: member.school,
               sortOrder: member.sortOrder,
               published: member.published,
+              bioMd: member.bioMd,
               image,
               legacyImagePath: member.legacyImagePath,
             }}

@@ -2,7 +2,7 @@ import 'server-only'
 
 import { and, asc, desc, eq, gte, isNull, lt, or, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { legacyPosts, media, members, pagePanels, rockets, siteSettings, storageCleanupJobs, rocketModels } from '@/lib/db/schema'
+import { legacyPosts, media, members, pagePanels, rocketSeries, rockets, siteSettings, storageCleanupJobs, rocketModels } from '@/lib/db/schema'
 import { StorageError, describeError } from './errors'
 import { assertKeyWritable } from './keys'
 import { deleteObject, headObject } from './objects'
@@ -132,7 +132,8 @@ export async function deleteMedia(mediaId: string): Promise<DeleteMediaResult> {
  * 참조 확인 없이 soft delete 하는 경로가 실제로 있었다.
  */
 export async function hasReferences(mediaId: string): Promise<boolean> {
-  const [rocketRefs, memberRefs, landingRefs, modelRefs, panelRefs, legacyPostRefs] = await Promise.all([
+  const [rocketRefs, memberRefs, landingRefs, modelRefs, panelRefs, legacyPostRefs, memberBioRefs, rocketProseRefs, seriesProseRefs] =
+    await Promise.all([
     db.select({ id: rockets.id }).from(rockets).where(eq(rockets.coverMediaId, mediaId)).limit(1),
     db.select({ id: members.id }).from(members).where(eq(members.imageMediaId, mediaId)).limit(1),
     // `mediaId` 는 호출부에서 UUID 임을 확인했으므로 LIKE 와일드카드가 섞일 수 없다.
@@ -170,7 +171,48 @@ export async function hasReferences(mediaId: string): Promise<boolean> {
     db
       .select({ id: legacyPosts.id })
       .from(legacyPosts)
-      .where(sql`${legacyPosts.contentMd} ilike ${`%${mediaId}%`}`)
+      .where(
+        or(
+          sql`${legacyPosts.contentMd} ilike ${`%${mediaId}%`}`,
+          /**
+           * **커버는 본문과 별개의 참조다.** 지금은 19행 전부 커버 id 가 본문에도 박혀 있어
+           * 위 `content_md` 검사에 **우연히** 걸린다(무방비 0건 실측). 본문에 없는 사진을
+           * 커버로 지정하는 경로가 생기는 순간 그 우연이 끝나고 정리 스윕의 사냥감이 된다.
+           *
+           * FK 가 아니라 `text` 컬럼이라 `db:verify` 의 `information_schema` 대조도 못 잡는다 —
+           * 스키마가 검사해 주지 못하는 자리라 사람이 여기 적어 두는 수밖에 없다.
+           */
+          eq(legacyPosts.coverMediaId, mediaId)
+        )
+      )
+      .limit(1),
+    /**
+     * 멤버 소개글 본문(`0007` 에서 추가). 마크다운 자유 텍스트라 `/api/media/{id}` 가 박힐 수 있다.
+     * 컬럼이 생긴 그 웨이브에서 같이 등록한다 — 나중에 등록하는 것이 D28 의 실패 방식이었다.
+     */
+    db
+      .select({ id: members.id })
+      .from(members)
+      .where(sql`${members.bioMd} ilike ${`%${mediaId}%`}`)
+      .limit(1),
+    /**
+     * 기체 설명과 시리즈 설명. **둘 다 이미지를 실제로 그린다** — `Prose.module.css` 에
+     * `.prose img` 규칙이 있고 `Prose` 는 `disallowedElements` 를 걸지 않는다.
+     *
+     * `rockets.description_md` 는 패널 CMS 보다 **먼저** 있었는데도 이 함수에 없었다.
+     * 2026-08-29 에 랜딩 사진 4장을 지운 것과 같은 종류이고, 발견이 늦은 이유도 같다 —
+     * 빠뜨려도 경고가 없고 증상은 "사진이 사라졌다"로만 온다.
+     * `rocket_series.description_md` 는 0007 에서 새로 생겼다. 둘을 같이 넣는다.
+     */
+    db
+      .select({ id: rockets.id })
+      .from(rockets)
+      .where(sql`${rockets.descriptionMd} ilike ${`%${mediaId}%`}`)
+      .limit(1),
+    db
+      .select({ id: rocketSeries.id })
+      .from(rocketSeries)
+      .where(sql`${rocketSeries.descriptionMd} ilike ${`%${mediaId}%`}`)
       .limit(1),
   ])
   return (
@@ -179,7 +221,10 @@ export async function hasReferences(mediaId: string): Promise<boolean> {
     landingRefs.length > 0 ||
     modelRefs.length > 0 ||
     panelRefs.length > 0 ||
-    legacyPostRefs.length > 0
+    legacyPostRefs.length > 0 ||
+    memberBioRefs.length > 0 ||
+    rocketProseRefs.length > 0 ||
+    seriesProseRefs.length > 0
   )
 }
 

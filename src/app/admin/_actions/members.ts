@@ -10,7 +10,13 @@ import { z } from 'zod'
 import { requireAdmin } from '@/lib/auth/guard'
 import { db, schema } from '@/lib/db'
 import { CONFLICT, DENIED, MALFORMED, fail, type ActionResult, type FormState } from './result'
-import { emptyToNull, formToRecord, zodFieldErrors, zodSummary } from '../_lib/form'
+import {
+  emptyToNull,
+  formToRecord,
+  normalizeNewlines,
+  zodFieldErrors,
+  zodSummary,
+} from '../_lib/form'
 import {
   MediaRejected,
   checkMediaAttachable,
@@ -41,6 +47,14 @@ const memberSchema = z.object({
   squad: z.string().trim().max(80, '부서는 80자 이내로 입력해 주세요.'),
   school: z.string().trim().max(120, '학교는 120자 이내로 입력해 주세요.'),
   sortOrder: z.string().trim().regex(/^\d{1,4}$/, '정렬순서는 0~9999 사이의 정수입니다.'),
+  /**
+   * 카드 옆 소개글 (Markdown). 비우면 null 이고 공개 화면은 그 자리를 아예 그리지 않는다.
+   *
+   * 상한이 `rockets.description_md`(20,000)보다 훨씬 낮은 이유: 이 글은 명단 격자 **한 행**
+   * 안에 서는 글이다. 길어지면 부서 하나가 화면 몇 개 높이가 되어 명단 구실을 못 한다.
+   * 그 이상 쓸 말이 있으면 하위 페이지로 — 랜딩 패널과 같은 원칙이다.
+   */
+  bioMd: z.string().max(2000, '소개글은 2,000자 이내로 입력해 주세요.'),
   published: z.enum(['0', '1'], '공개 여부 값이 올바르지 않습니다.'),
   // 업로드가 끝난 뒤의 media id. 빈 값은 "사진 없음"이고, 그때는 공개 페이지가 플레이스홀더를 쓴다 (E6).
   imageMediaId: mediaIdField(),
@@ -54,6 +68,8 @@ function toMemberValues(m: ParsedMember) {
     role: emptyToNull(m.role),
     squad: emptyToNull(m.squad),
     school: emptyToNull(m.school),
+    // 브라우저는 textarea 를 CRLF 로 보낸다. 렌더러(remark)는 LF 를 기대한다 — rockets 와 동일.
+    bioMd: emptyToNull(normalizeNewlines(m.bioMd)),
     sortOrder: Number(m.sortOrder),
     imageMediaId: emptyToNull(m.imageMediaId),
     published: m.published === '1',
