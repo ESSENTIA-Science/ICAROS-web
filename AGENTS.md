@@ -6,6 +6,17 @@ ICAROS 웹 저장소에서 작업하는 에이전트를 위한 안내.
 > 운영 식별자(RDS 엔드포인트·버킷명·계정 번호·관리자 이메일)를 커밋하지 마십시오.
 > 실제 값은 `docs/.local/identifiers.md` (추적 안 됨)에 있고, 문서에는 플레이스홀더만 씁니다.
 
+## 정적 웹 분리 구조 (2026-09-30)
+
+현재 새 구조는 `apps/web`(공개 정적 FE), `apps/cms`(관리자 UI),
+`services/api`(관리자 Lambda API), `packages/contracts`(공통 타입)이다.
+아래의 기존 `src/`, `scripts/`, DB 마이그레이션, Next.js 명령 설명은
+`legacy/`에 보존한 기존 앱에 적용된다. 기존 앱 실행은 `legacy/`에서 한다.
+새 워크스페이스는 루트 `npm run typecheck`, `npm run lint`, `npm run test`로 검사하고,
+공개 FE의 합성 콘텐츠 빌드는 `npm run build:web:fixture`로 확인한다.
+운영 게시 빌드는 검증된 스냅샷 파일과 SHA-256을 명시해야 한다.
+운영 배포 전환과 `main` 푸시는 별도 승인 후 진행한다.
+
 ## 프로젝트
 
 **ICAROS** — 제주 중심 중·고등학생 항공우주 팀의 사이트. `icaros.kr`.
@@ -34,7 +45,9 @@ npm run build            # 프로덕션 빌드
 npm run lint             # eslint (flat config)
 npm run typecheck        # tsc --noEmit
 npm run db:generate      # drizzle-kit generate  (push 는 금지)
-npm run db:migrate
+npm run db:migrate       # 자체 러너. -- --dry 로 적용 대상 확인
+npm run db:verify        # 마이그레이션 원장 · 스키마 소유자 · 미디어 참조 검증
+npm run fonts:subset     # Pretendard unicode-range 서브셋 재생성
 npm run bootstrap:admin  # 관리자 발급 · 복구
 npm run storage:cleanup  # S3 정리 큐 수동 실행
 npm run migrate:posts    # 레거시 → Community 이관 페이로드
@@ -70,8 +83,60 @@ Next peer(`^19.0.0`)는 19.3 을 통과시킨다. `package.json` 의 정확한 �
   `AWS_WEB_IDENTITY_TOKEN_FILE`(디스크의 **파일**)을 찾는데 Vercel 은 토큰을 파일로 주지 않는다.
   DB(`lib/db/connection.ts`)와 S3(`lib/s3/client.ts`) **둘 다** `AWS_ROLE_ARN` 이 있으면
   `@vercel/functions/oidc` 로 간다. 새 AWS 클라이언트를 만들면 같은 배선을 해야 한다.
-- **`/posts`**: ESSENTIA Community 의 ICAROS 게시판이 단일 원본. **복제하지 않는다.**
-  읽기는 공개 API 로 이미 동작하고, 쓰기는 서비스 토큰(D1) 대기.
+- **`/posts`**: Community 신규 글 + `icaros.legacy_posts` 과거 기록의 통합 피드.
+  각 글의 원본은 한 곳에만 두며 Community 글은 **복제하지 않는다**. 쓰기는 서비스 토큰(D1) 대기.
+
+## 상세 구현 안내
+
+인프라 부채 상태의 정본은 `docs/icaros-rebuild/15-infra-debt.md`다. 과거 장애 수치를 현재 상태로 단정하지 말고 해당 대장을 확인한다.
+공개 기체 경로는 `/vehicles`·`/vehicles/[slug]`, 멤버는 `/member`, 기록은 `/posts`다.
+패널의 `media_id`는 NOT NULL이다. 사진 없는 정보는 하위 페이지로 보낸다.
+
+`npm run db:migrate`는 `scripts/db/migrate.ts` 자체 러너를 사용한다. `drizzle-kit migrate`를 직접 사용하지 말고, 적용 후 `db:verify`로 원장과 스키마 소유권을 확인한다. 운영 적용은 사용자 승인 사항이다.
+
+### 하나의 DB, 두 소유자
+ICAROS 는 **`icaros` 스키마만** 소유한다. `public` 은 ESSENTIA Flyway 단독 소유이고 상대는 `ddl-auto: validate` 로 기동하므로 **`public` 에 무엇이든 만들면 상대 API 가 죽는다** (D2). 커넥션은 `search_path=icaros` 로 고정.
+`src/lib/db/connection.ts` 가 두 모드를 가른다 — 로컬은 `DATABASE_URL` 비밀번호, 배포는 **RDS IAM 인증**(정적 비밀번호 없음, 커넥션마다 15분 토큰, D20). Vercel 에서는 `AWS_ROLE_ARN` 이 있으면 `@vercel/functions/oidc` 경로를 탄다 — AWS SDK 기본 체인은 `AWS_WEB_IDENTITY_TOKEN_FILE`(파일)을 찾으므로 **기본 체인만으로는 절대 못 붙는다**. SSL 은 `verify-full` 상당(`RDS_CA_BUNDLE*` 필수, 없으면 fail-closed).
+런타임 role `icaros_app` 에는 DDL 권한이 없다. 마이그레이션은 `icaros_migrator`.
+
+### Posts 통합 피드
+`src/lib/posts/feed.ts`가 ESSENTIA Community의 신규 글과 `icaros.legacy_posts`의 과거 기록을 날짜순으로 합친다. 각 글의 원본은 한 곳에만 두고 Community 글은 복제하지 않는다.
+`src/lib/community/client.ts`는 서버 전용 어댑터다. 상류 오류는 `CommunityResult`로 구분하고, Community에 연결되지 않아도 로컬 레거시 기록은 표시한다. 쓰기 연동은 D1·D25를 따른다.
+
+### 미디어: 전부 private S3 + 프록시 스트리밍
+`/api/upload/presign`(presigned **PUT**, D12) → 브라우저 PUT → `/api/upload/confirm` 이 `HeadObject` 로 크기·타입을 **실측** 검증(서명에 크기를 못 박기 때문). `media` 행은 `pending → ready`. 확정되지 않은 행과 삭제 실패는 `storage_cleanup_jobs` 큐에 쌓이고 **Vercel cron `/api/cron/storage`**(`CRON_SECRET` Bearer, 매일 03:17)가 비운다 — 이 cron 이 없으면 큐를 꺼내는 주체가 아무도 없다.
+서빙은 `/api/media/[id]` 가 **바이트를 스트리밍**한다. 302 가 아니다 (D15) — Next 이미지 최적화기가 `Location` 을 따라가지 않아 0바이트로 끝나고, 서명 URL 이 클라이언트로 새는 경로도 함께 닫는다. `next.config.ts` 의 `remotePatterns: []` 는 그 결정의 일부다.
+캐시 헤더는 `entity_type` **허용 목록**으로 갈린다(`rocket|landing|model|poster` → immutable, 그 외·null → `private, no-store`). `member` 가 빠진 것은 멤버 사진이 미성년자 얼굴이기 때문이다. 차단 목록으로 뒤집지 말 것.
+업로드 상한·MIME 은 `src/lib/image/policy.ts` 한 곳 — 브라우저 인코더와 서버 검증이 **같은 상수**를 본다.
+
+### 인증
+자체 구현: Argon2id + DB 세션. 외부 Auth SaaS 없음, 공개 가입 없음.
+쿠키 `__Host-icaros_session` 에 원문 토큰, DB 에는 SHA-256 만(유출돼도 세션을 만들 수 없다). 절대 만료 7일 · 유휴 8시간 · `last_seen_at` write 는 5분 스로틀.
+CSRF 3중 방어: ① `SameSite=Lax` ② `next.config.ts` 의 `serverActions.allowedOrigins` ③ `requireAdmin()` 의 명시적 Origin 검증(fail-closed). **`ADMIN_ALLOWED_ORIGINS` 를 두 곳이 읽는데 형식이 다르다** — Next 는 호스트 목록, `guard.ts` 는 절대 URL. `guard.ts` 가 스킴 없는 값도 받아 주도록 보정해 두었다(안 그러면 콘솔이 조용히 전면 잠긴다).
+로그인 시도 제한은 서버리스라 in-memory 를 못 믿어 `login_attempts` 테이블 기반. `auth_events` 에는 비밀번호·토큰·해시를 절대 넣지 않는다.
+
+### Admin 콘솔 (`src/app/admin/`)
+- `layout.tsx` 가 인증 게이트다. 미인증이면 `children` 을 **트리에 넣지 않는다** — 서버 컴포넌트는 트리에 없으면 실행되지 않으므로 패널의 DB 조회 자체가 일어나지 않는다. `page.tsx` 가 한 번 더 본다.
+- **상태는 전부 URL 쿼리**(`?tab=&new=&edit=&delete=&saved=`). 그래서 새로고침·공유·뒤로가기가 그대로 되고 탭 전환에 클라이언트 JS 가 0 줄이다. 쿼리 조립은 `_tabs.ts` 의 `adminHref()` 한 곳.
+- 3분할: `_actions/`(`'use server'`, 쓰기) · `_data/`(읽기) · `_lib/`(form·media·version 헬퍼). 패널은 `_panels/`, 폼 잎만 `'use client'`.
+- **액션은 throw 하지 않는다.** 전부 `ActionResult`(`_actions/result.ts`)로 내려온다 — `DENIED`/`CONFLICT`/`MALFORMED`/`fail()`. 그래야 `useActionState` 가 그리고 스택 트레이스가 화면에 새지 않는다.
+- **모든 mutation 첫 줄에 `requireAdmin()`.** 동시 수정은 `_lib/version.ts` 낙관적 잠금(버전 토큰 불일치 → `CONFLICT`).
+- `runtime = 'nodejs'` 는 액션 파일이 아니라 **액션을 호출하는 세그먼트**(`admin/layout.tsx`·`page.tsx`)에 선언한다 — `'use server'` 모듈은 async 함수 외의 export 를 허용하지 않는다.
+- Scene 탭은 `ADMIN_TABS` 밖에 있다(`components/admin/scene/href.ts`). `parseTab` 이 모르는 값을 기본 탭으로 접으므로 scene 판정을 **먼저** 한다.
+
+### 랜딩
+`site_settings`(key/value)가 **유일한 원본**이다. 레거시 `home.jsx` 의 `DEFAULTS` 하드코딩 사본은 두 벌이 갈라진 채 방치돼 있었고, 그래서 없앴다 — 값이 없으면 그 자리를 비운다. 섹션 on/off·순서는 `page_sections`, 테마는 코드(`SECTION_THEME`), 내비 **경로는 코드가 정하고 라벨만 CMS** (`lib/content.ts`).
+루트 레이아웃만 `getSiteContentSafe()` 를 쓴다 — 거기서 던지면 DB 장애가 전체 500 이 되어 `/admin` 로그인 창구까지 사라진다.
+슬로건의 `**단어**` 는 마크다운이 아니라 레거시에서 이어받은 자체 표기다(`components/ui/Highlight.tsx`).
+
+### 3D (`src/components/three/`)
+`HeroStage` 가 capabilities 프로브를 통과한 뒤에야 `next/dynamic(..., { ssr: false })` 로 `Scene` 을 부른다 — **막히면 three 청크가 네트워크에 나가지도 않는다.** 폴백 사다리: WebGL2 & 저사양 아님 → 3D / 그 외 → 포스터 이미지 / 타깃 박스도 포스터도 없으면 → 아무것도 없음. **모바일 기본 off.**
+레이아웃은 HTML/CSS 가 소유하고 캔버스는 `data-webgl-target` 빈 박스의 `getBoundingClientRect()` 를 **읽기만** 한다. drei 는 쓰지 않는다(의존 그래프가 통째로 딸려 온다).
+Scene 설정은 검증된 숫자 필드로만 저장한다 — 임의 JS 를 허용하면 CMS 가 곧 RCE 경로다. 확장은 `extras` jsonb 하나로 제한.
+
+### 폰트
+본문 Pretendard 는 `next/font/local` 이 아니라 `src/app/fonts.css` 의 **수기 `@font-face`** 다 — 로더가 `unicode-range` 를 노출하지 않아 3 웨이트 2.22MB 를 통째로 받게 되기 때문(서브셋 후 305KB). Archivo(display, `wdth` 125 고정)·IBM Plex Mono 는 `next/font/google`.
+
 
 ## 규약
 
@@ -80,6 +145,7 @@ Next peer(`^19.0.0`)는 19.3 을 통과시킨다. `package.json` 의 정확한 �
 - 한글은 자간 0.02em 을 넘으면 깨진다. 모듈 CSS 가 `globals.css` 의 `:lang(ko)` 를
   특이도로 이기므로 각 모듈에서 `&:lang(ko)` 를 명시할 것.
 - 서버 전용 모듈에 `import 'server-only'`. 모든 mutation 첫 줄에 `requireAdmin()`.
+- 페이지 CSS는 `page.module.css`에 동거하고 공용 CSS는 `components/**/*.module.css`에 둔다.
 - 기본 Server Component. `'use client'` 는 상호작용이 실제 필요한 잎에만.
 
 ## 밟았던 지뢰 — 반복하지 말 것
@@ -109,8 +175,26 @@ Next peer(`^19.0.0`)는 19.3 을 통과시킨다. `package.json` 의 정확한 �
 ## 하지 말 것
 
 - Production 배포·마이그레이션, S3 운영 버킷 변경, IAM 변경 — 전부 사용자 승인 사항
-- 비밀값을 커밋하거나 출력하는 것
+- 비밀값·운영 식별자를 커밋하거나 출력하는 것
+- 커밋 메시지·PR 본문에 Codex/Claude/AI 생성 흔적을 남기는 것
 - 동작을 확인하지 않은 것을 "완료"로 보고하는 것
+
+## 도메인 맥락
+
+아래 인원·역할·활동 이력은 기존 문서 작성 시점의 맥락이며 현재 값은 CMS에서 확인한다.
+
+**ICAROS** = Intelligent Creative Astronautics & Rocketry Organization of Students. 제주 중심 중·고등학생 ~27명의 학생 주도 항공우주 팀. 대학 랩도 회사도 아니다 — 예산이 작고 기체는 3D 프린팅이며 발사는 빌린 땅에서 한다. 사이트는 **공개 기록 + 후원 창구**다.
+
+- **사람.** 주관 김지후(전 부분 총괄 설계, 표선고), 부주관 박현빈(전자부장). 분과는 `members.squad` 에: 추진공학부 / 전자부 / 비행제어부 / SW·디자인 / 법률·재무팀.
+- **두 갈래.** (1) 고체연료 사운딩 로켓 — KNSB, 흑색화약 사출, CanSat, 낙하산 회수, 정적연소(TMS). (2) UAV/VTVL — EDF TVC 호버 기체, STOL RC 고정익. 랜딩은 UAV 를 앞세우고 Posts 는 대부분 로켓이다.
+- **기체 명명.** `rockets.series` `'A'` = ICX 1/2 계열(ICX-IA, ICX-Is), `'B'` = ICX MV 계열. 기체에는 고유명도 붙는다 — **RAON** 이 ICX-II 기체.
+- **타임라인.** 2025-12 첫 TMS·발사대 제작 → 2026-01 ICX-I 제작, EDF TVC 설계 → 2026-06/07 TVC 호버·STOL 설계 → **2026-07-18 첫 고체연료 발사**(ICX-1A, 알뜨르, 회수 성공) → **2026-08-17 RAON 발사**(금악 사유지; 테일핀 제어 성공·회수 성공, 사출 장치 오작동으로 정점 고도 미달).
+- **돈.** `site_settings` 의 `donation.goal`/`donation.current` 가 라이브 모금 현황. **결제 연동은 없다.**
+- **바깥 링크.** 연락처·소셜 링크는 CMS의 현재 값을 확인한다. `sim.icaros.kr`(팀의 시뮬레이터)은 헤더에서 링크만 하고 이 레포에 없다.
+
+**Voice.** 섹션 헤딩·슬로건만 영문, 본문은 한국어. 슬로건은 짧은 영문 한 줄에 `**강조**` 단어 정확히 하나(`We build what flies, from **UAVs to rockets.**`). 본문은 평이하고 사실적으로 — 마케팅 과장 없이, 실패도 실패로 적는다. Posts 가 그 톤이니 카피를 쓸 때 맞출 것.
+
+**내용은 커밋 없이 바뀐다.** 로켓·멤버·랜딩 카피는 팀이 `/admin` 에서 고친다. 숫자·이름·문구를 인용하기 전에 DB 를 조회할 것 — `src/assets/*.json` 같은 레거시 시드는 남아 있지 않다.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

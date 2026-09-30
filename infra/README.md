@@ -1,0 +1,7 @@
+# Static release infrastructure
+
+`buildspec.yml` is the CodeBuild buildspec. The project source must be Git with full commit checkout, and its buildspec path must be `infra/buildspec.yml`. The Lambda supplies six `ICAROS_*` build overrides; project configuration supplies `ICAROS_RELEASE_BUCKET`. Use a Node 22 CodeBuild image with AWS CLI v2 and Git. Set source version to the approved 40-character commit. The build verifies checked-out HEAD, downloads the content-addressed S3 snapshot, verifies SHA-256, builds `@icaros/web`, and uploads all exported files before `manifest.json`.
+
+The viewer-request CloudFront Function uses a KVS association and key `release`. Its value has the form `releases/v<version>-<64-character-manifest-sha256>`, matching `releasePrefix: 'releases'` in the API runtime. Associate the function only with the public FE cache behavior. `/admin*` and `/api*` require separate behaviors and origins. The function rewrites extensionless routes to their exported `index.html`; missing paths stay missing on the S3 origin. Never configure SPA fallback or a blanket 403/404-to-200 custom error response. With a private S3 origin, missing keys may yield 403 unless the origin access policy grants `s3:ListBucket` for the release prefix; configure missing-key behavior to return HTTP 404 after security review.
+
+Run `node --test infra/cloudfront/release-router.test.mjs` and `node --check infra/release/build.mjs`. This directory contains deploy artifacts and local checks; it does not apply AWS changes.

@@ -1,0 +1,35 @@
+{
+  "name": "@icaros/web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 5174",
+    "prebuild": "node scripts/check-snapshot.mjs",
+    "build": "next build",
+    "postbuild": "node scripts/prune-empty-pages.mjs",
+    "test": "node --test scripts/snapshot-contract.test.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "check:snapshot": "node scripts/check-snapshot.mjs"
+  },
+  "dependencies": {
+    "@react-three/fiber": "^9.7.0",
+    "next": "16.3.2",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@types/three": "^0.185.4",
+    "eslint": "^9.39.1",
+    "eslint-config-next": "16.3.2",
+    "typescript": "^5.9.3"
+  },
+  "overrides": { "react": "19.2.8", "react-dom": "19.2.8" }
+}

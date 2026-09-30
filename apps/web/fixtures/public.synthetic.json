@@ -1,0 +1,284 @@
+{
+  "version": "synthetic-ci-2026-09-30",
+  "publishedAt": "2026-09-30T00:00:00.000Z",
+  "site": {
+    "seo.title": "ICAROS",
+    "seo.description": "학생 주도 항공우주 프로젝트의 합성 테스트 페이지입니다.",
+    "hero.tagline": "We build what flies, from **UAVs to rockets.**",
+    "about.slogan": "Built by students",
+    "about.body": "이 화면은 정적 사이트 빌드를 검증하는 합성 콘텐츠입니다.",
+    "contact.body": "테스트용 연락처 영역입니다.",
+    "footer.copyright": "ICAROS · Synthetic build fixture"
+  },
+  "sections": [
+    {
+      "id": "hero",
+      "label": "Hero"
+    },
+    {
+      "id": "about",
+      "label": "About Us"
+    },
+    {
+      "id": "contact",
+      "label": "Contact"
+    }
+  ],
+  "panels": [
+    {
+      "id": "synthetic-panel",
+      "published": true,
+      "mediaSrc": "/assets/models/icx-2-poster.png",
+      "mime": "image/png",
+      "width": 960,
+      "height": 540,
+      "alt": "정적 빌드 검증용 이미지",
+      "focalX": 50,
+      "focalY": 50,
+      "scrim": "bottom",
+      "anchor": "bottom-left",
+      "heightMode": "full",
+      "headline": "Synthetic flight panel",
+      "body": "합성 패널입니다. 실제 CMS 콘텐츠가 아닙니다.",
+      "ctaLabel": "기체 보기",
+      "ctaHref": "/vehicles"
+    }
+  ],
+  "taxonomy": {
+    "types": [
+      {
+        "id": "test-rockets",
+        "label": "합성 기체"
+      },
+      {
+        "id": "test-uav",
+        "label": "합성 무인기"
+      }
+    ],
+    "series": [
+      {
+        "id": "test-series",
+        "label": "합성 시리즈",
+        "typeId": "test-rockets",
+        "descriptionMd": "정적 빌드 검증용 시리즈입니다."
+      },
+      {
+        "id": "test-uav-series",
+        "label": "합성 무인기 시리즈",
+        "typeId": "test-uav",
+        "descriptionMd": "다른 분류의 합성 설명입니다."
+      },
+      {
+        "id": "test-series-two",
+        "label": "합성 시리즈 2",
+        "typeId": "test-rockets",
+        "descriptionMd": "같은 분류의 두 번째 합성 시리즈입니다."
+      }
+    ]
+  },
+  "vehicles": [
+    {
+      "published": true,
+      "slug": "test-vehicle",
+      "name": "합성 기체",
+      "series": "test-series",
+      "seriesLabel": "합성 시리즈",
+      "typeId": "test-rockets",
+      "imageSrc": "/assets/models/icx-2-poster.png",
+      "maxAltitudeM": null,
+      "sizeM": null,
+      "payloadKg": null,
+      "descriptionMd": "정적 상세 페이지의 본문을 확인하기 위한 합성 데이터입니다.",
+      "engines": []
+    },
+    {
+      "published": true,
+      "slug": "test-uav",
+      "name": "합성 무인기",
+      "series": "test-uav-series",
+      "seriesLabel": "합성 무인기 시리즈",
+      "typeId": "test-uav",
+      "imageSrc": "/assets/models/icx-2-poster.png",
+      "maxAltitudeM": null,
+      "sizeM": null,
+      "payloadKg": null,
+      "descriptionMd": "다른 분류의 정적 상세 페이지입니다.",
+      "engines": []
+    },
+    {
+      "published": true,
+      "slug": "test-vehicle-two",
+      "name": "합성 기체 2",
+      "series": "test-series-two",
+      "seriesLabel": "합성 시리즈 2",
+      "typeId": "test-rockets",
+      "imageSrc": "/assets/models/icx-2-poster.png",
+      "maxAltitudeM": null,
+      "sizeM": null,
+      "payloadKg": null,
+      "descriptionMd": "같은 분류의 두 번째 상세 페이지입니다.",
+      "engines": []
+    }
+  ],
+  "members": [
+    {
+      "published": true,
+      "id": "test-member",
+      "name": "테스트 부원",
+      "role": "검증",
+      "squad": "합성 부서",
+      "school": null,
+      "bioMd": "합성 명단입니다.",
+      "imageSrc": "/assets/img/member/profile.webp",
+      "hasPhoto": false
+    }
+  ],
+  "posts": [
+    {
+      "published": true,
+      "id": "test-community",
+      "source": "community",
+      "title": "합성 신규 기록",
+      "contentMd": "정적 게시글 본문 검증용 텍스트입니다.",
+      "date": "2026-09-30",
+      "displayDate": "2026-09-30",
+      "excerpt": "정적 게시글 본문 검증용 텍스트입니다.",
+      "thumb": null
+    },
+    {
+      "published": true,
+      "id": "test-legacy",
+      "slug": "test-legacy",
+      "source": "legacy",
+      "title": "합성 과거 기록",
+      "contentMd": "정적 아카이브 본문 검증용 텍스트입니다.",
+      "date": "2026-09-29",
+      "displayDate": "2026-09-29",
+      "excerpt": "정적 아카이브 본문 검증용 텍스트입니다.",
+      "thumb": null
+    },
+    {
+      "published": true,
+      "id": "test-community-01",
+      "source": "community",
+      "title": "합성 신규 기록 01",
+      "contentMd": "합성 게시글 01의 본문입니다.",
+      "date": "2026-09-01",
+      "displayDate": "2026-09-01",
+      "excerpt": "합성 게시글 01의 본문입니다.",
+      "thumb": null
+    },
+    {
+      "published": true,
+      "id": "test-community-02",
+      "source": "community",
+      "title": "합성 신규 기록 02",
+      "contentMd": "합성 게시글 02의 본문입니다.",
+      "date": "2026-09-02",
+      "displayDate": "2026-09-02",
+      "excerpt": "합성 게시글 02의 본문입니다.",
+      "thumb": null
+    },
+    {
+      "published": true,
+      "id": "test-community-03",
+      "source": "community",
+      "title": "합성 신규 기록 03",
+      "contentMd": "합성 게시글 03의 본문입니다.",
+      "date": "2026-09-03",
+      "displayDate": "2026-09-03",
+      "excerpt": "합성 게시글 03의 본문입니다.",
+      "thumb": null
+    },
+    {
+      "published": true,
+      "id": "test-community-04",
+      "source": "community",
+      "title": "합성 신규 기록 04",
+      "contentMd": "합성 게시글 04의 본문입니다.",
+      "date": "2026-09-04",
+      "displayDate": "2026-09-04",
+      "excerpt": "합성 게시글 04의 본문입니다.",
+      "thumb": null
+    },
+    {
+      "published": true,
+      "id": "test-community-05",
+      "source": "community",
+      "title": "합성 신규 기록 05",
+      "contentMd": "합성 게시글 05의 본문입니다.",
+      "date": "2026-09-05",
+      "displayDate": "2026-09-05",
+      "excerpt": "합성 게시글 05의 본문입니다.",
+      "thumb": null
+    },
+    {
+      "published": true,
+      "id": "test-community-06",
+      "source": "community",
+      "title": "합성 신규 기록 06",
+      "contentMd": "합성 게시글 06의 본문입니다.",
+      "date": "2026-09-06",
+      "displayDate": "2026-09-06",
+      "excerpt": "합성 게시글 06의 본문입니다.",
+      "thumb": null
+    },
+    {
+      "published": true,
+      "id": "test-community-07",
+      "source": "community",
+      "title": "합성 신규 기록 07",
+      "contentMd": "합성 게시글 07의 본문입니다.",
+      "date": "2026-09-07",
+      "displayDate": "2026-09-07",
+      "excerpt": "합성 게시글 07의 본문입니다.",
+      "thumb": null
+    },
+    {
+      "published": true,
+      "id": "test-community-08",
+      "source": "community",
+      "title": "합성 신규 기록 08",
+      "contentMd": "합성 게시글 08의 본문입니다.",
+      "date": "2026-09-08",
+      "displayDate": "2026-09-08",
+      "excerpt": "합성 게시글 08의 본문입니다.",
+      "thumb": null
+    },
+    {
+      "published": true,
+      "id": "test-community-09",
+      "source": "community",
+      "title": "합성 신규 기록 09",
+      "contentMd": "합성 게시글 09의 본문입니다.",
+      "date": "2026-09-09",
+      "displayDate": "2026-09-09",
+      "excerpt": "합성 게시글 09의 본문입니다.",
+      "thumb": null
+    },
+    {
+      "published": true,
+      "id": "test-community-10",
+      "source": "community",
+      "title": "합성 신규 기록 10",
+      "contentMd": "합성 게시글 10의 본문입니다.",
+      "date": "2026-09-10",
+      "displayDate": "2026-09-10",
+      "excerpt": "합성 게시글 10의 본문입니다.",
+      "thumb": null
+    },
+    {
+      "published": true,
+      "id": "test-community-11",
+      "source": "community",
+      "title": "합성 신규 기록 11",
+      "contentMd": "합성 게시글 11의 본문입니다.",
+      "date": "2026-09-11",
+      "displayDate": "2026-09-11",
+      "excerpt": "합성 게시글 11의 본문입니다.",
+      "thumb": null
+    }
+  ],
+  "media": {},
+  "missions": []
+}

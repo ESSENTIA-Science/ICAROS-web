@@ -1,0 +1,140 @@
+.card {
+  position: relative;
+  display: grid;
+  /* 그림 열은 폭이 아니라 카드 폭의 비율로 따라간다. 상한 22rem 은 1920 에서 카드가
+     넓어져도 이미지가 계속 커지지 않게 잡아 둔 값이다. */
+  grid-template-columns: clamp(8rem, 30%, 22rem) minmax(0, 1fr);
+  gap: var(--sp-5);
+  align-items: center;
+}
+
+/**
+ * 프레임을 그리지 않는다. 렌더는 배경이 비어 있고 기체가 이미지 폭의 3분의 1쯤만 차지해서,
+ * 상자를 두르면 상자의 3분의 2가 빈 채로 남아 카드가 "덜 채워진" 것처럼 보인다 (1280 실측).
+ * 상자를 지우면 남는 자리는 그냥 섹션 여백이 되고, 실루엣만 남는다.
+ * 이미지가 없는 경우에만 `.noImage` 가 자기 프레임을 그린다.
+ */
+.figure {
+  position: relative;
+  /* 원본(512×1024)과 같은 비율. contain 여백이 생기지 않는 유일한 값이다 */
+  aspect-ratio: 1 / 2;
+}
+
+.img {
+  object-fit: contain;
+  transition: var(--t-move);
+}
+
+.noImage {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--rule);
+  background: repeating-linear-gradient(135deg, transparent 0 8px, var(--rule) 8px 9px);
+}
+
+.body {
+  display: grid;
+  gap: var(--sp-4);
+  align-content: center;
+}
+
+.name {
+  font-size: var(--fs-h3);
+  line-height: var(--lh-h3);
+  letter-spacing: var(--tr-h3);
+  color: var(--fg);
+  text-wrap: balance;
+}
+/* globals 의 `:lang(ko)` 가드와 특이도가 동률이라 모듈이 이긴다 — 한글 기체명이면 되돌린다 */
+.name:lang(ko) {
+  letter-spacing: 0;
+}
+
+.link {
+  transition: var(--t-color);
+}
+/* 카드 전체를 클릭 표적으로 넓힌다. 접근 가능한 이름은 기체명 그대로 */
+.link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+/* 라벨과 값이 한 행으로 읽히려면 붙어 있어야 한다 — 1920 실측에서 카드 본문이 467px 까지
+   벌어져 '최대 고도' 와 '150 m' 사이가 470px 이었다. 규칙선도 같은 폭으로 묶어 끝을 맞춘다. */
+.rule,
+.specs {
+  max-width: 34rem;
+}
+
+.rule {
+  display: block;
+  position: relative;
+  height: 1px;
+  background: var(--rule);
+}
+.rule::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--sig);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform var(--dur-3) var(--ease-primary);
+}
+
+.specs {
+  display: grid;
+  gap: var(--sp-3);
+}
+
+.specRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--sp-3);
+}
+
+.specValue {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4em;
+  font-family: var(--ff-mono);
+  font-size: var(--fs-body-s);
+  letter-spacing: var(--tr-mono);
+  color: var(--fg);
+}
+
+/* 값 폭을 문자수로 고정해 두면 자릿수가 달라도 소수점과 단위가 세로로 선다 (Vast specs 의 width:10em) */
+.specNum {
+  display: inline-block;
+  min-width: 4ch;
+  text-align: right;
+}
+
+.specUnit {
+  color: var(--fg-muted);
+  font-size: var(--fs-mono);
+}
+
+/* ---- 호버/포커스 ---- */
+.card:hover .img,
+.card:has(.link:focus-visible) .img {
+  transform: scale(1.03);
+}
+.card:hover .rule::after,
+.card:has(.link:focus-visible) .rule::after {
+  transform: scaleX(1);
+}
+
+/* 레퍼런스 규칙: 터치에서는 호버를 흉내 내지 않고 지운다 (03 §7) */
+@media (hover: none) {
+  .card:hover .img { transform: none; }
+  .rule::after { display: none; }
+}
+
+@media (max-width: 599px) {
+  .card { gap: var(--sp-4); }
+  .body { gap: var(--sp-3); }
+  .specs { gap: var(--sp-2); }
+}

@@ -1,0 +1,15 @@
+.section { min-height: 70vh; padding-block: var(--section-pad-xl); }
+.inner { display: grid; gap: var(--sp-7); }
+.header { display: grid; gap: var(--sp-3); }
+.date { font-family: var(--ff-mono); font-size: var(--fs-mono); letter-spacing: var(--tr-mono); }
+.title { font-size: var(--fs-h2); line-height: var(--lh-h2); }
+.intro, .summary, .empty { color: var(--fg-muted); }
+.list { width: 100%; max-width: var(--measure); list-style: none; border-top: 1px solid var(--rule-strong); }
+.item { border-bottom: 1px solid var(--rule); }
+.itemLink { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); padding-block: var(--sp-7); color: var(--fg); }
+.itemLink:hover .itemTitle, .itemLink:focus-visible .itemTitle { text-decoration: underline; text-underline-offset: var(--sp-1); }
+.main, .facts { display: grid; align-content: start; gap: var(--sp-2); }
+.itemTitle { font-size: var(--fs-h4); font-weight: 700; }
+.summary, .facts { font-size: var(--fs-body); }
+.facts { display: flex; flex-wrap: wrap; gap: var(--sp-3); color: var(--fg-muted); }
+@media (max-width: 699px) { .itemLink { gap: var(--sp-3); } }

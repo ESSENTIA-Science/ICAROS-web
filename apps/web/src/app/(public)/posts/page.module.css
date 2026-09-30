@@ -1,0 +1,55 @@
+.section { padding-block: var(--section-pad-xl); min-height: 70vh; }
+.inner { display: grid; justify-items: start; gap: var(--sp-5); }
+
+/* 제목과 인스타 링크는 한 덩어리다. 제목이 들고 있던 아래 여백을 여기로 옮겨,
+   링크가 목록이 아니라 제목에 붙어 보이게 한다. */
+.head { display: grid; justify-items: start; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.title { font-size: var(--fs-h2); line-height: var(--lh-h2); }
+.notice { color: var(--fg-muted); display: grid; gap: var(--sp-4); justify-items: start; }
+
+/* 포스트 카드는 사진 면이다. 링크를 같은 문법으로 두면 목록의 0번째 항목으로 읽히므로
+   1px 테두리 상자로 갈라 놓는다 — 목록이 아니라 머리말에 붙은 바깥 링크라는 표시다. */
+.social {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-4);
+  border: 1px solid var(--rule-strong);
+  color: var(--fg);
+  transition: var(--t-color);
+}
+.social:hover { border-color: var(--sig); }
+.socialLabel {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--tr-mono);
+  color: var(--fg-faint);
+}
+.socialHandle { font-size: var(--fs-body-s); }
+.socialArrow { width: 1.2rem; height: 1.2rem; flex: none; color: var(--fg-faint); }
+.social:hover .socialArrow { color: var(--fg); }
+
+/* 글마다 사진과 요약을 한 줄씩 크게 보여 준다. */
+.grid {
+  width: 100%;
+  max-width: var(--measure);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: var(--sp-10);
+}
+
+.pager { display: flex; align-items: center; gap: var(--sp-5); margin-top: var(--sp-6); }
+.pageNum { font-family: var(--ff-mono); font-size: var(--fs-mono); color: var(--fg-muted); }
+
+.link {
+  font-size: var(--fs-body-s);
+  color: var(--sig-ink);
+  border-bottom: 1px solid var(--rule-strong);
+  padding-bottom: var(--sp-1);
+  transition: var(--t-color);
+}
+.link:hover { border-bottom-color: var(--sig); }
+
+@media (max-width: 599px) {
+  .grid { grid-template-columns: minmax(0, 1fr); row-gap: var(--sp-9); }
+}

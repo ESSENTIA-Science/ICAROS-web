@@ -1,0 +1,9 @@
+.section { margin-top: var(--sp-8); border-top: 1px solid var(--rule); padding-top: var(--sp-5); }
+.section h2 { font-size: var(--fs-h3); }
+.section ul { list-style: none; padding: 0; display: grid; gap: var(--sp-4); }
+.section a, .section summary { text-decoration: underline; cursor: pointer; }
+.section video { display: block; width: 100%; max-width: 48rem; margin-block: var(--sp-4); }
+.pdfPreview { display: block; width: 100%; max-width: 48rem; min-height: 32rem; aspect-ratio: 3 / 4; margin-block: var(--sp-4); border: 1px solid var(--rule); background: var(--bg-raised); }
+
+.image { display: block; max-width: 100%; max-height: 48rem; width: auto; height: auto; margin-block: var(--sp-4); }
+.section figure { margin: 0; }
