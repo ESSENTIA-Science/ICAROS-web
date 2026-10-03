@@ -1,17 +1,21 @@
-import { rmSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readdirSync, rmSync } from 'node:fs'
+import { resolve, join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { loadAndValidateSnapshot } from './snapshot-contract.mjs'
 
-const snapshot = loadAndValidateSnapshot(process.env.ICAROS_SNAPSHOT, process.env.ICAROS_SNAPSHOT_SHA256)
-if (snapshot.posts.length <= 12) {
-  // Next static export requires one generated param for every dynamic route.
-  // Remove its temporary page 2 when the snapshot has only one actual page.
-  rmSync(resolve('out/posts/page/2'), { recursive: true, force: true })
-}
-if (!snapshot.posts.some((post) => post.source === 'community')) {
-  rmSync(resolve('out/posts/__empty-community'), { recursive: true, force: true })
+/** Reserved sentinel segments are build scaffolding, never public routes. */
+export function pruneEmptyPages(output) {
+  function walk(directory) {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name)
+      if (entry.name.startsWith('__empty-')) rmSync(path, { recursive: true, force: true })
+      else if (entry.isDirectory()) walk(path)
+    }
+  }
+  walk(output)
 }
 
-if (snapshot.missions.length === 0) {
-  rmSync(resolve('out/missions/__empty-mission'), { recursive: true, force: true })
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  loadAndValidateSnapshot(process.env.ICAROS_SNAPSHOT, process.env.ICAROS_SNAPSHOT_SHA256)
+  pruneEmptyPages(resolve('out'))
 }

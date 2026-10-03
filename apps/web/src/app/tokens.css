@@ -83,8 +83,9 @@ html {
   --fs-h3: clamp(2.4rem, 3vw, 3.6rem);
   --fs-h4: clamp(2rem, 2.2vw, 2.6rem);
   --fs-h5: 1.8rem;
-  --fs-body-l: 1.8rem;
-  --fs-body: 1.6rem;
+  --fs-body-l: clamp(1.7rem, calc(1.6rem + 0.2vw), 1.8rem);
+  --fs-body: clamp(1.6rem, calc(1.55rem + 0.2vw), 1.8rem);
+  --fs-article: clamp(2rem, calc(1.9rem + 0.4vw), 2.4rem);
   --fs-body-s: 1.4rem;
   --fs-caption: 1.3rem;
   --fs-mono: 1.2rem;

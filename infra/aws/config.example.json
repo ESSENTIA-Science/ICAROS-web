@@ -1,0 +1,90 @@
+{
+  "region": "ap-northeast-2",
+  "webRepository": "https://github.com/ESSENTIA-Science/ICAROS-web.git",
+  "webSourceRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "adminOrigin": "https://cms.example.invalid",
+  "publicMediaOrigin": "https://media.example.invalid",
+  "essentiaOrigin": "https://essentia.example.invalid",
+  "essentiaCategory": "EXAMPLE",
+  "essentiaAuthorLabel": "EXAMPLE",
+  "network": {
+    "vpcId": "vpc-00000000000000000",
+    "internetGatewayId": "igw-00000000000000000",
+    "dbSecurityGroupId": "sg-00000000000000000",
+    "azA": "ap-northeast-2a",
+    "azB": "ap-northeast-2c",
+    "vpcCidr": "10.200.0.0/16",
+    "publicCidr": "10.200.240.0/24",
+    "privateCidrA": "10.200.241.0/24",
+    "privateCidrB": "10.200.242.0/24",
+    "proxyPrivateIpv4": "10.200.10.10",
+    "proxySecurityGroupId": "sg-00000000000000002",
+    "s3PrefixListId": "pl-00000000000000000"
+  },
+  "foundation": {
+    "releaseBucket": "example-release",
+    "privateMediaBucket": "example-private-media",
+    "publicMediaBucket": "example-public-media",
+    "buildProject": "example-build",
+    "kvsArn": "arn:aws:cloudfront::000000000000:key-value-store/00000000-0000-0000-0000-000000000000",
+    "privateSubnetA": "subnet-00000000000000000",
+    "privateSubnetB": "subnet-00000000000000001",
+    "lambdaSecurityGroupId": "sg-00000000000000001",
+    "apiOriginHost": "example.execute-api.ap-northeast-2.amazonaws.com"
+  },
+  "artifacts": {
+    "bucket": "example-artifacts",
+    "apiKey": "approved/api.zip",
+    "apiVersion": "EXAMPLE_VERSION",
+    "proxyKey": "approved/media-proxy.zip",
+    "proxyVersion": "EXAMPLE_VERSION"
+  },
+  "secrets": {
+    "databaseArn": "arn:aws:secretsmanager:ap-northeast-2:000000000000:secret:EXAMPLE-databaseArn",
+    "essentiaArn": "arn:aws:secretsmanager:ap-northeast-2:000000000000:secret:EXAMPLE-essentiaArn",
+    "workerArn": "arn:aws:secretsmanager:ap-northeast-2:000000000000:secret:EXAMPLE-workerArn"
+  },
+  "codeFixes": {
+    "bucketSplit": false,
+    "promotionMetadata": false,
+    "promotionRecovery": false,
+    "terminalCallbacks": false,
+    "durableBuildIdentity": false,
+    "publicMediaPromotion": false,
+    "memberPrivacy": false,
+    "emptyCollections": false,
+    "releaseAssetConsistency": false,
+    "manualPromotionGate": false,
+    "compatibilityIndex": false
+  },
+  "gates": {
+    "databaseTlsVerified": false,
+    "schemaVerified": false,
+    "leastPrivilegeDbRoleVerified": false,
+    "egressVerified": false,
+    "apiPackageVerified": false,
+    "proxyPackageVerified": false,
+    "stagedEndToEndVerified": false,
+    "sourceReviewed": false,
+    "snapshotIndependentlyHashed": false,
+    "databaseAuthReviewed": false,
+    "existingCognitoCallbacksVerified": false
+  },
+  "approvals": {
+    "deploy": true,
+    "iam": true,
+    "network": true,
+    "dbTls": true,
+    "dbMigrations": true,
+    "domainCutover": true,
+    "firstPointer": true,
+    "publicMediaSelection": true
+  },
+  "publicOrigin": "https://public.example.invalid",
+  "cognito": {
+    "userPoolId": "ap-northeast-2_EXAMPLE",
+    "clientId": "EXAMPLE",
+    "domain": "https://existing.example.invalid",
+    "adminGroup": "EXAMPLE"
+  }
+}

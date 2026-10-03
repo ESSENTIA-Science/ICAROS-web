@@ -1,0 +1,414 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Existing VPC dedicated Lambda subnets; proxy mode creates no NAT/EIP/public routes. Existing backend CONNECT listener separately installed.",
+  "Parameters": {
+    "VpcId": {
+      "Type": "AWS::EC2::VPC::Id"
+    },
+    "InternetGatewayId": {
+      "Type": "String",
+      "AllowedPattern": "^$|igw-[0-9a-f]+",
+      "Default": ""
+    },
+    "DbSecurityGroupId": {
+      "Type": "AWS::EC2::SecurityGroup::Id"
+    },
+    "AvailabilityZoneA": {
+      "Type": "AWS::EC2::AvailabilityZone::Name"
+    },
+    "AvailabilityZoneB": {
+      "Type": "AWS::EC2::AvailabilityZone::Name"
+    },
+    "PublicCidr": {
+      "Type": "String",
+      "Default": "10.200.240.0/24"
+    },
+    "PrivateCidrA": {
+      "Type": "String",
+      "Default": "10.200.241.0/24"
+    },
+    "PrivateCidrB": {
+      "Type": "String",
+      "Default": "10.200.242.0/24"
+    },
+    "ManageDbIngress": {
+      "Type": "String",
+      "AllowedValues": [
+        "false",
+        "true"
+      ],
+      "Default": "false"
+    },
+    "EgressMode": {
+      "Type": "String",
+      "Default": "proxy",
+      "AllowedValues": [
+        "proxy",
+        "nat"
+      ]
+    },
+    "ProxyPrivateIpv4": {
+      "Type": "String",
+      "AllowedPattern": "(10\\.[0-9.]+|172\\.(1[6-9]|2[0-9]|3[01])\\.[0-9.]+|192\\.168\\.[0-9.]+)",
+      "Description": "Verified existing backend private IPv4, used as /32 destination on port 3128."
+    },
+    "ProxySecurityGroupId": {
+      "Type": "AWS::EC2::SecurityGroup::Id"
+    },
+    "S3PrefixListId": {
+      "Type": "String",
+      "AllowedPattern": "pl-[0-9a-f]+",
+      "Description": "Read-only verified regional S3 managed prefix list; gateway endpoint uses private IPv4."
+    },
+    "ManageProxyIngress": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "false",
+        "true"
+      ]
+    }
+  },
+  "Conditions": {
+    "ManageDbIngress": {
+      "Fn::Equals": [
+        {
+          "Ref": "ManageDbIngress"
+        },
+        "true"
+      ]
+    },
+    "UseNat": {
+      "Fn::Equals": [
+        {
+          "Ref": "EgressMode"
+        },
+        "nat"
+      ]
+    },
+    "UseProxy": {
+      "Fn::Equals": [
+        {
+          "Ref": "EgressMode"
+        },
+        "proxy"
+      ]
+    },
+    "ManageProxyIngress": {
+      "Fn::And": [
+        {
+          "Condition": "UseProxy"
+        },
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "ManageProxyIngress"
+            },
+            "true"
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "PublicSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "CidrBlock": {
+          "Ref": "PublicCidr"
+        },
+        "AvailabilityZone": {
+          "Ref": "AvailabilityZoneA"
+        },
+        "MapPublicIpOnLaunch": false
+      },
+      "Condition": "UseNat"
+    },
+    "PrivateSubnetA": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "CidrBlock": {
+          "Ref": "PrivateCidrA"
+        },
+        "AvailabilityZone": {
+          "Ref": "AvailabilityZoneA"
+        },
+        "MapPublicIpOnLaunch": false
+      }
+    },
+    "PrivateSubnetB": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "CidrBlock": {
+          "Ref": "PrivateCidrB"
+        },
+        "AvailabilityZone": {
+          "Ref": "AvailabilityZoneB"
+        },
+        "MapPublicIpOnLaunch": false
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        }
+      },
+      "Condition": "UseNat"
+    },
+    "PublicDefaultRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGatewayId"
+        }
+      },
+      "Condition": "UseNat"
+    },
+    "PublicAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      },
+      "Condition": "UseNat"
+    },
+    "NatEip": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc"
+      },
+      "Condition": "UseNat"
+    },
+    "NatGateway": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatEip",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet"
+        }
+      },
+      "DependsOn": "PublicDefaultRoute",
+      "Condition": "UseNat"
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        }
+      }
+    },
+    "PrivateDefaultRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NatGateway"
+        }
+      },
+      "Condition": "UseNat"
+    },
+    "PrivateAssociationA": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnetA"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "PrivateAssociationB": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnetB"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "LambdaSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "GroupDescription": "ICAROS: DB and TLS egress only",
+        "SecurityGroupEgress": [
+          {
+            "Fn::If": [
+              "UseNat",
+              {
+                "IpProtocol": "tcp",
+                "FromPort": 443,
+                "ToPort": 443,
+                "CidrIp": "0.0.0.0/0"
+              },
+              {
+                "IpProtocol": "tcp",
+                "FromPort": 443,
+                "ToPort": 443,
+                "DestinationPrefixListId": {
+                  "Ref": "S3PrefixListId"
+                }
+              }
+            ]
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "DestinationSecurityGroupId": {
+              "Ref": "DbSecurityGroupId"
+            }
+          },
+          {
+            "Fn::If": [
+              "UseProxy",
+              {
+                "IpProtocol": "tcp",
+                "FromPort": 3128,
+                "ToPort": 3128,
+                "CidrIp": {
+                  "Fn::Sub": "${ProxyPrivateIpv4}/32"
+                }
+              },
+              {
+                "Ref": "AWS::NoValue"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "DatabaseIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "DbSecurityGroupId"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 5432,
+        "ToPort": 5432,
+        "SourceSecurityGroupId": {
+          "Ref": "LambdaSecurityGroup"
+        }
+      },
+      "Condition": "ManageDbIngress"
+    },
+    "S3Endpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+        },
+        "VpcEndpointType": "Gateway",
+        "RouteTableIds": [
+          {
+            "Ref": "PrivateRouteTable"
+          }
+        ]
+      }
+    },
+    "ProxyIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Condition": "ManageProxyIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "ProxySecurityGroupId"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 3128,
+        "ToPort": 3128,
+        "SourceSecurityGroupId": {
+          "Ref": "LambdaSecurityGroup"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "PrivateSubnetA": {
+      "Value": {
+        "Ref": "PrivateSubnetA"
+      }
+    },
+    "PrivateSubnetB": {
+      "Value": {
+        "Ref": "PrivateSubnetB"
+      }
+    },
+    "LambdaSecurityGroup": {
+      "Value": {
+        "Ref": "LambdaSecurityGroup"
+      }
+    },
+    "HttpProxyUrl": {
+      "Condition": "UseProxy",
+      "Value": {
+        "Fn::Sub": "http://${ProxyPrivateIpv4}:3128"
+      }
+    }
+  },
+  "Rules": {
+    "NatRequiresGateway": {
+      "RuleCondition": {
+        "Fn::Equals": [
+          {
+            "Ref": "EgressMode"
+          },
+          "nat"
+        ]
+      },
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "InternetGatewayId"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "NAT mode requires an attached existing IGW."
+        }
+      ]
+    }
+  }
+}

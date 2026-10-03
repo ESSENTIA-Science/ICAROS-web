@@ -4,15 +4,12 @@ import InView from '@/components/rocket/InView'
 import RevealNoScript from '@/components/rocket/RevealNoScript'
 import { groupBySquad, listMembersSafe } from './_data'
 import styles from './page.module.css'
+import { pageMetadata } from '@/lib/seo'
 
 /** Snapshot member records are already approved for public export. */
 const UNASSIGNED_SQUAD_LABEL = '기타'
 
-export const metadata: Metadata = {
-  title: 'Members',
-  description: 'ICAROS를 구성하는 추진공학부·전자부·비행제어부 등 부서별 부원 명단.',
-  alternates: { canonical: '/member' },
-}
+export const metadata: Metadata = pageMetadata({ title: 'Members', description: 'ICAROS를 구성하는 추진공학부·전자부·비행제어부 등 부서별 부원 명단.', path: '/member' })
 
 export default async function MemberPage() {
   const squads = groupBySquad(await listMembersSafe())

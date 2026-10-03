@@ -73,6 +73,7 @@
 .empty { color: var(--fg-muted); }
 
 @media (max-width: 999px) {
+  .grid { --member-col: 12rem; }
   /* 왼쪽 기둥을 유지하기엔 오른쪽 격자가 두 열까지 줄어든다 — 제목을 위로 되돌린다 */
   .squad {
     grid-template-columns: minmax(0, 1fr);

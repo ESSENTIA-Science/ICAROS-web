@@ -1,0 +1,19 @@
+.media {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin-block: var(--sp-4);
+}
+
+.pdf, .video {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid var(--rule);
+  background: var(--bg-raised);
+}
+
+.pdf { height: min(65vh, 48rem); }
+.video { max-height: 65vh; }
+.link { display: inline-block; margin-top: var(--sp-2); overflow-wrap: anywhere; }
+.link:lang(ko) { letter-spacing: 0; }

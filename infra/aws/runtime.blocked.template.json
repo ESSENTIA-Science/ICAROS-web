@@ -1,0 +1,1030 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "BLOCKED runtime draft: requires reviewed bucket split, callbacks, promotion and media fixes.",
+  "Metadata": {
+    "DeploymentGate": "Review artifact only. Existing Cognito, verified DB TLS/schema/auth, egress and packaging required. Member uses active published allowlist plus private published copies; withdrawal on publication; privacy-safe rollback gate required."
+  },
+  "Parameters": {
+    "ReleaseBucketName": {
+      "Type": "String"
+    },
+    "PrivateMediaBucketName": {
+      "Type": "String"
+    },
+    "PublicMediaBucketName": {
+      "Type": "String"
+    },
+    "CodeBuildProject": {
+      "Type": "String"
+    },
+    "KvsArn": {
+      "Type": "String"
+    },
+    "PublicMediaOrigin": {
+      "Type": "String"
+    },
+    "AdminOrigin": {
+      "Type": "String"
+    },
+    "WebSourceRevision": {
+      "Type": "String",
+      "AllowedPattern": "[a-f0-9]{40}"
+    },
+    "DatabaseSecretArn": {
+      "Type": "String"
+    },
+    "EssentiaSecretArn": {
+      "Type": "String"
+    },
+    "WorkerSecretArn": {
+      "Type": "String"
+    },
+    "EssentiaOrigin": {
+      "Type": "String"
+    },
+    "EssentiaCategory": {
+      "Type": "String"
+    },
+    "EssentiaAuthorLabel": {
+      "Type": "String"
+    },
+    "ArtifactBucket": {
+      "Type": "String"
+    },
+    "ApiArtifactKey": {
+      "Type": "String"
+    },
+    "ApiArtifactVersion": {
+      "Type": "String"
+    },
+    "PrivateSubnets": {
+      "Type": "List<AWS::EC2::Subnet::Id>"
+    },
+    "LambdaSecurityGroupId": {
+      "Type": "AWS::EC2::SecurityGroup::Id"
+    },
+    "EnableBuildEvents": {
+      "Type": "String",
+      "AllowedValues": [
+        "false",
+        "true"
+      ],
+      "Default": "false"
+    },
+    "CompatibilityReviewed": {
+      "Type": "String",
+      "AllowedValues": [
+        "false",
+        "true"
+      ],
+      "Default": "false"
+    },
+    "MediaProxyArtifactKey": {
+      "Type": "String"
+    },
+    "MediaProxyArtifactVersion": {
+      "Type": "String"
+    },
+    "CognitoUserPoolId": {
+      "Type": "String"
+    },
+    "CognitoClientId": {
+      "Type": "String"
+    },
+    "CognitoDomain": {
+      "Type": "String"
+    },
+    "CognitoAdminGroup": {
+      "Type": "String"
+    },
+    "HttpProxyUrl": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|http://(10\\.[0-9.]+|172\\.(1[6-9]|2[0-9]|3[01])\\.[0-9.]+|192\\.168\\.[0-9.]+):3128",
+      "Description": "Private HTTP CONNECT proxy on port3128. Wired to ICAROS_HTTPS_PROXY used by reviewed parent SDK/JWKS/fetch egress helper; keep empty only for verified alternative egress."
+    },
+    "Ipv6AllowedForDualStack": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "false",
+        "true"
+      ],
+      "Description": "Enable only after both subnets and every required destination are verified."
+    }
+  },
+  "Resources": {
+    "ApiLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/icaros/${AWS::StackName}/api"
+        },
+        "RetentionInDays": 30
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "CallbackLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/icaros/${AWS::StackName}/callback"
+        },
+        "RetentionInDays": 30
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "RuntimeRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "runtime",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "ApiLogs",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "CallbackLogs",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ec2:CreateNetworkInterface",
+                    "ec2:DescribeNetworkInterfaces",
+                    "ec2:DescribeSubnets",
+                    "ec2:DeleteNetworkInterface",
+                    "ec2:AssignPrivateIpAddresses",
+                    "ec2:UnassignPrivateIpAddresses"
+                  ],
+                  "Resource": [
+                    "*"
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${ReleaseBucketName}/snapshots/*"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${ReleaseBucketName}/releases/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${ReleaseBucketName}/__staging/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:DeleteObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${PrivateMediaBucketName}/icaros-web/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${PublicMediaBucketName}/published/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codebuild:StartBuild",
+                    "codebuild:BatchGetBuilds"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:project/${CodeBuildProject}"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudfront-keyvaluestore:DescribeKeyValueStore",
+                    "cloudfront-keyvaluestore:GetKey",
+                    "cloudfront-keyvaluestore:UpdateKeys"
+                  ],
+                  "Resource": [
+                    {
+                      "Ref": "KvsArn"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sqs:SendMessage"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "AsyncFailureDlq",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${PrivateMediaBucketName}/published/*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ApiFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Runtime": "nodejs22.x",
+        "Architectures": [
+          "x86_64"
+        ],
+        "Handler": "dist/handler.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "RuntimeRole",
+            "Arn"
+          ]
+        },
+        "MemorySize": 1024,
+        "Timeout": 30,
+        "ReservedConcurrentExecutions": 1,
+        "Code": {
+          "S3Bucket": {
+            "Ref": "ArtifactBucket"
+          },
+          "S3Key": {
+            "Ref": "ApiArtifactKey"
+          },
+          "S3ObjectVersion": {
+            "Ref": "ApiArtifactVersion"
+          }
+        },
+        "VpcConfig": {
+          "SubnetIds": {
+            "Ref": "PrivateSubnets"
+          },
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroupId"
+            }
+          ],
+          "Ipv6AllowedForDualStack": {
+            "Fn::If": [
+              "UseIpv6",
+              true,
+              false
+            ]
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "DATABASE_URL": {
+              "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecretArn}:SecretString:DATABASE_URL}}"
+            },
+            "DB_CA_BUNDLE_PATH": "/var/task/certs/rds.pem",
+            "ADMIN_ALLOWED_ORIGINS": {
+              "Ref": "AdminOrigin"
+            },
+            "COGNITO_USER_POOL_ID": {
+              "Ref": "CognitoUserPoolId"
+            },
+            "COGNITO_CLIENT_ID": {
+              "Ref": "CognitoClientId"
+            },
+            "COGNITO_DOMAIN": {
+              "Ref": "CognitoDomain"
+            },
+            "COGNITO_CALLBACK_URL": {
+              "Fn::Sub": "${AdminOrigin}/api/admin/auth/callback"
+            },
+            "COGNITO_ADMIN_GROUP": {
+              "Ref": "CognitoAdminGroup"
+            },
+            "S3_BUCKET": {
+              "Ref": "PrivateMediaBucketName"
+            },
+            "S3_PREFIX": "icaros-web",
+            "RELEASE_BUCKET": {
+              "Ref": "ReleaseBucketName"
+            },
+            "SNAPSHOT_BUCKET": {
+              "Ref": "ReleaseBucketName"
+            },
+            "PUBLIC_MEDIA_BUCKET": {
+              "Ref": "PublicMediaBucketName"
+            },
+            "PUBLIC_MEDIA_ORIGIN": {
+              "Ref": "PublicMediaOrigin"
+            },
+            "WEB_SOURCE_REVISION": {
+              "Ref": "WebSourceRevision"
+            },
+            "CODEBUILD_PROJECT": {
+              "Ref": "CodeBuildProject"
+            },
+            "CLOUDFRONT_KVS_ARN": {
+              "Ref": "KvsArn"
+            },
+            "BUILD_WORKER_TOKEN": {
+              "Fn::Sub": "{{resolve:secretsmanager:${WorkerSecretArn}:SecretString:BUILD_WORKER_TOKEN}}"
+            },
+            "ESSENTIA_SERVICE_ORIGIN": {
+              "Ref": "EssentiaOrigin"
+            },
+            "ESSENTIA_SERVICE_TOKEN": {
+              "Fn::Sub": "{{resolve:secretsmanager:${EssentiaSecretArn}:SecretString:ESSENTIA_SERVICE_TOKEN}}"
+            },
+            "ESSENTIA_SERVICE_CATEGORY": {
+              "Ref": "EssentiaCategory"
+            },
+            "ESSENTIA_AUTHOR_LABEL": {
+              "Ref": "EssentiaAuthorLabel"
+            },
+            "HTTP_PROXY": {
+              "Ref": "HttpProxyUrl"
+            },
+            "HTTPS_PROXY": {
+              "Ref": "HttpProxyUrl"
+            },
+            "ICAROS_HTTPS_PROXY": {
+              "Ref": "HttpProxyUrl"
+            },
+            "DB_TLS_SERVERNAME": {
+              "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecretArn}:SecretString:DB_TLS_SERVERNAME}}"
+            }
+          }
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "ApiLogs"
+          }
+        }
+      }
+    },
+    "CallbackFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Runtime": "nodejs22.x",
+        "Architectures": [
+          "x86_64"
+        ],
+        "Handler": "dist/handler.buildEventHandler",
+        "Role": {
+          "Fn::GetAtt": [
+            "RuntimeRole",
+            "Arn"
+          ]
+        },
+        "MemorySize": 1024,
+        "Timeout": 900,
+        "ReservedConcurrentExecutions": 1,
+        "Code": {
+          "S3Bucket": {
+            "Ref": "ArtifactBucket"
+          },
+          "S3Key": {
+            "Ref": "ApiArtifactKey"
+          },
+          "S3ObjectVersion": {
+            "Ref": "ApiArtifactVersion"
+          }
+        },
+        "VpcConfig": {
+          "SubnetIds": {
+            "Ref": "PrivateSubnets"
+          },
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroupId"
+            }
+          ],
+          "Ipv6AllowedForDualStack": {
+            "Fn::If": [
+              "UseIpv6",
+              true,
+              false
+            ]
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "DATABASE_URL": {
+              "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecretArn}:SecretString:DATABASE_URL}}"
+            },
+            "DB_CA_BUNDLE_PATH": "/var/task/certs/rds.pem",
+            "ADMIN_ALLOWED_ORIGINS": {
+              "Ref": "AdminOrigin"
+            },
+            "COGNITO_USER_POOL_ID": {
+              "Ref": "CognitoUserPoolId"
+            },
+            "COGNITO_CLIENT_ID": {
+              "Ref": "CognitoClientId"
+            },
+            "COGNITO_DOMAIN": {
+              "Ref": "CognitoDomain"
+            },
+            "COGNITO_CALLBACK_URL": {
+              "Fn::Sub": "${AdminOrigin}/api/admin/auth/callback"
+            },
+            "COGNITO_ADMIN_GROUP": {
+              "Ref": "CognitoAdminGroup"
+            },
+            "S3_BUCKET": {
+              "Ref": "PrivateMediaBucketName"
+            },
+            "S3_PREFIX": "icaros-web",
+            "RELEASE_BUCKET": {
+              "Ref": "ReleaseBucketName"
+            },
+            "SNAPSHOT_BUCKET": {
+              "Ref": "ReleaseBucketName"
+            },
+            "PUBLIC_MEDIA_BUCKET": {
+              "Ref": "PublicMediaBucketName"
+            },
+            "PUBLIC_MEDIA_ORIGIN": {
+              "Ref": "PublicMediaOrigin"
+            },
+            "WEB_SOURCE_REVISION": {
+              "Ref": "WebSourceRevision"
+            },
+            "CODEBUILD_PROJECT": {
+              "Ref": "CodeBuildProject"
+            },
+            "CLOUDFRONT_KVS_ARN": {
+              "Ref": "KvsArn"
+            },
+            "BUILD_WORKER_TOKEN": {
+              "Fn::Sub": "{{resolve:secretsmanager:${WorkerSecretArn}:SecretString:BUILD_WORKER_TOKEN}}"
+            },
+            "ESSENTIA_SERVICE_ORIGIN": {
+              "Ref": "EssentiaOrigin"
+            },
+            "ESSENTIA_SERVICE_TOKEN": {
+              "Fn::Sub": "{{resolve:secretsmanager:${EssentiaSecretArn}:SecretString:ESSENTIA_SERVICE_TOKEN}}"
+            },
+            "ESSENTIA_SERVICE_CATEGORY": {
+              "Ref": "EssentiaCategory"
+            },
+            "ESSENTIA_AUTHOR_LABEL": {
+              "Ref": "EssentiaAuthorLabel"
+            },
+            "HTTP_PROXY": {
+              "Ref": "HttpProxyUrl"
+            },
+            "HTTPS_PROXY": {
+              "Ref": "HttpProxyUrl"
+            },
+            "ICAROS_HTTPS_PROXY": {
+              "Ref": "HttpProxyUrl"
+            },
+            "DB_TLS_SERVERNAME": {
+              "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecretArn}:SecretString:DB_TLS_SERVERNAME}}"
+            }
+          }
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "CallbackLogs"
+          }
+        }
+      }
+    },
+    "HttpApi": {
+      "Type": "AWS::ApiGatewayV2::Api",
+      "Properties": {
+        "ProtocolType": "HTTP",
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-admin"
+        }
+      }
+    },
+    "ApiIntegration": {
+      "Type": "AWS::ApiGatewayV2::Integration",
+      "Properties": {
+        "ApiId": {
+          "Ref": "HttpApi"
+        },
+        "IntegrationType": "AWS_PROXY",
+        "IntegrationUri": {
+          "Fn::GetAtt": [
+            "ApiFunction",
+            "Arn"
+          ]
+        },
+        "PayloadFormatVersion": "2.0",
+        "TimeoutInMillis": 30000
+      }
+    },
+    "ApiRoute": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "HttpApi"
+        },
+        "RouteKey": "ANY /api/{proxy+}",
+        "Target": {
+          "Fn::Sub": "integrations/${ApiIntegration}"
+        }
+      }
+    },
+    "ApiRootRoute": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "HttpApi"
+        },
+        "RouteKey": "ANY /api",
+        "Target": {
+          "Fn::Sub": "integrations/${ApiIntegration}"
+        }
+      }
+    },
+    "ApiStage": {
+      "Type": "AWS::ApiGatewayV2::Stage",
+      "Properties": {
+        "ApiId": {
+          "Ref": "HttpApi"
+        },
+        "StageName": "$default",
+        "AutoDeploy": true,
+        "DefaultRouteSettings": {
+          "ThrottlingBurstLimit": 5,
+          "ThrottlingRateLimit": 2
+        }
+      }
+    },
+    "ApiInvoke": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "ApiFunction"
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*/api*"
+        }
+      }
+    },
+    "EventDlq": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "MessageRetentionPeriod": 1209600,
+        "SqsManagedSseEnabled": true
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "BuildEvents": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "State": {
+          "Fn::If": [
+            "EnableBuildEvents",
+            "ENABLED",
+            "DISABLED"
+          ]
+        },
+        "EventPattern": {
+          "source": [
+            "aws.codebuild"
+          ],
+          "detail-type": [
+            "CodeBuild Build State Change"
+          ],
+          "detail": {
+            "project-name": [
+              {
+                "Ref": "CodeBuildProject"
+              }
+            ],
+            "build-status": [
+              "SUCCEEDED",
+              "FAILED",
+              "FAULT",
+              "STOPPED",
+              "TIMED_OUT"
+            ]
+          }
+        },
+        "Targets": [
+          {
+            "Id": "callback",
+            "Arn": {
+              "Fn::GetAtt": [
+                "CallbackFunction",
+                "Arn"
+              ]
+            },
+            "RetryPolicy": {
+              "MaximumEventAgeInSeconds": 86400,
+              "MaximumRetryAttempts": 185
+            },
+            "DeadLetterConfig": {
+              "Arn": {
+                "Fn::GetAtt": [
+                  "EventDlq",
+                  "Arn"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "BuildEventInvoke": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "CallbackFunction"
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "BuildEvents",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "DlqPolicy": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "Queues": [
+          {
+            "Ref": "EventDlq"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sqs:SendMessage",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "EventDlq",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::GetAtt": [
+                      "BuildEvents",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "AsyncFailureDlq": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "MessageRetentionPeriod": 1209600,
+        "SqsManagedSseEnabled": true
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "CallbackAsyncConfig": {
+      "Type": "AWS::Lambda::EventInvokeConfig",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "CallbackFunction"
+        },
+        "Qualifier": "$LATEST",
+        "MaximumEventAgeInSeconds": 21600,
+        "MaximumRetryAttempts": 2,
+        "DestinationConfig": {
+          "OnFailure": {
+            "Destination": {
+              "Fn::GetAtt": [
+                "AsyncFailureDlq",
+                "Arn"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "MediaProxyLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/icaros/${AWS::StackName}/media-proxy"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "MediaProxyRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "public-index-read-only",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${ReleaseBucketName}/releases/*/compat-media-index.json"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${PublicMediaBucketName}/published/*"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${PrivateMediaBucketName}/published/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudfront-keyvaluestore:GetKey"
+                  ],
+                  "Resource": [
+                    {
+                      "Ref": "KvsArn"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "MediaProxyLogs",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${ReleaseBucketName}/releases/*/published-member-media.json"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "MediaProxyFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Runtime": "nodejs22.x",
+        "Architectures": [
+          "x86_64"
+        ],
+        "Handler": "media-proxy.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "MediaProxyRole",
+            "Arn"
+          ]
+        },
+        "MemorySize": 256,
+        "Timeout": 15,
+        "ReservedConcurrentExecutions": 2,
+        "Code": {
+          "S3Bucket": {
+            "Ref": "ArtifactBucket"
+          },
+          "S3Key": {
+            "Ref": "MediaProxyArtifactKey"
+          },
+          "S3ObjectVersion": {
+            "Ref": "MediaProxyArtifactVersion"
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "RELEASE_BUCKET": {
+              "Ref": "ReleaseBucketName"
+            },
+            "PUBLIC_MEDIA_BUCKET": {
+              "Ref": "PublicMediaBucketName"
+            },
+            "CLOUDFRONT_KVS_ARN": {
+              "Ref": "KvsArn"
+            },
+            "PRIVATE_MEDIA_BUCKET": {
+              "Ref": "PrivateMediaBucketName"
+            }
+          }
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "MediaProxyLogs"
+          }
+        }
+      }
+    },
+    "MediaProxyIntegration": {
+      "Type": "AWS::ApiGatewayV2::Integration",
+      "Properties": {
+        "ApiId": {
+          "Ref": "HttpApi"
+        },
+        "IntegrationType": "AWS_PROXY",
+        "IntegrationUri": {
+          "Fn::GetAtt": [
+            "MediaProxyFunction",
+            "Arn"
+          ]
+        },
+        "PayloadFormatVersion": "2.0"
+      }
+    },
+    "MediaProxyGETRoute": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "HttpApi"
+        },
+        "RouteKey": "GET /api/media/{id}",
+        "Target": {
+          "Fn::Sub": "integrations/${MediaProxyIntegration}"
+        }
+      }
+    },
+    "MediaProxyHEADRoute": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "HttpApi"
+        },
+        "RouteKey": "HEAD /api/media/{id}",
+        "Target": {
+          "Fn::Sub": "integrations/${MediaProxyIntegration}"
+        }
+      }
+    },
+    "MediaProxyInvoke": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "MediaProxyFunction"
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*/api/media/*"
+        }
+      }
+    }
+  },
+  "Conditions": {
+    "EnableBuildEvents": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableBuildEvents"
+        },
+        "true"
+      ]
+    },
+    "UseIpv6": {
+      "Fn::Equals": [
+        {
+          "Ref": "Ipv6AllowedForDualStack"
+        },
+        "true"
+      ]
+    }
+  },
+  "Rules": {
+    "RequirePatchedCode": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Equals": [
+              {
+                "Ref": "CompatibilityReviewed"
+              },
+              "true"
+            ]
+          },
+          "AssertDescription": "Current handler is incompatible with this split-bucket runtime. Approve code fixes first."
+        }
+      ]
+    }
+  },
+  "Outputs": {
+    "ApiOriginHost": {
+      "Value": {
+        "Fn::Sub": "${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+      }
+    },
+    "CallbackFailureQueue": {
+      "Value": {
+        "Ref": "AsyncFailureDlq"
+      }
+    }
+  }
+}

@@ -86,7 +86,7 @@ export default function HeaderNav({ items }: { items: readonly HeaderNavItem[] }
   }, [open])
 
   return (
-    <header className={styles.nav} data-theme="dark" data-scrolled={scrolled ? '' : undefined}>
+    <header className={styles.nav} data-home={pathname === '/' ? '' : undefined} data-theme="dark" data-scrolled={scrolled ? '' : undefined}>
       <div className={styles.inner}>
         {/* 홈에 있을 때만 aria-current 를 붙인다 — 나머지 경로에서는 속성 자체가 없어야 한다.
             `false` 를 넘기면 `aria-current="false"` 가 실제로 렌더돼 의미가 뒤집힌다. */}

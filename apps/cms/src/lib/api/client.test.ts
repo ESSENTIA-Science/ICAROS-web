@@ -12,6 +12,14 @@ const post: Post = { id: 'post-1', version: 'v1', publishState: 'draft_saved', u
 afterEach(() => vi.unstubAllGlobals())
 
 describe('admin API client', () => {
+  it('creates the missing donation CTA link setting', async () => {
+    const setting = { id: 'donate.cta_href', value: '#contact', version: 'v1', publishState: 'draft_saved', updatedAt: '2026-09-30T01:00:00Z' }
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, data: setting }), { status: 201 }))
+    vi.stubGlobal('fetch', fetcher)
+    await expect(api.createSiteSetting('donate.cta_href', '#contact')).resolves.toEqual(setting)
+    expect(fetcher.mock.calls[0]?.[0]).toBe('/api/admin/content/site')
+    expect(JSON.parse(fetcher.mock.calls[0]?.[1].body)).toEqual({ id: 'donate.cta_href', value: '#contact' })
+  })
   it('creates a post draft with only the accepted fields and returns the CMS post', async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, data: post }), { status: 201 }))
     vi.stubGlobal('fetch', fetcher)
@@ -33,12 +41,12 @@ describe('admin API client', () => {
     expect(fetcher).not.toHaveBeenCalled()
     vi.unstubAllEnvs()
   })
-  it('uses same-origin auth routes and reads the server session', async () => {
+  it('reads the server session with same-origin credentials', async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, data: { userId: 'admin-1', email: 'admin@example.test' } }), { status: 200 }))
     vi.stubGlobal('fetch', fetcher)
-    await expect(api.login('admin@example.test', 'password')).resolves.toEqual({ userId: 'admin-1', email: 'admin@example.test' })
-    expect(fetcher.mock.calls[0]?.[0]).toBe('/api/admin/login')
+    await expect(api.session()).resolves.toEqual({ userId: 'admin-1', email: 'admin@example.test', displayName: null })
+    expect(fetcher.mock.calls[0]?.[0]).toBe('/api/admin/session')
     expect(fetcher.mock.calls[0]?.[1].credentials).toBe('same-origin')
   })
 
@@ -50,6 +58,20 @@ describe('admin API client', () => {
     expect(fetcher.mock.calls[0]?.[0]).toBe('/api/admin/content/rockets/icx-1a')
     expect(fetcher.mock.calls[0]?.[1].method).toBe('PUT')
     expect(fetcher.mock.calls[0]?.[1].headers['If-Match']).toBe(rocket.version)
+  })
+
+  it('creates a private vehicle draft and sends empty specifications as SQL nulls', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, data: { ...rocket, published: false } }), { status: 200 }))
+    vi.stubGlobal('fetch', fetcher)
+    await expect(api.createVehicle({ id: rocket.id, name: rocket.name, series: 'A', descriptionMd: '', maxAltitudeM: '', sizeM: '', payloadKg: '' })).resolves.toMatchObject({ id: rocket.id, published: false })
+    expect(fetcher.mock.calls[0]?.[0]).toBe('/api/admin/content/rockets')
+    expect(fetcher.mock.calls[0]?.[1].method).toBe('POST')
+    expect(JSON.parse(fetcher.mock.calls[0]?.[1].body)).toMatchObject({ id: rocket.id, series: 'A', published: false, maxAltitudeM: null, sizeM: null, payloadKg: null })
+  })
+
+  it('reports duplicate vehicle addresses as a conflict', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: false, message: 'CONFLICT' }), { status: 409 })))
+    await expect(api.createVehicle({ id: rocket.id, name: rocket.name, series: 'A', descriptionMd: '', maxAltitudeM: '', sizeM: '', payloadKg: '' })).rejects.toMatchObject({ status: 409 })
   })
 
   it('requires a saved receipt with a new version before updating local content', async () => {
@@ -69,6 +91,13 @@ describe('admin API client', () => {
     await expect(api.publish('rockets', rocket.id, rocket.version, 'key-1')).resolves.toMatchObject({ id: 'job-1', state: 'publishing' })
     expect(fetcher.mock.calls[0]?.[0]).toBe('/api/admin/publish')
     expect(JSON.parse(fetcher.mock.calls[0]?.[1].body)).toEqual({ kind: 'rockets', id: rocket.id, version: rocket.version, idempotencyKey: 'key-1' })
+  })
+
+  it('requests one full-site publication with the global scope', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, data: { id: 'job-all', state: 'publishing' } }), { status: 202 }))
+    vi.stubGlobal('fetch', fetcher)
+    await api.publish('site', 'donation.current', 'version-1', 'global-key-1', 'all')
+    expect(JSON.parse(fetcher.mock.calls[0]?.[1].body)).toEqual({ kind: 'site', id: 'donation.current', version: 'version-1', idempotencyKey: 'global-key-1', scope: 'all' })
   })
 
   it.each([

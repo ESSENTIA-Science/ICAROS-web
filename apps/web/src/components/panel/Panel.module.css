@@ -161,41 +161,65 @@
 .body:lang(ko) { letter-spacing: 0; word-break: keep-all; }
 
 /* ── CTA ───────────────────────────────────────── */
-/* `.text` 가 그리드라 자식이 기본 stretch 다. 버튼이 화면 폭까지 늘어나면
-   그건 버튼이 아니라 띠가 된다. */
+/* 각 패널에서 자료 페이지로 이어지는 입구. 사진 위에서도 목적지가 먼저 읽히도록 한다. */
 .cta {
   margin-top: var(--sp-7);
   justify-self: start;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-4);
-  padding: 1.4rem 3.2rem;
-  border: 1px solid var(--n-0);
-  background: color-mix(in srgb, var(--n-950) 64%, transparent);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  width: min(32rem, 100%);
+  min-height: 8.8rem;
+  border: 1px solid color-mix(in srgb, var(--n-0) 72%, transparent);
+  background: color-mix(in srgb, var(--n-950) 76%, transparent);
   color: var(--n-0);
-  font-family: var(--ff-mono);
-  font-size: 1.3rem;
-  line-height: 1;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  font-family: var(--ff-body);
   text-decoration: none;
   transition:
     background var(--dur-2) var(--ease-out),
-    color var(--dur-2) var(--ease-out),
     border-color var(--dur-2) var(--ease-out);
 }
 .cta:hover {
-  background: var(--n-0);
+  background: color-mix(in srgb, var(--n-950) 92%, transparent);
   border-color: var(--n-0);
-  color: var(--n-950);
 }
-/* 화살표만 먼저 움직인다. 버튼 전체가 움직이면 값싸 보인다. */
-.ctaArrow { transition: translate var(--dur-2) var(--ease-out); }
-.cta:hover .ctaArrow { translate: 0.4rem 0; }
+.cta:focus-visible { outline: 2px solid var(--n-0); outline-offset: 3px; }
+.ctaCopy {
+  display: grid;
+  align-content: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-4) var(--sp-5);
+  text-align: start;
+}
+.ctaEyebrow {
+  color: color-mix(in srgb, var(--n-0) 72%, transparent);
+  font-size: var(--fs-mono);
+  font-weight: var(--fw-medium);
+  line-height: 1;
+  letter-spacing: 0;
+}
+.ctaLabel {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-body-s);
+  letter-spacing: 0;
+  word-break: keep-all;
+}
+.ctaIcon {
+  display: grid;
+  place-items: center;
+  width: 6.4rem;
+  border-left: 1px solid color-mix(in srgb, var(--n-0) 32%, transparent);
+  transition: background var(--dur-2) var(--ease-out);
+}
+.ctaArrow { width: 2rem; height: 2rem; transition: translate var(--dur-2) var(--ease-out); }
+.cta:hover .ctaIcon, .cta:focus-visible .ctaIcon { background: var(--n-0); color: var(--n-950); }
+.cta:hover .ctaArrow, .cta:focus-visible .ctaArrow { translate: 0.3rem 0; }
 
 @media (prefers-reduced-motion: reduce) {
-  .ctaArrow, .cta { transition: none; }
-  .cta:hover .ctaArrow { translate: none; }
+  .ctaArrow, .cta, .ctaIcon { transition: none; }
+  .cta:hover .ctaArrow, .cta:focus-visible .ctaArrow { translate: none; }
 }
 
 @media (max-width: 767px) {

@@ -4,7 +4,6 @@
   "type": "module",
   "workspaces": [
     "apps/*",
-    "services/*",
     "packages/*"
   ],
   "overrides": {

@@ -1,8 +1,11 @@
 import { createHash } from 'node:crypto'
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, relative, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
+
+import { prepareReleaseExport, exportContentType } from './export.mjs'
+import { uploadSharedAssets } from './upload-assets.mjs'
 
 const required = (key) => {
   const value = process.env[key]
@@ -41,35 +44,24 @@ run('npm', ['run', 'build', '--workspace', '@icaros/web'], {
   env: { ...process.env, ICAROS_SNAPSHOT: snapshotFile, ICAROS_SNAPSHOT_SHA256: snapshotHash },
 })
 const output = resolve('apps/web/out')
-const files = []
-function walk(directory) {
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    const path = join(directory, entry.name)
-    if (entry.isDirectory()) walk(path)
-    else if (entry.isFile()) {
-      const name = relative(output, path).split('\\').join('/')
-      if (!safePath(name) || name === 'manifest.json') throw new Error(`Invalid export path: ${name}`)
-      files.push({ path: name, sha256: hash(readFileSync(path)) })
-    } else throw new Error(`Unsupported export entry: ${path}`)
-  }
-}
-walk(output)
-files.sort((a, b) => a.path.localeCompare(b.path, 'en'))
-for (const name of ['index.html', '404.html', 'sitemap.xml']) {
-  if (!files.some((file) => file.path === name)) throw new Error(`Missing required export: ${name}`)
-}
+const data = JSON.parse(readFileSync(snapshotFile, 'utf8'))
+if (data.version !== String(version)) throw new Error('Snapshot publication version mismatch')
+const prepared = prepareReleaseExport(output, data)
+const files = prepared.files
+// Old tabs retain these keys through both forward promotion and rollback.
+// AWS template grants create-only shared asset writes; no API promotion changes.
+uploadSharedAssets({ root: output, bucket,
+  assets: prepared.assets.map(asset => ({ ...asset, contentType: exportContentType(asset.path) })),
+  aws: args => spawnSync('aws', args, { encoding: 'utf8', maxBuffer: 1024 * 1024 }),
+})
 // Never publish a manifest for an incomplete upload. Each attempt has a unique prefix.
 for (const file of files) {
   run('aws', ['s3', 'cp', join(output, file.path), `s3://${bucket}/${stagingPrefix}/${file.path}`,
     '--only-show-errors', '--no-guess-mime-type', '--content-type',
-    file.path.endsWith('.html') ? 'text/html; charset=utf-8' :
-      file.path.endsWith('.xml') ? 'application/xml; charset=utf-8' :
-        file.path.endsWith('.css') ? 'text/css; charset=utf-8' :
-          file.path.endsWith('.js') ? 'text/javascript; charset=utf-8' :
-            'application/octet-stream'])
+    exportContentType(file.path)])
 }
 const manifest = { jobId, buildId, attempt, version, snapshotSha256: snapshotHash,
-  sourceRevision: revision, stagingPrefix, files }
+  sourceRevision: revision, stagingPrefix, assetHash: prepared.assetHash, files }
 const manifestFile = join(temp, 'manifest.json')
 writeFileSync(manifestFile, `${JSON.stringify(manifest)}\n`)
 run('aws', ['s3', 'cp', manifestFile, `s3://${bucket}/${stagingPrefix}/manifest.json`,

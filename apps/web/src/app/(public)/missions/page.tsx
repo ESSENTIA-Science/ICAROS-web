@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getSnapshot } from '@/lib/content/snapshot'
+import { pageMetadata } from '@/lib/seo'
 import styles from './page.module.css'
 
-export const metadata: Metadata = { title: 'Missions', description: 'ICAROS의 발사 임무와 결과.', alternates: { canonical: '/missions' } }
+export const metadata: Metadata = pageMetadata({ title: 'Missions', description: 'ICAROS 학생 항공우주팀의 로켓 발사 임무와 결과를 기록합니다.', path: '/missions' })
 const outcomeLabel = { success: '성공', partial: '부분 성공', failure: '실패', planned: '예정' } as const
 
 export default function MissionsPage() {

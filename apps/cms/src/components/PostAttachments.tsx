@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { resourcesApi } from '../lib/api/resources'
 import type { PostAttachment } from '../lib/api/types'
+import ImagePreview from './ImagePreview'
 
 export function koreaToday(now = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
@@ -43,6 +44,7 @@ export default function PostAttachments({ attachments, onChange, onInsert, disab
     {uploading && <p role="status">업로드 중…</p>}
     {error && <p role="alert" className="notice error">{error}</p>}
     {attachments.map((item, index) => <div className="attachmentRow" key={`${item.mediaId}-${index}`}>
+      {item.kind === 'image' && <ImagePreview mediaId={item.mediaId} alt={`${item.title} 이미지 미리보기`} />}
       {previews[item.mediaId]
         ? <a href={previews[item.mediaId]} target="_blank" rel="noreferrer">{item.kind === 'pdf' ? 'PDF' : item.kind === 'video' ? '영상' : '이미지'} 미리보기</a>
         : <span>{item.kind === 'pdf' ? 'PDF' : item.kind === 'video' ? '영상' : '이미지'} 첨부됨</span>}

@@ -1,26 +1,13 @@
-import { useState, type FormEvent } from 'react'
-import { api } from '../lib/api/client'
-import type { Session } from '../lib/api/types'
+import { useEffect } from 'react'
 
-export default function Login({ onLogin }: { onLogin: (session: Session) => void }) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  async function submit(event: FormEvent) {
-    event.preventDefault()
-    setBusy(true); setError('')
-    try { onLogin(await api.login(email, password)) }
-    catch (cause) { setError(cause instanceof Error ? cause.message : '로그인에 실패했습니다.') }
-    finally { setBusy(false) }
-  }
+export default function Login({ error }: { error?: string }) {
+  useEffect(() => {
+    if (!error) location.replace('/api/admin/auth/start')
+  }, [error])
+
   return <div className="gate"><div className="gateCard">
-    <h1 lang="en">ICAROS Admin</h1><p>관리자 계정으로 로그인해 주세요.</p>
-    <form onSubmit={submit}>
-      {error && <p className="notice error" role="alert">{error}</p>}
-      <label>이메일<input type="email" autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} required maxLength={254} autoFocus /></label>
-      <label>비밀번호<input type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required maxLength={512} /></label>
-      <button className="primary" disabled={busy}>{busy ? '확인 중…' : '로그인'}</button>
-    </form>
+    <h1 lang="en">ICAROS Admin</h1><p>{error ? '로그인 연결을 확인해 주세요.' : 'Cognito 로그인으로 이동 중…'}</p>
+    {error && <p className="notice error" role="alert">{error}</p>}
+    <a className="primary" href="/api/admin/auth/start">Cognito로 로그인</a>
   </div></div>
 }

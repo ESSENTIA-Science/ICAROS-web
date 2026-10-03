@@ -3,8 +3,8 @@ import { loadAndValidateSnapshot } from '../../../scripts/snapshot-contract.mjs'
 import type { LandingPanel } from '@/lib/panels'
 import type { RocketDetail } from '@/app/(public)/vehicles/_data'
 import type { MemberDto } from '@/app/(public)/member/_data'
-import type { PostAttachment } from '@/components/posts/PostAttachments'
 import type { VehicleTaxonomy } from '@/components/rocket/series'
+import { postPageCount } from '@/lib/posts/pagination'
 
 export type PublishedPost = {
   id: string
@@ -17,7 +17,7 @@ export type PublishedPost = {
   excerpt: string
   thumb: { kind: 'external' | 'media'; src: string } | null
   published: true
-  attachments?: PostAttachment[]
+  attachments?: { kind: 'image' | 'pdf' | 'video'; src: string; title: string; posterSrc?: string | null; width?: number; height?: number }[]
 }
 
 export type PublishedMission = {
@@ -66,7 +66,7 @@ export function exportedRoutes(): string[] {
   const snapshot = getSnapshot()
   return [
     '/', '/vehicles', '/member', '/posts', '/missions',
-    ...Array.from({ length: Math.ceil(snapshot.posts.length / 12) - 1 }, (_, index) => `/posts/page/${index + 2}`),
+    ...Array.from({ length: postPageCount(snapshot.posts.length) - 1 }, (_, index) => `/posts/page/${index + 2}`),
     ...snapshot.taxonomy.types.map((type) => `/vehicles/types/${type.id}`),
     ...snapshot.taxonomy.series.map((series) => `/vehicles/types/${series.typeId}/${series.id}`),
     ...snapshot.vehicles.map((vehicle) => `/vehicles/${vehicle.slug}`),

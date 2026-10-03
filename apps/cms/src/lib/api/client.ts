@@ -1,5 +1,6 @@
-import type { ContentKind, ContentMap, Editable, Post, PostAttachment, PublishJob, Session } from './types'
+import type { ContentKind, ContentMap, Editable, Post, PostAttachment, PublishJob, Rocket } from './types'
 import type { PublishKind } from './publish'
+import { validVehicleSpecs } from '../vehicleSpecs'
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) { super(message); this.name = 'ApiError' }
@@ -59,6 +60,7 @@ function assertRecord(value: unknown): asserts value is { id: string; version: s
 
 function assertContent<K extends ContentKind>(kind: K, value: unknown): asserts value is ContentMap[K] {
   assertRecord(value)
+  if (kind === 'rockets' && 'specs' in value && !validVehicleSpecs(value.specs)) throw new ApiError('기체 제원 응답 형식이 올바르지 않습니다.', 200)
   const fields = kind === 'rockets' ? ['name', 'series', 'descriptionMd', 'maxAltitudeM', 'sizeM', 'payloadKg']
     : kind === 'site' ? ['value'] : ['title', 'bodyMd', 'authorLabel', 'displayDate']
   if (kind === 'posts' && (!('attachments' in value) || !Array.isArray(value.attachments) || value.attachments.some((item: unknown) => !validAttachment(item)))) throw new ApiError('첨부 응답 형식이 올바르지 않습니다.', 200)
@@ -82,17 +84,28 @@ function assertPublishJob(value: unknown): asserts value is PublishJob {
 }
 
 export const api = {
+  createVehicle: async (draft: {
+    id: string; name: string; series: string; descriptionMd: string;
+    maxAltitudeM: string; sizeM: string; payloadKg: string; specs?: import('./types').VehicleSpec[]
+  }): Promise<Rocket> => {
+    if (import.meta.env.VITE_ICAROS_DEMO === '1') throw new ApiError('데모에서는 변경할 수 없습니다.', 503)
+    const body = { ...draft, published: false,
+      maxAltitudeM: draft.maxAltitudeM || null, sizeM: draft.sizeM || null, payloadKg: draft.payloadKg || null }
+    const value = await request<unknown>('/content/rockets', { method: 'POST', body: JSON.stringify(body) })
+    assertContent('rockets', value)
+    return value
+  },
   session: async () => {
     const value = await request<unknown>('/session')
     if (!value || typeof value !== 'object' || !('userId' in value) || typeof value.userId !== 'string' || !('email' in value) || typeof value.email !== 'string') throw new ApiError('세션 응답 형식이 올바르지 않습니다.', 200)
     return { userId: value.userId, email: value.email, displayName: 'displayName' in value && typeof value.displayName === 'string' ? value.displayName : null }
   },
-  login: async (email: string, password: string) => {
-    const value = await request<unknown>('/login', { method: 'POST', body: JSON.stringify({ email, password }) })
-    if (!value || typeof value !== 'object' || !('userId' in value) || typeof value.userId !== 'string' || !('email' in value) || typeof value.email !== 'string') throw new ApiError('로그인 응답 형식이 올바르지 않습니다.', 200)
-    return value as Session
+  logout: async (): Promise<{ logoutUrl: string }> => {
+    const value = await request<unknown>('/logout', { method: 'POST' })
+    if (!value || typeof value !== 'object' || !('logoutUrl' in value) || typeof value.logoutUrl !== 'string' ||
+      !value.logoutUrl.startsWith('https://')) throw new ApiError('로그아웃 응답 형식이 올바르지 않습니다.', 200)
+    return { logoutUrl: value.logoutUrl }
   },
-  logout: () => request<unknown>('/logout', { method: 'POST' }),
   list: async <K extends ContentKind>(kind: K): Promise<ContentMap[K][]> => {
     const value = await request<unknown>(`/content/${kind}`)
     if (!Array.isArray(value)) throw new ApiError('목록 응답 형식이 올바르지 않습니다.', 200)
@@ -105,14 +118,21 @@ export const api = {
     assertContent('posts', value)
     return value
   },
+  createSiteSetting: async (id: string, value: string): Promise<ContentMap['site']> => {
+    if (import.meta.env.VITE_ICAROS_DEMO === '1') throw new ApiError('데모에서는 변경할 수 없습니다.', 503)
+    const result = await request<unknown>('/content/site', { method: 'POST', body: JSON.stringify({ id, value }) })
+    assertContent('site', result)
+    if (result.id !== id) throw new ApiError('사이트 설정 생성 응답이 올바르지 않습니다.', 200)
+    return result
+  },
   save: async <K extends ContentKind>(kind: K, id: string, version: string, draft: Editable<K>): Promise<ContentMap[K]> => {
     const value = await request<unknown>(`/content/${kind}/${encode(id)}`, { method: 'PUT', headers: { 'If-Match': version }, body: JSON.stringify(draft) })
     assertContent(kind, value)
     if (value.id !== id || value.version === version) throw new ApiError('저장 확인 응답의 버전이 갱신되지 않았습니다.', 200)
     return value
   },
-  publish: async (kind: PublishKind, id: string, version: string, idempotencyKey: string): Promise<PublishJob> => {
-    const value = await request<unknown>('/publish', { method: 'POST', body: JSON.stringify({ kind, id, version, idempotencyKey }) })
+  publish: async (kind: PublishKind, id: string, version: string, idempotencyKey: string, scope?: 'all'): Promise<PublishJob> => {
+    const value = await request<unknown>('/publish', { method: 'POST', body: JSON.stringify({ kind, id, version, idempotencyKey, ...(scope ? { scope } : {}) }) })
     assertPublishJob(value)
     return value
   },

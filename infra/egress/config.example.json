@@ -1,0 +1,11 @@
+{
+  "privateIpv4": "10.200.10.10",
+  "lambdaCidrs": ["10.200.241.0/24", "10.200.242.0/24"],
+  "hosts": {
+    "cognitoAuth": "auth.example.invalid",
+    "cognitoJwks": "jwks.example.invalid",
+    "essentia": "essentia.example.invalid",
+    "codebuild": "codebuild.example.invalid",
+    "kvs": "kvs.example.invalid"
+  }
+}

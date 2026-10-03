@@ -1,3 +1,4 @@
+import { trackCmsOperation } from '../cmsChanges'
 import { ApiError } from './client'
 import type { ResourceKind, ResourceRecord } from '../resources'
 
@@ -86,10 +87,10 @@ async function request(path: string, init: RequestInit = {}): Promise<unknown> {
 
 const outbound: Record<string, Partial<Record<keyof ResourceRecord, string>>> = {
   departments: { name: 'name', position: 'sortOrder' },
-  members: { name: 'name', description: 'bioMd', departmentId: 'departmentId', position: 'sortOrder' },
+  members: { name: 'name', description: 'bioMd', departmentId: 'departmentId', position: 'sortOrder', imageMediaId: 'imageMediaId', published: 'published' },
   'vehicle-types': { name: 'label', position: 'sortOrder' },
   'vehicle-series': { name: 'label', description: 'descriptionMd', typeId: 'typeId', position: 'sortOrder' },
-  panels: { title: 'headline', description: 'body', mediaId: 'mediaId', position: 'sortOrder', published: 'published' },
+  panels: { title: 'headline', description: 'body', mediaId: 'mediaId', position: 'sortOrder', ctaLabel: 'ctaLabel', ctaHref: 'ctaHref', published: 'published' },
   missions: { title: 'title', launchDate: 'launchDate', vehicleId: 'vehicleId', location: 'location', outcome: 'outcome', summary: 'summary', bodyMd: 'bodyMd', coverMediaId: 'coverMediaId', published: 'published' },
   vehicles: { name: 'name', typeId: 'typeId', seriesId: 'seriesId', description: 'description', galleryMediaIds: 'galleryMediaIds', modelMediaId: 'modelMediaId', position: 'position', published: 'published' },
   'donation-rounds': { roundLabel: 'roundLabel', goal: 'goal', amount: 'amount' },
@@ -198,7 +199,7 @@ export const resourcesApi: {
     const data = await request(`${route}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'If-Match': version } })
     if (!data || typeof data !== 'object' || !('id' in data) || data.id !== id) throw new ApiError('삭제 확인 응답 형식이 올바르지 않습니다.', 200)
   },
-  upload: async file => {
+  upload: async file => trackCmsOperation(async () => {
     if (import.meta.env.VITE_ICAROS_DEMO === '1') return readOnly()
     if (!file.name || [...file.name].some(char => char === '/' || char === '\\' || char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127) || /\.(svgz?|xml|html?)$/i.test(file.name)) return invalid('지원하지 않는 파일 이름입니다.')
     const typed = /\.glb$/i.test(file.name) && (!file.type || file.type === 'application/octet-stream') ? new File([file], file.name, { type: 'model/gltf-binary' }) : file
@@ -208,16 +209,20 @@ export const resourcesApi: {
     if (!policy || !prepared.name.toLowerCase().endsWith(`.${policy.extension}`)) throw new ApiError('파일 확장자와 형식이 일치하지 않습니다.', 415)
     if (prepared.size <= 0) return invalid('빈 파일은 업로드할 수 없습니다.')
     if (prepared.size > policy.max) throw new ApiError('파일 크기 제한을 초과했습니다.', 413)
-    const signed = await mediaRequest('presign', { kind: policy.kind, contentType: prepared.type, size: prepared.size, originalFilename: prepared.name })
+    const digest = await crypto.subtle.digest('SHA-256', await prepared.arrayBuffer())
+    const checksumSha256 = btoa(String.fromCharCode(...new Uint8Array(digest)))
+    const signed = await mediaRequest('presign', { kind: policy.kind, contentType: prepared.type, size: prepared.size, originalFilename: prepared.name, checksumSha256 })
     if (typeof signed.mediaId !== 'string' || !signed.mediaId || typeof signed.uploadUrl !== 'string' || !signed.uploadUrl || signed.contentType !== prepared.type) throw new ApiError('업로드 서명 응답 형식이 올바르지 않습니다.', 200)
     let put: Response
-    try { put = await fetch(signed.uploadUrl, { method: 'PUT', headers: { 'Content-Type': prepared.type }, body: prepared }) }
+    // Fetch computes Content-Length from this exact File; browsers forbid setting it.
+    try { put = await fetch(signed.uploadUrl, { method: 'PUT', headers: { 'Content-Type': prepared.type,
+      'If-None-Match': '*', 'x-amz-checksum-sha256': checksumSha256 }, body: prepared }) }
     catch { throw new ApiError('파일 전송에 실패했습니다.', 0) }
     if (!put.ok) throw new ApiError(`파일 전송에 실패했습니다. (${put.status})`, put.status)
     const confirmed = await mediaRequest('confirm', { mediaId: signed.mediaId })
     if (confirmed.id !== signed.mediaId) throw new ApiError('업로드 확인 응답 형식이 올바르지 않습니다.', 200)
     return { id: signed.mediaId }
-  },
+  }),
   vehicleMedia: async (id, kind) => vehicleMedia(await request(`vehicles/${encodeURIComponent(id)}/${kind}`), id, kind),
   saveVehicleMedia: async (id, kind, version, draft) => {
     if (import.meta.env.VITE_ICAROS_DEMO === '1') return readOnly()

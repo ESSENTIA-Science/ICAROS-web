@@ -9,7 +9,7 @@ ICAROS 웹 저장소에서 작업하는 에이전트를 위한 안내.
 ## 정적 웹 분리 구조 (2026-09-30)
 
 현재 새 구조는 `apps/web`(공개 정적 FE), `apps/cms`(관리자 UI),
-`services/api`(관리자 Lambda API), `packages/contracts`(공통 타입)이다.
+`packages/contracts`(CMS 공통 타입)이다. 관리자 Lambda API는 형제 `ICAROS-api` 저장소에 있다.
 아래의 기존 `src/`, `scripts/`, DB 마이그레이션, Next.js 명령 설명은
 `legacy/`에 보존한 기존 앱에 적용된다. 기존 앱 실행은 `legacy/`에서 한다.
 새 워크스페이스는 루트 `npm run typecheck`, `npm run lint`, `npm run test`로 검사하고,

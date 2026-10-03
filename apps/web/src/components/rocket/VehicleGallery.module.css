@@ -1,0 +1,110 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: var(--sp-5);
+}
+
+.item {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--rule);
+  background: var(--bg-sunken);
+  cursor: zoom-in;
+}
+
+.item:hover,
+.item:focus-visible { border-color: var(--fg); }
+
+.thumbnail {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+}
+
+.dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(120rem, calc(100vw - var(--sp-8) - var(--sp-8)));
+  height: min(80rem, calc(100dvh - var(--sp-8) - var(--sp-8)));
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  background: var(--bg-sunken);
+  color: var(--fg);
+  box-shadow: var(--shadow-modal);
+}
+
+.dialog::backdrop { background: color-mix(in srgb, var(--n-950) 82%, transparent); }
+
+.dialogContent { position: relative; width: 100%; height: 100%; }
+
+.imageFrame { position: absolute; inset: var(--sp-5); }
+
+.largeImage {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.close {
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 3.6rem;
+  height: 3.6rem;
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.close svg { width: 1.8rem; height: 1.8rem; }
+
+.arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 4.4rem;
+  height: 4.4rem;
+  padding: var(--sp-2);
+  transform: translateY(-50%);
+  border: 1px solid var(--rule-strong);
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.arrow svg { width: 100%; height: 100%; }
+.previous { left: var(--sp-3); }
+.next { right: var(--sp-3); }
+.arrow:hover, .close:hover { border-color: var(--fg); }
+
+.count {
+  position: absolute;
+  right: var(--sp-3);
+  bottom: var(--sp-3);
+  color: var(--fg-muted);
+  font-size: var(--fs-body-s);
+}
+
+@media (max-width: 599px) {
+  .dialog {
+    width: calc(100vw - var(--sp-4) - var(--sp-4));
+    height: calc(100dvh - var(--sp-4) - var(--sp-4));
+  }
+}

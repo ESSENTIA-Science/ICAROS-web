@@ -138,3 +138,23 @@
   .body { gap: var(--sp-3); }
   .specs { gap: var(--sp-2); }
 }
+
+.specs[data-columns='2'] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: none;
+}
+
+.specs[data-columns='2'] .specRow {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+}
+
+.specRow > dt,
+.specValue {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.specValue { flex-wrap: wrap; }
+.specNum { max-width: 100%; overflow-wrap: anywhere; }
+.specNum:lang(ko), .specUnit:lang(ko) { letter-spacing: 0; }

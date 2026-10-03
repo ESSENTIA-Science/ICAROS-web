@@ -1,0 +1,435 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/icaros-deployment-review.schema.json",
+  "type": "object",
+  "properties": {
+    "region": {
+      "const": "ap-northeast-2"
+    },
+    "webRepository": {
+      "const": "https://github.com/ESSENTIA-Science/ICAROS-web.git"
+    },
+    "webSourceRevision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$",
+      "minLength": 1
+    },
+    "adminOrigin": {
+      "type": "string",
+      "pattern": "^https://[a-zA-Z0-9.-]+$",
+      "minLength": 1
+    },
+    "publicMediaOrigin": {
+      "type": "string",
+      "pattern": "^https://[a-zA-Z0-9.-]+$",
+      "minLength": 1
+    },
+    "essentiaOrigin": {
+      "type": "string",
+      "pattern": "^https://[a-zA-Z0-9.-]+$",
+      "minLength": 1
+    },
+    "essentiaCategory": {
+      "type": "string",
+      "minLength": 1
+    },
+    "essentiaAuthorLabel": {
+      "type": "string",
+      "minLength": 1
+    },
+    "network": {
+      "type": "object",
+      "properties": {
+        "vpcId": {
+          "type": "string",
+          "pattern": "^vpc-[a-f0-9]+$",
+          "minLength": 1
+        },
+        "internetGatewayId": {
+          "type": "string",
+          "pattern": "^igw-[a-f0-9]+$",
+          "minLength": 1
+        },
+        "dbSecurityGroupId": {
+          "type": "string",
+          "pattern": "^sg-[a-f0-9]+$",
+          "minLength": 1
+        },
+        "azA": {
+          "type": "string",
+          "pattern": "^ap-northeast-2[a-d]$",
+          "minLength": 1
+        },
+        "azB": {
+          "type": "string",
+          "pattern": "^ap-northeast-2[a-d]$",
+          "minLength": 1
+        },
+        "vpcCidr": {
+          "type": "string",
+          "minLength": 1
+        },
+        "publicCidr": {
+          "type": "string",
+          "minLength": 1
+        },
+        "privateCidrA": {
+          "type": "string",
+          "minLength": 1
+        },
+        "privateCidrB": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proxyPrivateIpv4": {
+          "type": "string",
+          "pattern": "^(10\\.[0-9.]+|172\\.(1[6-9]|2[0-9]|3[01])\\.[0-9.]+|192\\.168\\.[0-9.]+)$"
+        },
+        "proxySecurityGroupId": {
+          "type": "string",
+          "pattern": "^sg-[0-9a-f]+$"
+        },
+        "s3PrefixListId": {
+          "type": "string",
+          "pattern": "^pl-[0-9a-f]+$"
+        }
+      },
+      "required": [
+        "vpcId",
+        "internetGatewayId",
+        "dbSecurityGroupId",
+        "azA",
+        "azB",
+        "vpcCidr",
+        "publicCidr",
+        "privateCidrA",
+        "privateCidrB",
+        "proxyPrivateIpv4",
+        "proxySecurityGroupId",
+        "s3PrefixListId"
+      ],
+      "additionalProperties": false
+    },
+    "foundation": {
+      "type": "object",
+      "properties": {
+        "releaseBucket": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.-]+$",
+          "minLength": 1
+        },
+        "privateMediaBucket": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.-]+$",
+          "minLength": 1
+        },
+        "publicMediaBucket": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.-]+$",
+          "minLength": 1
+        },
+        "buildProject": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "minLength": 1
+        },
+        "kvsArn": {
+          "type": "string",
+          "pattern": "^arn:aws:cloudfront::[0-9]{12}:key-value-store/[a-f0-9-]+$",
+          "minLength": 1
+        },
+        "privateSubnetA": {
+          "type": "string",
+          "pattern": "^subnet-[a-f0-9]+$",
+          "minLength": 1
+        },
+        "privateSubnetB": {
+          "type": "string",
+          "pattern": "^subnet-[a-f0-9]+$",
+          "minLength": 1
+        },
+        "lambdaSecurityGroupId": {
+          "type": "string",
+          "pattern": "^sg-[a-f0-9]+$",
+          "minLength": 1
+        },
+        "apiOriginHost": {
+          "type": "string",
+          "pattern": "^[a-z0-9.-]+$",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "releaseBucket",
+        "privateMediaBucket",
+        "publicMediaBucket",
+        "buildProject",
+        "kvsArn",
+        "privateSubnetA",
+        "privateSubnetB",
+        "lambdaSecurityGroupId",
+        "apiOriginHost"
+      ],
+      "additionalProperties": false
+    },
+    "artifacts": {
+      "type": "object",
+      "properties": {
+        "bucket": {
+          "type": "string",
+          "minLength": 1
+        },
+        "apiKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "apiVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proxyKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proxyVersion": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "bucket",
+        "apiKey",
+        "apiVersion",
+        "proxyKey",
+        "proxyVersion"
+      ],
+      "additionalProperties": false
+    },
+    "secrets": {
+      "type": "object",
+      "properties": {
+        "databaseArn": {
+          "type": "string",
+          "pattern": "^arn:aws:secretsmanager:ap-northeast-2:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+$",
+          "minLength": 1
+        },
+        "essentiaArn": {
+          "type": "string",
+          "pattern": "^arn:aws:secretsmanager:ap-northeast-2:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+$",
+          "minLength": 1
+        },
+        "workerArn": {
+          "type": "string",
+          "pattern": "^arn:aws:secretsmanager:ap-northeast-2:[0-9]{12}:secret:[A-Za-z0-9/_+=.@-]+$",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "databaseArn",
+        "essentiaArn",
+        "workerArn"
+      ],
+      "additionalProperties": false
+    },
+    "codeFixes": {
+      "type": "object",
+      "properties": {
+        "bucketSplit": {
+          "type": "boolean"
+        },
+        "promotionMetadata": {
+          "type": "boolean"
+        },
+        "promotionRecovery": {
+          "type": "boolean"
+        },
+        "terminalCallbacks": {
+          "type": "boolean"
+        },
+        "durableBuildIdentity": {
+          "type": "boolean"
+        },
+        "publicMediaPromotion": {
+          "type": "boolean"
+        },
+        "memberPrivacy": {
+          "type": "boolean"
+        },
+        "emptyCollections": {
+          "type": "boolean"
+        },
+        "releaseAssetConsistency": {
+          "type": "boolean"
+        },
+        "manualPromotionGate": {
+          "type": "boolean"
+        },
+        "compatibilityIndex": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "bucketSplit",
+        "promotionMetadata",
+        "promotionRecovery",
+        "terminalCallbacks",
+        "durableBuildIdentity",
+        "publicMediaPromotion",
+        "memberPrivacy",
+        "emptyCollections",
+        "releaseAssetConsistency",
+        "manualPromotionGate",
+        "compatibilityIndex"
+      ],
+      "additionalProperties": false
+    },
+    "gates": {
+      "type": "object",
+      "properties": {
+        "databaseTlsVerified": {
+          "type": "boolean"
+        },
+        "schemaVerified": {
+          "type": "boolean"
+        },
+        "leastPrivilegeDbRoleVerified": {
+          "type": "boolean"
+        },
+        "egressVerified": {
+          "type": "boolean"
+        },
+        "apiPackageVerified": {
+          "type": "boolean"
+        },
+        "proxyPackageVerified": {
+          "type": "boolean"
+        },
+        "stagedEndToEndVerified": {
+          "type": "boolean"
+        },
+        "sourceReviewed": {
+          "type": "boolean"
+        },
+        "snapshotIndependentlyHashed": {
+          "type": "boolean"
+        },
+        "databaseAuthReviewed": {
+          "type": "boolean"
+        },
+        "existingCognitoCallbacksVerified": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "databaseTlsVerified",
+        "schemaVerified",
+        "leastPrivilegeDbRoleVerified",
+        "egressVerified",
+        "apiPackageVerified",
+        "proxyPackageVerified",
+        "stagedEndToEndVerified",
+        "sourceReviewed",
+        "snapshotIndependentlyHashed",
+        "databaseAuthReviewed",
+        "existingCognitoCallbacksVerified"
+      ],
+      "additionalProperties": false
+    },
+    "approvals": {
+      "type": "object",
+      "properties": {
+        "deploy": {
+          "type": "boolean"
+        },
+        "iam": {
+          "type": "boolean"
+        },
+        "network": {
+          "type": "boolean"
+        },
+        "dbTls": {
+          "type": "boolean"
+        },
+        "dbMigrations": {
+          "type": "boolean"
+        },
+        "domainCutover": {
+          "type": "boolean"
+        },
+        "firstPointer": {
+          "type": "boolean"
+        },
+        "publicMediaSelection": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "deploy",
+        "iam",
+        "network",
+        "dbTls",
+        "dbMigrations",
+        "domainCutover",
+        "firstPointer",
+        "publicMediaSelection"
+      ],
+      "additionalProperties": false
+    },
+    "publicOrigin": {
+      "type": "string",
+      "pattern": "^https://[a-zA-Z0-9.-]+$",
+      "minLength": 1
+    },
+    "cognito": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "userPoolId",
+        "clientId",
+        "domain",
+        "adminGroup"
+      ],
+      "properties": {
+        "userPoolId": {
+          "type": "string",
+          "pattern": "^ap-northeast-2_[a-zA-Z0-9]+$",
+          "minLength": 1
+        },
+        "clientId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9]+$",
+          "minLength": 1
+        },
+        "domain": {
+          "type": "string",
+          "pattern": "^https://[a-zA-Z0-9.-]+$",
+          "minLength": 1
+        },
+        "adminGroup": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "required": [
+    "region",
+    "webRepository",
+    "webSourceRevision",
+    "adminOrigin",
+    "publicMediaOrigin",
+    "essentiaOrigin",
+    "essentiaCategory",
+    "essentiaAuthorLabel",
+    "network",
+    "foundation",
+    "artifacts",
+    "secrets",
+    "codeFixes",
+    "gates",
+    "approvals",
+    "publicOrigin",
+    "cognito"
+  ],
+  "additionalProperties": false
+}

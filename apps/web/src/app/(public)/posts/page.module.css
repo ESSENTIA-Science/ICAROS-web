@@ -29,17 +29,33 @@
 .socialArrow { width: 1.2rem; height: 1.2rem; flex: none; color: var(--fg-faint); }
 .social:hover .socialArrow { color: var(--fg); }
 
-/* 글마다 사진과 요약을 한 줄씩 크게 보여 준다. */
+/* 사진·제목·요약을 한 카드로 묶는 갤러리. */
 .grid {
   width: 100%;
-  max-width: var(--measure);
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  row-gap: var(--sp-10);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: var(--grid-gap-x);
+  row-gap: var(--sp-8);
 }
 
-.pager { display: flex; align-items: center; gap: var(--sp-5); margin-top: var(--sp-6); }
-.pageNum { font-family: var(--ff-mono); font-size: var(--fs-mono); color: var(--fg-muted); }
+.pager { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-5); margin-top: var(--sp-6); }
+.pageList { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); list-style: none; margin: 0; padding: 0; }
+.pageNum {
+  display: grid;
+  place-items: center;
+  min-width: 3.6rem;
+  min-height: 3.6rem;
+  padding: var(--sp-1);
+  border: 1px solid var(--rule-strong);
+  color: var(--fg-muted);
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  text-decoration: none;
+  transition: var(--t-color);
+}
+.pageNum:hover { color: var(--fg); border-color: var(--fg); }
+.pageNum[aria-current='page'] { color: var(--bg); background: var(--fg); border-color: var(--fg); }
+.pageNum:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
 
 .link {
   font-size: var(--fs-body-s);
@@ -49,6 +65,10 @@
   transition: var(--t-color);
 }
 .link:hover { border-bottom-color: var(--sig); }
+
+@media (max-width: 999px) {
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--sp-7); }
+}
 
 @media (max-width: 599px) {
   .grid { grid-template-columns: minmax(0, 1fr); row-gap: var(--sp-9); }

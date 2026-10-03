@@ -4,17 +4,17 @@
 
 ## 로컬 실행
 
-루트에서 npm workspace 의존성을 설치한 후 `npm run dev --workspace @icaros/cms`를 실행합니다. 개발 서버는 5174 포트이며 `/api/admin`은 로컬 3000 포트로 프록시합니다. `npm run test --workspace @icaros/cms`, `npm run typecheck --workspace @icaros/cms`, `npm run lint --workspace @icaros/cms`, `npm run build --workspace @icaros/cms`로 검사합니다.
+루트에서 npm workspace 의존성을 설치한 후 `npm run dev --workspace @icaros/cms`를 실행합니다. 단독 Vite 서버의 기본 포트는 5174이고 `/api/admin`은 기본적으로 로컬 3000 포트로 프록시합니다. 통합 실행은 `./dev.sh`를 사용합니다. `npm run test --workspace @icaros/cms`, `npm run typecheck --workspace @icaros/cms`, `npm run lint --workspace @icaros/cms`, `npm run build --workspace @icaros/cms`로 검사합니다.
 
-전체 화면을 로컬 DB 데이터와 함께 살펴보려면 루트에서 `./dev.sh`를 실행하세요. CMS는 `http://127.0.0.1:5175/admin/`, 실제 로컬 API는 5176, 공개 정적 웹은 5174 포트에서 열립니다. CMS의 저장·게시는 로컬 DB와 빌드 파이프라인에 연결됩니다. 이전 데모 API가 필요할 때만 `ICAROS_API_RUNTIME=demo ./dev.sh`를 사용합니다.
+전체 화면을 로컬 DB 데이터와 함께 살펴보려면 루트에서 `./dev.sh`를 실행하세요. CMS는 `http://127.0.0.1:5175/admin/`, 실제 로컬 API는 5176, 공개 정적 웹은 5174 포트에서 열립니다. CMS의 저장·게시는 로컬 DB와 빌드 파이프라인에 연결됩니다. API 코드는 형제 `ICAROS-api` 저장소에 있습니다. Cognito 리소스가 설정되지 않으면 로그인이 닫힙니다.
 
 ## 현재 클라이언트 계약
 
 | 작업 | 요청 | 기대 응답 |
 | --- | --- | --- |
 | 세션 | `GET /api/admin/session` | `{ok:true,data:{userId,email}}` |
-| 로그인 | `POST /api/admin/login` `{email,password}` | 같은 세션 데이터 및 세션 쿠키 |
-| 로그아웃 | `POST /api/admin/logout` | `{ok:true}` |
+| 로그인 | `GET /api/admin/auth/start` → Cognito → `/api/admin/auth/callback` | HttpOnly 관리자 세션 쿠키 |
+| 로그아웃 | `POST /api/admin/logout` | `{ok:true,data:{logoutUrl}}`; 브라우저가 Cognito 로그아웃 URL로 이동 |
 | 목록 | `GET /api/admin/content/{rockets\|site\|posts}` | `{ok:true,data:Record[]}` |
 | 수정 | `PUT /api/admin/content/{kind}/{id}`, `If-Match: {version}` | `{ok:true,data:updatedRecord}` |
 | 게시 | `POST /api/admin/publish` `{kind,id,version,idempotencyKey}` | `{ok:true,data:PublishJob}` |

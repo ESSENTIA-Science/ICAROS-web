@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches:
+      - main
       - refactor/**
 
 jobs:
@@ -19,6 +20,6 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run test
+      - run: node --test infra/cloudfront/release-router.test.mjs infra/aws/*.test.mjs
       - run: npm run build:web:fixture
       - run: npm run build -w @icaros/cms
-      - run: npm run build -w @icaros/api

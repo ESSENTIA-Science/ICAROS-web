@@ -1,11 +1,12 @@
 import type { ContentKind, ContentMap, Editable } from './api/types'
+import { getVehicleSpecs } from './vehicleSpecs'
 
 export function editable<K extends ContentKind>(kind: K, record: ContentMap[K]): Editable<K> {
   if (kind === 'rockets') {
     const rocket = record as ContentMap['rockets']
     return { name: rocket.name, series: rocket.series, descriptionMd: rocket.descriptionMd,
       maxAltitudeM: rocket.maxAltitudeM, sizeM: rocket.sizeM, payloadKg: rocket.payloadKg,
-      coverMediaId: rocket.coverMediaId ?? null } as unknown as Editable<K>
+      coverMediaId: rocket.coverMediaId ?? null, published: rocket.published ?? true, specs: getVehicleSpecs(rocket) } as unknown as Editable<K>
   }
   if (kind === 'site') {
     const site = record as ContentMap['site']

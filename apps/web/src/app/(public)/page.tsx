@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { getSnapshot } from '@/lib/content/snapshot'
-import { toList, toNumber, type SiteContent } from '@/lib/content'
+import { getSeo, toList, toNumber, type SiteContent } from '@/lib/content'
 import Panel from '@/components/panel/Panel'
 import styles from './page.module.css'
 import Hero from '@/components/landing/Hero'
@@ -10,6 +10,7 @@ import Mission, { hasMissionContent } from '@/components/landing/Mission'
 import Donate, { hasDonateContent, type DonateContent } from '@/components/landing/Donate'
 import Contact, { hasContactContent } from '@/components/landing/Contact'
 import type { SectionTheme } from '@/components/landing/Section'
+import { isInternalCtaHref } from '@/lib/cta'
 
 const loadContent = async (): Promise<SiteContent> => getSnapshot().site
 const SECTION_THEME: Readonly<Record<string, SectionTheme>> = {
@@ -37,6 +38,7 @@ function toDescription(body: string | undefined): string | undefined {
 export async function generateMetadata(): Promise<Metadata> {
   const c = await loadContent()
   const description = toDescription(c['about.body'])
+  const seo = getSeo(c)
   return {
     alternates: { canonical: '/' },
     // Next 는 `openGraph` 를 **최상위 키 단위로 치환**한다 — 여기서 `{ description }` 만 주면
@@ -47,12 +49,14 @@ export async function generateMetadata(): Promise<Metadata> {
           description,
           openGraph: {
             type: 'website',
+            locale: 'ko_KR',
             url: 'https://icaros.kr',
-            siteName: 'ICAROS',
-            title: 'ICAROS',
+            siteName: seo.title,
+            title: seo.title,
             description,
-            images: ['/og.png'],
+            images: [{ url: seo.ogImage, alt: 'ICAROS' }],
           },
+          twitter: { card: 'summary_large_image', title: seo.title, description, images: [seo.ogImage] },
         }
       : {}),
   }
@@ -163,7 +167,7 @@ function buildSection(row: SectionRow, c: SiteContent, ctx: BuildContext): Secti
         goal: toNumber(c['donation.goal']),
         roundLabel: c['donation.round_label'],
         ctaLabel: c['donate.cta_label'],
-        ctaHref: ctx.donateCtaHref,
+        ctaHref: c['donate.cta_href'] === undefined ? ctx.donateCtaHref : isInternalCtaHref(c['donate.cta_href']) ? c['donate.cta_href'] : undefined,
       }
       if (!hasDonateContent(content)) return null
       return function renderDonate(index) {
@@ -216,8 +220,8 @@ export default async function HomePage() {
   const REPLACED_BY_PANELS = new Set(['hero', 'about', 'vision', 'research', 'mission'])
   const usable = panels.length > 0 ? sections.filter((s) => !REPLACED_BY_PANELS.has(s.id)) : sections
 
-  // 후원 CTA 는 alert 대신 앵커다 (B8). contact 가 꺼져 있거나 카피가 전부 비어 통째로 빠지면
-  // `#contact` 는 죽은 앵커가 되므로 메일로 보낸다.
+  // 기존 스냅샷에 donate.cta_href 가 없을 때만 연락처 앵커/메일을 기본 링크로 쓴다.
+  // CMS 에서 설정한 링크는 buildSection 이 우선 사용한다.
   const email = c['contact.email']
   const contactRenders =
     sections.some((s) => s.id === 'contact') &&

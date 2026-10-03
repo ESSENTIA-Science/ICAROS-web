@@ -7,7 +7,7 @@
 
 .band {
   display: grid;
-  gap: var(--sp-5);
+  gap: var(--sp-4);
 }
 
 .figures {
@@ -177,23 +177,19 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: var(--sp-5);
   overflow: hidden;
-  padding: var(--sp-4) var(--sp-6);
+  min-height: 4.8rem;
+  padding: var(--sp-2) var(--sp-4);
   border: 1px solid var(--fg);
-  font-family: var(--ff-mono);
-  font-size: var(--fs-mono);
-  letter-spacing: var(--tr-mono);
-  text-transform: uppercase;
-}
-.cta:lang(ko) {
   font-family: var(--ff-body);
   font-size: var(--fs-body-s);
-  font-weight: var(--fw-medium);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-body-s);
   letter-spacing: 0;
-  text-transform: none;
+  text-decoration: none;
 }
-
 .ctaWipe {
   position: absolute;
   inset: 0;
@@ -209,14 +205,18 @@
   transform-origin: bottom left;
 }
 
-.ctaText {
+.ctaText,
+.ctaArrow {
   position: relative;
   transition: color var(--dur-4) var(--ease-primary);
 }
 .cta:hover .ctaText,
-.cta:focus-visible .ctaText {
+.cta:focus-visible .ctaText,
+.cta:hover .ctaArrow,
+.cta:focus-visible .ctaArrow {
   color: var(--bg-raised);
 }
+.ctaArrow { flex: 0 0 1.6rem; width: 1.6rem; height: 1.6rem; }
 
 /* 호버가 없는 기기에서는 닦임 자체를 지운다 — 유령 호버를 남기지 않는다 (03 §7) */
 @media (hover: none) {

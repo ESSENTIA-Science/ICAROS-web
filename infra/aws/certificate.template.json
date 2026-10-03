@@ -1,0 +1,35 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Deploy only in us-east-1 after certificate and Cloudflare DNS validation approval.",
+  "Parameters": {
+    "DomainName": {
+      "Type": "String"
+    },
+    "AlternativeDomainNames": {
+      "Type": "CommaDelimitedList"
+    }
+  },
+  "Resources": {
+    "Certificate": {
+      "Type": "AWS::CertificateManager::Certificate",
+      "Properties": {
+        "DomainName": {
+          "Ref": "DomainName"
+        },
+        "SubjectAlternativeNames": {
+          "Ref": "AlternativeDomainNames"
+        },
+        "ValidationMethod": "DNS"
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    }
+  },
+  "Outputs": {
+    "CertificateArn": {
+      "Value": {
+        "Ref": "Certificate"
+      }
+    }
+  }
+}

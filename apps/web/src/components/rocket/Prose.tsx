@@ -13,9 +13,9 @@ import styles from './Prose.module.css'
  *
  * TODO(통합): Posts 쪽 공용 마크다운 렌더러가 생기면 prose 스타일을 그쪽으로 합친다.
  */
-export default function Prose({ markdown }: { markdown: string }) {
+export default function Prose({ markdown, className }: { markdown: string; className?: string }) {
   return (
-    <div className={`${styles.prose} measure`}>
+    <div className={`${styles.prose} measure${className ? ` ${className}` : ''}`}>
       <Markdown remarkPlugins={[remarkGfm]} skipHtml>
         {markdown}
       </Markdown>

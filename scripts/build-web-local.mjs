@@ -4,6 +4,7 @@ import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs
 import { resolve } from 'node:path'
 import pg from 'pg'
 import { validateSnapshot } from '../apps/web/scripts/snapshot-contract.mjs'
+import { memberPortraitMedia } from '../apps/web/scripts/public-member-media.mjs'
 
 const root = resolve(import.meta.dirname, '..')
 const publicRoot = resolve(root, 'apps/web/public')
@@ -32,7 +33,13 @@ async function readServicePosts() {
   const { ESSENTIA_SERVICE_ORIGIN: origin, ESSENTIA_SERVICE_TOKEN: token,
     ESSENTIA_SERVICE_CATEGORY: category } = process.env
   if (![origin, token, category].some(Boolean)) return []
-  if (![origin, token, category].every(Boolean) || !/^https:\/\/[^/?#]+$/.test(origin)) {
+  let approvedOrigin = false
+  try {
+    const url = new URL(origin)
+    approvedOrigin = !url.username && !url.password && url.pathname === '/' && !url.search && !url.hash &&
+      (url.protocol === 'https:' || (url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))
+  } catch { /* incomplete origin */ }
+  if (![origin, token, category].every(Boolean) || !approvedOrigin) {
     throw new Error('ESSENTIA service configuration is incomplete')
   }
   const response = await fetch(`${origin}/api/service/icaros/posts/snapshot`, {
@@ -45,7 +52,7 @@ async function readServicePosts() {
     !/^[a-zA-Z0-9_-]+$/.test(post.id) || !/^[a-zA-Z0-9_-]+$/.test(post.forumPostId) || typeof post.title !== 'string' ||
     typeof post.content !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(post.displayDate) ||
     !Array.isArray(post.attachments))) throw new Error('Invalid ESSENTIA snapshot')
-  return posts
+  return posts.map(post => ({ ...post, content: post.content.replace(/https:\/\/(?:www\.)?icaros\.kr\/api\/media\/([0-9a-f-]{36})/gi, '/api/media/$1') }))
 }
 
 function localLegacyImage(path) {
@@ -87,7 +94,7 @@ async function main() {
       where m.published order by m.sort_order, m.id`)
     const posts = await query('select * from icaros.legacy_posts where published order by published_at desc, id desc')
     const missions = await query('select *, launch_date::text as launch_day from icaros.missions where published order by launch_date desc, id')
-    const media = await query("select id, bucket, key, mime, width, height, entity_type, entity_id, created_at from icaros.media where status = 'ready' and deleted_at is null")
+    const media = await query("select id, bucket, key, mime, width, height, entity_type, entity_id, created_at, status, deleted_at from icaros.media where status = 'ready' and deleted_at is null")
     await client.query('commit')
     rows = { site, sections, panels, types, series, vehicles, models, engines, members, posts, missions, media }
   } catch (error) {
@@ -107,6 +114,10 @@ async function main() {
   }
   for (const panel of rows.panels) requireMedia(panel.media_id)
   for (const vehicle of rows.vehicles) if (vehicle.cover_media_id) requireMedia(vehicle.cover_media_id)
+  for (const member of rows.members) {
+    const portrait = memberPortraitMedia(member, mediaById)
+    if (portrait) requireMedia(portrait.id)
+  }
   const galleryFor = (vehicle) => {
     const images = rows.media.filter((item) => item.entity_type === 'rocket' && item.entity_id === vehicle.id &&
       item.id !== vehicle.cover_media_id && item.mime.startsWith('image/'))
@@ -151,6 +162,12 @@ async function main() {
     if (mission.cover_media_id) requireMedia(mission.cover_media_id)
     for (const match of mission.body_md.matchAll(mediaIdPattern)) requireMedia(match[1])
   }
+  for (const value of [
+    ...rows.vehicles.map((item) => item.description_md),
+    ...rows.series.map((item) => item.description_md),
+  ]) {
+    if (value) for (const match of value.matchAll(mediaIdPattern)) requireMedia(match[1])
+  }
 
   rmSync(mediaRoot, { recursive: true, force: true })
   mkdirSync(mediaRoot, { recursive: true, mode: 0o700 })
@@ -172,6 +189,12 @@ async function main() {
     }
   }))
   const urlFor = (id) => mediaUrls[requireMedia(id)]
+  const imageSize = (id) => {
+    const media = mediaById.get(id.toLowerCase())
+    const width = Number(media?.width)
+    const height = Number(media?.height)
+    return width > 0 && height > 0 ? { width, height } : {}
+  }
   const snapshot = {
     version: `local-db-${Date.now()}`,
     publishedAt: new Date().toISOString(),
@@ -188,7 +211,7 @@ async function main() {
     }),
     taxonomy: {
       types: rows.types,
-      series: rows.series.map((item) => ({ id: item.id, label: item.label, typeId: item.type_id, descriptionMd: item.description_md })),
+      series: rows.series.map((item) => ({ id: item.id, label: item.label, typeId: item.type_id, descriptionMd: item.description_md?.replace(mediaIdPattern, (_, id) => urlFor(id)) ?? null })),
     },
     vehicles: rows.vehicles.map((vehicle) => {
       const itemSeries = rows.series.find((item) => item.id === vehicle.series)
@@ -204,8 +227,9 @@ async function main() {
           src: urlFor(modelFor(vehicle).glb_media_id),
           posterSrc: modelFor(vehicle).poster_media_id ? urlFor(modelFor(vehicle).poster_media_id) : null,
         } : null,
+        ...(vehicle.specs == null ? {} : { specs: vehicle.specs }),
         maxAltitudeM: numeric(vehicle.max_altitude_m), sizeM: numeric(vehicle.size_m), payloadKg: numeric(vehicle.payload_kg),
-        descriptionMd: vehicle.description_md,
+        descriptionMd: vehicle.description_md?.replace(mediaIdPattern, (_, id) => urlFor(id)) ?? null,
         engines: rows.engines.filter((engine) => engine.rocket_id === vehicle.id).map((engine) => ({
           id: engine.id, type: engine.type, thrustN: numeric(engine.thrust_n),
           burnTimeS: numeric(engine.burn_time_s), count: engine.count, mode: engine.mode,
@@ -213,11 +237,15 @@ async function main() {
         published: true,
       }
     }),
-    members: rows.members.map((member) => ({
-      id: member.id, name: member.name, role: member.role, squad: member.public_squad,
-      school: member.school, bioMd: member.bio_md, imageSrc: '/assets/img/member/profile.webp',
-      hasPhoto: false, published: true,
-    })),
+    members: rows.members.map((member) => {
+      const portrait = memberPortraitMedia(member, mediaById)
+      return {
+        id: member.id, name: member.name, role: member.role, squad: member.public_squad,
+        school: member.school, bioMd: member.bio_md ?? null,
+        imageSrc: portrait ? urlFor(portrait.id) : '/assets/img/member/profile.webp',
+        hasPhoto: portrait !== null, published: true,
+      }
+    }),
     posts: [...rows.posts.map((post) => ({
       id: post.id, slug: post.slug, source: 'legacy', title: post.title,
       contentMd: post.content_md.replace(mediaIdPattern, (_, id) => urlFor(id)),
@@ -228,9 +256,10 @@ async function main() {
       id: post.id, forumPostId: post.forumPostId, source: 'community', title: post.title,
       contentMd: post.content.replace(mediaIdPattern, (_, id) => urlFor(id)),
       displayDate: post.displayDate, excerpt: excerpt(post.content),
-      thumb: null, published: true,
+      thumb: post.attachments.find(item => item.kind === 'image') ? { kind: 'media', src: urlFor(post.attachments.find(item => item.kind === 'image').mediaId) } : null, published: true,
       attachments: post.attachments.map((attachment) => ({
         kind: attachment.kind, title: attachment.title, src: urlFor(attachment.mediaId),
+        ...(attachment.kind === 'image' ? imageSize(attachment.mediaId) : {}),
       })),
     }))].sort((a, b) => b.displayDate.localeCompare(a.displayDate) || a.id.localeCompare(b.id)),
     missions: rows.missions.map((mission) => ({

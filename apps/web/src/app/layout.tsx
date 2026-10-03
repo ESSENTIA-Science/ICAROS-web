@@ -13,11 +13,15 @@ export function generateMetadata(): Metadata {
     metadataBase: new URL('https://icaros.kr'),
     title: { default: seo.title, template: `%s · ${seo.title}` },
     description: seo.description,
-    openGraph: { type: 'website', url: 'https://icaros.kr', siteName: seo.title, title: seo.title, description: seo.description, images: [seo.ogImage] },
+    openGraph: { type: 'website', locale: 'ko_KR', url: 'https://icaros.kr', siteName: seo.title, title: seo.title, description: seo.description, images: [{ url: seo.ogImage, alt: 'ICAROS' }] },
+    twitter: { card: 'summary_large_image', title: seo.title, description: seo.description, images: [seo.ogImage] },
     icons: { icon: '/favicon.png' },
   }
 }
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, colorScheme: 'light dark' }
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return <html lang="ko" className={`${display.variable} ${mono.variable}`}><body><Loader />{children}</body></html>
+  const seo = getSeo(getSnapshot().site)
+  const website = JSON.stringify({ '@context': 'https://schema.org', '@type': 'WebSite', name: seo.title,
+    url: 'https://icaros.kr/', description: seo.description, inLanguage: 'ko-KR' }).replace(/</g, '\\u003c')
+  return <html lang="ko" className={`${display.variable} ${mono.variable}`}><head><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: website }} /></head><body><Loader />{children}</body></html>
 }

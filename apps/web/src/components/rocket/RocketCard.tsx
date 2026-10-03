@@ -1,11 +1,10 @@
+import { getVehicleSpecs } from '@/lib/vehicle-specs'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { RocketListItem } from '@/app/(public)/vehicles/_data'
 import { textLang } from '@/components/landing/text-lang'
 import { vehicleHref } from './series'
 import styles from './RocketCard.module.css'
-
-type CardSpec = { label: string; value: string | null; unit: string }
 
 /**
  * 데이터 시트형 카드 — 세로 1:2 렌더 옆에 큰 기체명 + 작은 모노 제원.
@@ -19,11 +18,7 @@ type CardSpec = { label: string; value: string | null; unit: string }
  * 스크린리더의 링크 목록 탐색이 망가진다. 대가로 카드 안 텍스트 드래그 선택이 막힌다.
  */
 export default function RocketCard({ rocket }: { rocket: RocketListItem }) {
-  const specs: CardSpec[] = [
-    { label: '최대 고도', value: rocket.maxAltitudeM, unit: 'm' },
-    { label: '길이', value: rocket.sizeM, unit: 'm' },
-    { label: '페이로드', value: rocket.payloadKg, unit: 'kg' },
-  ]
+  const specs = getVehicleSpecs(rocket)
 
   return (
     <li className={styles.card} data-reveal-item="">
@@ -52,10 +47,10 @@ export default function RocketCard({ rocket }: { rocket: RocketListItem }) {
         {/* 호버·포커스 때 좌→우로 차는 1px 마크. 시그널 컬러의 허용 용법(진행률 채움) */}
         <span className={styles.rule} aria-hidden="true" />
 
-        <dl className={styles.specs}>
-          {specs.map((s) => (
-            <div key={s.label} className={styles.specRow}>
-              <dt className="eyebrow">{s.label}</dt>
+        {specs.length > 0 ? <dl className={styles.specs} data-columns={specs.length > 3 ? 2 : 1}>
+          {specs.map((s, index) => (
+            <div key={index} className={styles.specRow}>
+              <dt className="eyebrow" lang={textLang(s.label)}>{s.label}</dt>
               <dd className={styles.specValue}>
                 {s.value == null ? (
                   <>
@@ -64,14 +59,14 @@ export default function RocketCard({ rocket }: { rocket: RocketListItem }) {
                   </>
                 ) : (
                   <>
-                    <span className={`${styles.specNum} num`}>{s.value}</span>
+                    <span className={`${styles.specNum} num`} lang={textLang(s.value)}>{s.value}</span>
                     <span className={styles.specUnit}>{s.unit}</span>
                   </>
                 )}
               </dd>
             </div>
           ))}
-        </dl>
+        </dl> : null}
       </div>
     </li>
   )

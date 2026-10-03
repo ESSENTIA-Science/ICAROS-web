@@ -1,0 +1,1697 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "ICAROS review artifact: storage, pinned build, KVS and isolated CloudFront. No DNS changes.",
+  "Metadata": {
+    "ReviewStatus": "PREPROVISION_ONLY: runtime and publication remain blocked by REVIEW.md; no deploy runner is supplied."
+  },
+  "Parameters": {
+    "WebRepository": {
+      "Type": "String",
+      "AllowedPattern": "https://github.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\\.git",
+      "Default": "https://github.com/ESSENTIA-Science/ICAROS-web.git"
+    },
+    "WebSourceRevision": {
+      "Type": "String",
+      "AllowedPattern": "[a-f0-9]{40}"
+    },
+    "CmsOrigin": {
+      "Type": "String",
+      "AllowedPattern": "https://[A-Za-z0-9.-]+"
+    },
+    "EnableDistributions": {
+      "Type": "String",
+      "AllowedValues": [
+        "false",
+        "true"
+      ],
+      "Default": "false"
+    },
+    "AttachDomains": {
+      "Type": "String",
+      "AllowedValues": [
+        "false",
+        "true"
+      ],
+      "Default": "false"
+    },
+    "WebAliases": {
+      "Type": "CommaDelimitedList",
+      "Default": ""
+    },
+    "MediaAliases": {
+      "Type": "CommaDelimitedList",
+      "Default": ""
+    },
+    "WebCertificateArn": {
+      "Type": "String",
+      "Default": ""
+    },
+    "MediaCertificateArn": {
+      "Type": "String",
+      "Default": ""
+    },
+    "ApiOriginHost": {
+      "Type": "String",
+      "AllowedPattern": "[A-Za-z0-9.-]+",
+      "Default": "disabled.invalid"
+    },
+    "PublicOrigin": {
+      "Type": "String",
+      "AllowedPattern": "https://[A-Za-z0-9.-]+"
+    },
+    "CmsAliases": {
+      "Type": "CommaDelimitedList",
+      "Default": ""
+    },
+    "CmsCertificateArn": {
+      "Type": "String",
+      "Default": ""
+    },
+    "CreateArtifactBucket": {
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": [
+        "false",
+        "true"
+      ]
+    }
+  },
+  "Conditions": {
+    "EnableDistributions": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableDistributions"
+        },
+        "true"
+      ]
+    },
+    "AttachDomains": {
+      "Fn::Equals": [
+        {
+          "Ref": "AttachDomains"
+        },
+        "true"
+      ]
+    },
+    "CreateArtifactBucket": {
+      "Fn::Equals": [
+        {
+          "Ref": "CreateArtifactBucket"
+        },
+        "true"
+      ]
+    }
+  },
+  "Rules": {
+    "DomainInputs": {
+      "RuleCondition": {
+        "Fn::Equals": [
+          {
+            "Ref": "AttachDomains"
+          },
+          "true"
+        ]
+      },
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "WebCertificateArn"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Domain cutover requires issued us-east-1 ACM certificates."
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "MediaCertificateArn"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Domain cutover requires issued us-east-1 ACM certificates."
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "CmsCertificateArn"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Separate CMS distribution requires its issued us-east-1 ACM certificate."
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "ReleaseBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "IgnorePublicAcls": true,
+          "BlockPublicPolicy": true,
+          "RestrictPublicBuckets": true
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "PrivateMediaBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "IgnorePublicAcls": true,
+          "BlockPublicPolicy": true,
+          "RestrictPublicBuckets": true
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        },
+        "CorsConfiguration": {
+          "CorsRules": [
+            {
+              "AllowedOrigins": [
+                {
+                  "Ref": "CmsOrigin"
+                }
+              ],
+              "AllowedMethods": [
+                "PUT"
+              ],
+              "AllowedHeaders": [
+                "content-type"
+              ],
+              "ExposedHeaders": [
+                "ETag"
+              ],
+              "MaxAge": 600
+            }
+          ]
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "PublicMediaBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "IgnorePublicAcls": true,
+          "BlockPublicPolicy": true,
+          "RestrictPublicBuckets": true
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "CmsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "IgnorePublicAcls": true,
+          "BlockPublicPolicy": true,
+          "RestrictPublicBuckets": true
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "ReleaseBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "ReleaseBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "RequireTLS",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "ReleaseBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${ReleaseBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            },
+            {
+              "Sid": "RequireConditionalCreate",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": [
+                {
+                  "Fn::Sub": "${ReleaseBucket.Arn}/releases/*"
+                },
+                {
+                  "Fn::Sub": "${ReleaseBucket.Arn}/snapshots/*"
+                },
+                {
+                  "Fn::Sub": "${ReleaseBucket.Arn}/release-assets/*"
+                }
+              ],
+              "Condition": {
+                "Null": {
+                  "s3:if-none-match": "true"
+                }
+              }
+            },
+            {
+              "Sid": "RequireStarCondition",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": [
+                {
+                  "Fn::Sub": "${ReleaseBucket.Arn}/releases/*"
+                },
+                {
+                  "Fn::Sub": "${ReleaseBucket.Arn}/snapshots/*"
+                },
+                {
+                  "Fn::Sub": "${ReleaseBucket.Arn}/release-assets/*"
+                }
+              ],
+              "Condition": {
+                "StringNotEquals": {
+                  "s3:if-none-match": "*"
+                }
+              }
+            },
+            {
+              "Sid": "RetainImmutableBytes",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": [
+                "s3:DeleteObject",
+                "s3:DeleteObjectVersion"
+              ],
+              "Resource": [
+                {
+                  "Fn::Sub": "${ReleaseBucket.Arn}/releases/*"
+                },
+                {
+                  "Fn::Sub": "${ReleaseBucket.Arn}/snapshots/*"
+                },
+                {
+                  "Fn::Sub": "${ReleaseBucket.Arn}/release-assets/*"
+                }
+              ]
+            },
+            {
+              "Sid": "DistributionRead",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudfront.amazonaws.com"
+              },
+              "Action": "s3:GetObject",
+              "Resource": [
+                {
+                  "Fn::Sub": "${ReleaseBucket.Arn}/releases/*"
+                },
+                {
+                  "Fn::Sub": "${ReleaseBucket.Arn}/release-assets/*"
+                }
+              ],
+              "Condition": {
+                "StringEquals": {
+                  "AWS:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${WebDistribution}"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "MissingKeysReturn404",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudfront.amazonaws.com"
+              },
+              "Action": "s3:ListBucket",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "ReleaseBucket",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "AWS:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${WebDistribution}"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "PrivateMediaBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "PrivateMediaBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "RequireTLS",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "PrivateMediaBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${PrivateMediaBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "PublicMediaBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "PublicMediaBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "RequireTLS",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "PublicMediaBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${PublicMediaBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            },
+            {
+              "Sid": "RequireConditionalCreate",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": [
+                {
+                  "Fn::Sub": "${PublicMediaBucket.Arn}/published/*"
+                }
+              ],
+              "Condition": {
+                "Null": {
+                  "s3:if-none-match": "true"
+                }
+              }
+            },
+            {
+              "Sid": "RequireStarCondition",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": [
+                {
+                  "Fn::Sub": "${PublicMediaBucket.Arn}/published/*"
+                }
+              ],
+              "Condition": {
+                "StringNotEquals": {
+                  "s3:if-none-match": "*"
+                }
+              }
+            },
+            {
+              "Sid": "RetainImmutableBytes",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": [
+                "s3:DeleteObject",
+                "s3:DeleteObjectVersion"
+              ],
+              "Resource": [
+                {
+                  "Fn::Sub": "${PublicMediaBucket.Arn}/published/*"
+                }
+              ]
+            },
+            {
+              "Sid": "DistributionRead",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudfront.amazonaws.com"
+              },
+              "Action": "s3:GetObject",
+              "Resource": {
+                "Fn::Sub": "${PublicMediaBucket.Arn}/published/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "AWS:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${MediaDistribution}"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "MissingKeysReturn404",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudfront.amazonaws.com"
+              },
+              "Action": "s3:ListBucket",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "PublicMediaBucket",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "AWS:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${MediaDistribution}"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "CmsBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "CmsBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "RequireTLS",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "CmsBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${CmsBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            },
+            {
+              "Sid": "DistributionRead",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudfront.amazonaws.com"
+              },
+              "Action": "s3:GetObject",
+              "Resource": {
+                "Fn::Sub": "${CmsBucket.Arn}/admin/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "AWS:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${CmsDistribution}"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "MissingKeysReturn404",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudfront.amazonaws.com"
+              },
+              "Action": "s3:ListBucket",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "CmsBucket",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "AWS:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${CmsDistribution}"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "ReleaseKvs": {
+      "Type": "AWS::CloudFront::KeyValueStore",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-release"
+        },
+        "Comment": "No initial release: fails closed until separately approved baseline."
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "ReleaseRouter": {
+      "Type": "AWS::CloudFront::Function",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-release-router"
+        },
+        "AutoPublish": true,
+        "FunctionConfig": {
+          "Comment": "Public FE release pointer only",
+          "Runtime": "cloudfront-js-2.0",
+          "KeyValueStoreAssociations": [
+            {
+              "KeyValueStoreARN": {
+                "Fn::GetAtt": [
+                  "ReleaseKvs",
+                  "Arn"
+                ]
+              }
+            }
+          ]
+        },
+        "FunctionCode": "import cf from 'cloudfront';\nconst kvs = cf.kvs();\n\nasync function handler(event) {\n  var request = event.request;\n  var uri = request.uri;\n  // Never let origin-key prefixes or noncanonical paths become public routes.\n  // Reject encoded separators/dots/percent signs, including nested encoding.\n  if (typeof uri !== 'string' || uri.charAt(0) !== '/' ||\n      /[\\\\\\u0000-\\u001f\\u007f?#]/.test(uri) || uri.indexOf('//') !== -1 ||\n      /%(?:2e|2f|5c|25)/i.test(uri)) {\n    return { statusCode: 404, statusDescription: 'Not Found' };\n  }\n  var decoded;\n  try { decoded = decodeURIComponent(uri); } catch (error) {\n    return { statusCode: 404, statusDescription: 'Not Found' };\n  }\n  if (/[\\\\\\u0000-\\u001f\\u007f?#]/.test(decoded) ||\n      /(?:^|\\/)\\.{1,2}(?:\\/|$)/.test(decoded) ||\n      /^\\/(?:releases|release-assets|__release-assets|__releases|__staging|snapshots)(?:\\/|$)/i.test(decoded)) {\n    return { statusCode: 404, statusDescription: 'Not Found' };\n  }\n  if (/^\\/(?:compat-media-index|published-member-media|manifest|snapshot)\\.json$/i.test(decoded)) {\n    return { statusCode: 404, statusDescription: 'Not Found' };\n  }\n  // Next export's RSC metadata uses !/$ only inside a bounded __next basename.\n  // Directory segments stay strict; arbitrary punctuation paths fail closed.\n  var rsc = /^(?:\\/[a-zA-Z0-9_.,-]+)*\\/__next\\.[a-zA-Z0-9_.,!$-]+\\.txt$/.test(decoded);\n  if (/[!$]/.test(decoded) && !rsc) {\n    return { statusCode: 404, statusDescription: 'Not Found' };\n  }\n  if (rsc) uri = decoded;\n  // Other public behaviors own the CMS redirect and the UUID-only API proxy.\n  // Never let a missing association expose these routes through the FE origin.\n  if (/^\\/(?:admin|api)(?:\\/|$)/i.test(decoded)) {\n    return { statusCode: 404, statusDescription: 'Not Found' };\n  }\n  if (decoded.indexOf('/_release') === 0) {\n    var scoped = /^\\/_release\\/([a-f0-9]{64})\\/((?:_next\\/static|assets)\\/[a-zA-Z0-9/_.,-]+\\.(?:js|css|woff2?|ttf|otf|png|jpe?g|webp|avif|gif|ico|svg|glb|pdf|mp4))$/.exec(uri);\n    if (!scoped) return { statusCode: 404, statusDescription: 'Not Found' };\n    if (/^assets\\/(?:local-media|proxy-members|private)(?:\\/|$)/.test(scoped[2]) ||\n        (/^assets\\/img\\/member\\//.test(scoped[2]) && scoped[2] !== 'assets/img/member/profile.webp')) {\n      return { statusCode: 404, statusDescription: 'Not Found' };\n    }\n    request.uri = '/release-assets/' + scoped[1] + '/' + scoped[2];\n    return request;\n  }\n  var release;\n  try { release = await kvs.get('release'); } catch (error) {\n    return { statusCode: 503, statusDescription: 'Service Unavailable' };\n  }\n  if (!/^releases\\/v[1-9][0-9]*-[a-f0-9]{64}$/.test(release)) {\n    return { statusCode: 503, statusDescription: 'Service Unavailable' };\n  }\n  if (uri === '/') uri = '/index.html';\n  else if (uri.charAt(uri.length - 1) === '/') uri += 'index.html';\n  else if (uri.lastIndexOf('.') < uri.lastIndexOf('/')) uri += '/index.html';\n  request.uri = '/' + release + uri;\n  return request;\n}\n"
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "StaticOac": {
+      "Type": "AWS::CloudFront::OriginAccessControl",
+      "Properties": {
+        "OriginAccessControlConfig": {
+          "Name": {
+            "Fn::Sub": "${AWS::StackName}-static"
+          },
+          "OriginAccessControlOriginType": "s3",
+          "SigningBehavior": "always",
+          "SigningProtocol": "sigv4"
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "NoCachePolicy": {
+      "Type": "AWS::CloudFront::CachePolicy",
+      "Properties": {
+        "CachePolicyConfig": {
+          "Name": {
+            "Fn::Sub": "${AWS::StackName}-no-cache"
+          },
+          "DefaultTTL": 0,
+          "MaxTTL": 0,
+          "MinTTL": 0,
+          "ParametersInCacheKeyAndForwardedToOrigin": {
+            "EnableAcceptEncodingGzip": false,
+            "EnableAcceptEncodingBrotli": false,
+            "HeadersConfig": {
+              "HeaderBehavior": "none"
+            },
+            "CookiesConfig": {
+              "CookieBehavior": "none"
+            },
+            "QueryStringsConfig": {
+              "QueryStringBehavior": "none"
+            }
+          }
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "MediaCachePolicy": {
+      "Type": "AWS::CloudFront::CachePolicy",
+      "Properties": {
+        "CachePolicyConfig": {
+          "Name": {
+            "Fn::Sub": "${AWS::StackName}-immutable-media"
+          },
+          "DefaultTTL": 86400,
+          "MaxTTL": 31536000,
+          "MinTTL": 0,
+          "ParametersInCacheKeyAndForwardedToOrigin": {
+            "EnableAcceptEncodingGzip": true,
+            "EnableAcceptEncodingBrotli": true,
+            "HeadersConfig": {
+              "HeaderBehavior": "none"
+            },
+            "CookiesConfig": {
+              "CookieBehavior": "none"
+            },
+            "QueryStringsConfig": {
+              "QueryStringBehavior": "none"
+            }
+          }
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "ApiOriginPolicy": {
+      "Type": "AWS::CloudFront::OriginRequestPolicy",
+      "Properties": {
+        "OriginRequestPolicyConfig": {
+          "Name": {
+            "Fn::Sub": "${AWS::StackName}-api"
+          },
+          "HeadersConfig": {
+            "HeaderBehavior": "allExcept",
+            "Headers": [
+              "host"
+            ]
+          },
+          "CookiesConfig": {
+            "CookieBehavior": "all"
+          },
+          "QueryStringsConfig": {
+            "QueryStringBehavior": "all"
+          }
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "WebDistribution": {
+      "Type": "AWS::CloudFront::Distribution",
+      "Properties": {
+        "DistributionConfig": {
+          "Enabled": {
+            "Fn::If": [
+              "EnableDistributions",
+              true,
+              false
+            ]
+          },
+          "Comment": "ICAROS public FE; CMS redirects; UUID media compatibility only",
+          "Origins": [
+            {
+              "Id": "release",
+              "DomainName": {
+                "Fn::GetAtt": [
+                  "ReleaseBucket",
+                  "RegionalDomainName"
+                ]
+              },
+              "OriginAccessControlId": {
+                "Ref": "StaticOac"
+              },
+              "S3OriginConfig": {
+                "OriginAccessIdentity": ""
+              }
+            },
+            {
+              "Id": "api",
+              "DomainName": {
+                "Ref": "ApiOriginHost"
+              },
+              "CustomOriginConfig": {
+                "OriginProtocolPolicy": "https-only",
+                "OriginSSLProtocols": [
+                  "TLSv1.2"
+                ]
+              }
+            }
+          ],
+          "DefaultCacheBehavior": {
+            "TargetOriginId": "release",
+            "ViewerProtocolPolicy": "redirect-to-https",
+            "CachePolicyId": {
+              "Ref": "NoCachePolicy"
+            },
+            "AllowedMethods": [
+              "GET",
+              "HEAD"
+            ],
+            "CachedMethods": [
+              "GET",
+              "HEAD"
+            ],
+            "Compress": true,
+            "FunctionAssociations": [
+              {
+                "EventType": "viewer-request",
+                "FunctionARN": {
+                  "Fn::GetAtt": [
+                    "ReleaseRouter",
+                    "FunctionMetadata.FunctionARN"
+                  ]
+                }
+              }
+            ]
+          },
+          "CacheBehaviors": [
+            {
+              "PathPattern": "/admin",
+              "TargetOriginId": "release",
+              "ViewerProtocolPolicy": "redirect-to-https",
+              "CachePolicyId": {
+                "Ref": "NoCachePolicy"
+              },
+              "AllowedMethods": [
+                "GET",
+                "HEAD"
+              ],
+              "CachedMethods": [
+                "GET",
+                "HEAD"
+              ],
+              "Compress": true,
+              "FunctionAssociations": [
+                {
+                  "EventType": "viewer-request",
+                  "FunctionARN": {
+                    "Fn::GetAtt": [
+                      "PublicAdminRouter",
+                      "FunctionMetadata.FunctionARN"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "PathPattern": "/admin/*",
+              "TargetOriginId": "release",
+              "ViewerProtocolPolicy": "redirect-to-https",
+              "CachePolicyId": {
+                "Ref": "NoCachePolicy"
+              },
+              "AllowedMethods": [
+                "GET",
+                "HEAD"
+              ],
+              "CachedMethods": [
+                "GET",
+                "HEAD"
+              ],
+              "Compress": true,
+              "FunctionAssociations": [
+                {
+                  "EventType": "viewer-request",
+                  "FunctionARN": {
+                    "Fn::GetAtt": [
+                      "PublicAdminRouter",
+                      "FunctionMetadata.FunctionARN"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "PathPattern": "/api",
+              "TargetOriginId": "api",
+              "ViewerProtocolPolicy": "redirect-to-https",
+              "CachePolicyId": {
+                "Ref": "NoCachePolicy"
+              },
+              "AllowedMethods": [
+                "GET",
+                "HEAD"
+              ],
+              "CachedMethods": [
+                "GET",
+                "HEAD"
+              ],
+              "Compress": true,
+              "OriginRequestPolicyId": {
+                "Ref": "PublicApiOriginPolicy"
+              },
+              "FunctionAssociations": [
+                {
+                  "EventType": "viewer-request",
+                  "FunctionARN": {
+                    "Fn::GetAtt": [
+                      "PublicApiRouter",
+                      "FunctionMetadata.FunctionARN"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "PathPattern": "/api/*",
+              "TargetOriginId": "api",
+              "ViewerProtocolPolicy": "redirect-to-https",
+              "CachePolicyId": {
+                "Ref": "NoCachePolicy"
+              },
+              "AllowedMethods": [
+                "GET",
+                "HEAD"
+              ],
+              "CachedMethods": [
+                "GET",
+                "HEAD"
+              ],
+              "Compress": true,
+              "OriginRequestPolicyId": {
+                "Ref": "PublicApiOriginPolicy"
+              },
+              "FunctionAssociations": [
+                {
+                  "EventType": "viewer-request",
+                  "FunctionARN": {
+                    "Fn::GetAtt": [
+                      "PublicApiRouter",
+                      "FunctionMetadata.FunctionARN"
+                    ]
+                  }
+                }
+              ]
+            }
+          ],
+          "HttpVersion": "http2and3",
+          "IPV6Enabled": true,
+          "PriceClass": "PriceClass_100",
+          "Aliases": {
+            "Fn::If": [
+              "AttachDomains",
+              {
+                "Ref": "WebAliases"
+              },
+              []
+            ]
+          },
+          "ViewerCertificate": {
+            "Fn::If": [
+              "AttachDomains",
+              {
+                "AcmCertificateArn": {
+                  "Ref": "WebCertificateArn"
+                },
+                "SslSupportMethod": "sni-only",
+                "MinimumProtocolVersion": "TLSv1.2_2021"
+              },
+              {
+                "CloudFrontDefaultCertificate": true
+              }
+            ]
+          }
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "MediaDistribution": {
+      "Type": "AWS::CloudFront::Distribution",
+      "Properties": {
+        "DistributionConfig": {
+          "Enabled": {
+            "Fn::If": [
+              "EnableDistributions",
+              true,
+              false
+            ]
+          },
+          "Comment": "Only explicitly promoted public media; never private portraits",
+          "Origins": [
+            {
+              "Id": "media",
+              "DomainName": {
+                "Fn::GetAtt": [
+                  "PublicMediaBucket",
+                  "RegionalDomainName"
+                ]
+              },
+              "OriginAccessControlId": {
+                "Ref": "StaticOac"
+              },
+              "S3OriginConfig": {
+                "OriginAccessIdentity": ""
+              }
+            }
+          ],
+          "DefaultCacheBehavior": {
+            "TargetOriginId": "media",
+            "ViewerProtocolPolicy": "redirect-to-https",
+            "CachePolicyId": {
+              "Ref": "MediaCachePolicy"
+            },
+            "AllowedMethods": [
+              "GET",
+              "HEAD"
+            ],
+            "CachedMethods": [
+              "GET",
+              "HEAD"
+            ],
+            "Compress": true,
+            "FunctionAssociations": [
+              {
+                "EventType": "viewer-request",
+                "FunctionARN": {
+                  "Fn::GetAtt": [
+                    "MediaRouter",
+                    "FunctionMetadata.FunctionARN"
+                  ]
+                }
+              }
+            ],
+            "ResponseHeadersPolicyId": {
+              "Ref": "PublicMediaCors"
+            }
+          },
+          "Aliases": {
+            "Fn::If": [
+              "AttachDomains",
+              {
+                "Ref": "MediaAliases"
+              },
+              []
+            ]
+          },
+          "ViewerCertificate": {
+            "Fn::If": [
+              "AttachDomains",
+              {
+                "AcmCertificateArn": {
+                  "Ref": "MediaCertificateArn"
+                },
+                "SslSupportMethod": "sni-only",
+                "MinimumProtocolVersion": "TLSv1.2_2021"
+              },
+              {
+                "CloudFrontDefaultCertificate": true
+              }
+            ]
+          },
+          "HttpVersion": "http2and3",
+          "IPV6Enabled": true,
+          "PriceClass": "PriceClass_100"
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "BuildLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/icaros/${AWS::StackName}/build"
+        },
+        "RetentionInDays": 30
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "BuildRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codebuild.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "staging-only",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "${ReleaseBucket.Arn}/snapshots/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "${ReleaseBucket.Arn}/__staging/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "${ReleaseBucket.Arn}/release-assets/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "BuildLogs",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "WebBuild": {
+      "Type": "AWS::CodeBuild::Project",
+      "Properties": {
+        "ServiceRole": {
+          "Fn::GetAtt": [
+            "BuildRole",
+            "Arn"
+          ]
+        },
+        "Artifacts": {
+          "Type": "NO_ARTIFACTS"
+        },
+        "Source": {
+          "Type": "GITHUB",
+          "Location": {
+            "Ref": "WebRepository"
+          },
+          "BuildSpec": "infra/buildspec.yml",
+          "GitCloneDepth": 1,
+          "ReportBuildStatus": false
+        },
+        "SourceVersion": {
+          "Ref": "WebSourceRevision"
+        },
+        "Environment": {
+          "Type": "LINUX_CONTAINER",
+          "ComputeType": "BUILD_GENERAL1_SMALL",
+          "Image": "aws/codebuild/standard:7.0",
+          "PrivilegedMode": false,
+          "EnvironmentVariables": [
+            {
+              "Name": "ICAROS_RELEASE_BUCKET",
+              "Value": {
+                "Ref": "ReleaseBucket"
+              },
+              "Type": "PLAINTEXT"
+            }
+          ]
+        },
+        "TimeoutInMinutes": 30,
+        "QueuedTimeoutInMinutes": 30,
+        "LogsConfig": {
+          "CloudWatchLogs": {
+            "Status": "ENABLED",
+            "GroupName": {
+              "Ref": "BuildLogs"
+            }
+          }
+        }
+      }
+    },
+    "CmsRouter": {
+      "Type": "AWS::CloudFront::Function",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-cms-router"
+        },
+        "AutoPublish": true,
+        "FunctionConfig": {
+          "Comment": "ICAROS isolated cms-router",
+          "Runtime": "cloudfront-js-2.0"
+        },
+        "FunctionCode": "function handler(event) {\n  var request = event.request;\n  var uri = request.uri;\n  if (typeof uri !== 'string' || /[\\\\%\\u0000-\\u001f\\u007f?#]/.test(uri) ||\n      uri.indexOf('//') !== -1 || /(?:^|\\/)\\.{1,2}(?:\\/|$)/.test(uri)) {\n    return { statusCode: 404, statusDescription: 'Not Found' };\n  }\n  if (uri === '/api' || uri.indexOf('/api/') === 0) {\n    return { statusCode: 404, statusDescription: 'Not Found' };\n  }\n  if (uri === '/' || uri === '/admin/') request.uri = '/admin/index.html';\n  else if (uri === '/admin') return { statusCode: 308, statusDescription: 'Permanent Redirect',\n    headers: { location: { value: '/admin/' }, 'cache-control': { value: 'private, no-store' } } };\n  else if (!/^\\/admin\\/[a-zA-Z0-9/_.,-]+$/.test(uri)) return { statusCode: 404, statusDescription: 'Not Found' };\n  return request;\n}\n"
+      }
+    },
+    "PublicAdminRouter": {
+      "Type": "AWS::CloudFront::Function",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-cms-redirect"
+        },
+        "AutoPublish": true,
+        "FunctionConfig": {
+          "Comment": "ICAROS isolated cms-redirect",
+          "Runtime": "cloudfront-js-2.0"
+        },
+        "FunctionCode": {
+          "Fn::Sub": "// Template renderer replaces this origin from a private, validated parameter.\nconst cmsOrigin = '${CmsOrigin}';\nfunction handler(event) {\n  var request = event.request;\n  if (!/^https:\\/\\/[a-zA-Z0-9.-]+$/.test(cmsOrigin) ||\n      !/^\\/admin(?:\\/[a-zA-Z0-9/_.,-]*)?$/.test(request.uri) ||\n      /(?:^|\\/)\\.{1,2}(?:\\/|$)/.test(request.uri) || request.uri.indexOf('//') !== -1) {\n    return { statusCode: 404, statusDescription: 'Not Found' };\n  }\n  // Drop legacy queries: public URLs must not carry auth codes or editor state across origins.\n  return { statusCode: 308, statusDescription: 'Permanent Redirect',\n    headers: { location: { value: cmsOrigin + '/admin/' },\n      'cache-control': { value: 'private, no-store' } } };\n}\n"
+        }
+      }
+    },
+    "PublicApiRouter": {
+      "Type": "AWS::CloudFront::Function",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-public-api-guard"
+        },
+        "AutoPublish": true,
+        "FunctionConfig": {
+          "Comment": "ICAROS isolated public-api-guard",
+          "Runtime": "cloudfront-js-2.0"
+        },
+        "FunctionCode": "function handler(event) {\n  var request = event.request;\n  if ((request.method !== 'GET' && request.method !== 'HEAD') ||\n      !/^\\/api\\/media\\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(request.uri)) {\n    return { statusCode: 404, statusDescription: 'Not Found',\n      headers: { 'cache-control': { value: 'private, no-store' } } };\n  }\n  return request;\n}\n"
+      }
+    },
+    "MediaRouter": {
+      "Type": "AWS::CloudFront::Function",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-media-guard"
+        },
+        "AutoPublish": true,
+        "FunctionConfig": {
+          "Comment": "ICAROS isolated media-guard",
+          "Runtime": "cloudfront-js-2.0"
+        },
+        "FunctionCode": "function handler(event) {\n  var request = event.request;\n  // No bucket-root listing, raw UUID source keys, or proxy-only portraits.\n  if ((request.method !== 'GET' && request.method !== 'HEAD') ||\n      !/^\\/published\\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\\/[a-f0-9]{64}\\.(?:jpe?g|png|webp|avif|gif|mp4|glb|pdf)$/.test(request.uri)) {\n    return { statusCode: 404, statusDescription: 'Not Found' };\n  }\n  return request;\n}\n"
+      }
+    },
+    "PublicApiOriginPolicy": {
+      "Type": "AWS::CloudFront::OriginRequestPolicy",
+      "Properties": {
+        "OriginRequestPolicyConfig": {
+          "Name": {
+            "Fn::Sub": "${AWS::StackName}-public-media-api"
+          },
+          "HeadersConfig": {
+            "HeaderBehavior": "none"
+          },
+          "CookiesConfig": {
+            "CookieBehavior": "none"
+          },
+          "QueryStringsConfig": {
+            "QueryStringBehavior": "none"
+          }
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "CmsDistribution": {
+      "Type": "AWS::CloudFront::Distribution",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "DistributionConfig": {
+          "Enabled": {
+            "Fn::If": [
+              "EnableDistributions",
+              true,
+              false
+            ]
+          },
+          "Comment": "ICAROS isolated CMS and same-origin administrator API",
+          "Origins": [
+            {
+              "Id": "cms",
+              "DomainName": {
+                "Fn::GetAtt": [
+                  "CmsBucket",
+                  "RegionalDomainName"
+                ]
+              },
+              "OriginAccessControlId": {
+                "Ref": "StaticOac"
+              },
+              "S3OriginConfig": {
+                "OriginAccessIdentity": ""
+              }
+            },
+            {
+              "Id": "api",
+              "DomainName": {
+                "Ref": "ApiOriginHost"
+              },
+              "CustomOriginConfig": {
+                "OriginProtocolPolicy": "https-only",
+                "OriginSSLProtocols": [
+                  "TLSv1.2"
+                ]
+              }
+            }
+          ],
+          "DefaultCacheBehavior": {
+            "TargetOriginId": "cms",
+            "ViewerProtocolPolicy": "redirect-to-https",
+            "CachePolicyId": {
+              "Ref": "NoCachePolicy"
+            },
+            "AllowedMethods": [
+              "GET",
+              "HEAD"
+            ],
+            "CachedMethods": [
+              "GET",
+              "HEAD"
+            ],
+            "Compress": true,
+            "FunctionAssociations": [
+              {
+                "EventType": "viewer-request",
+                "FunctionARN": {
+                  "Fn::GetAtt": [
+                    "CmsRouter",
+                    "FunctionMetadata.FunctionARN"
+                  ]
+                }
+              }
+            ]
+          },
+          "CacheBehaviors": [
+            {
+              "PathPattern": "/api",
+              "TargetOriginId": "api",
+              "ViewerProtocolPolicy": "redirect-to-https",
+              "CachePolicyId": {
+                "Ref": "NoCachePolicy"
+              },
+              "AllowedMethods": [
+                "GET",
+                "HEAD",
+                "OPTIONS",
+                "PUT",
+                "PATCH",
+                "POST",
+                "DELETE"
+              ],
+              "CachedMethods": [
+                "GET",
+                "HEAD"
+              ],
+              "Compress": true,
+              "OriginRequestPolicyId": {
+                "Ref": "ApiOriginPolicy"
+              }
+            },
+            {
+              "PathPattern": "/api/*",
+              "TargetOriginId": "api",
+              "ViewerProtocolPolicy": "redirect-to-https",
+              "CachePolicyId": {
+                "Ref": "NoCachePolicy"
+              },
+              "AllowedMethods": [
+                "GET",
+                "HEAD",
+                "OPTIONS",
+                "PUT",
+                "PATCH",
+                "POST",
+                "DELETE"
+              ],
+              "CachedMethods": [
+                "GET",
+                "HEAD"
+              ],
+              "Compress": true,
+              "OriginRequestPolicyId": {
+                "Ref": "ApiOriginPolicy"
+              }
+            }
+          ],
+          "HttpVersion": "http2and3",
+          "IPV6Enabled": true,
+          "PriceClass": "PriceClass_100",
+          "Aliases": {
+            "Fn::If": [
+              "AttachDomains",
+              {
+                "Ref": "CmsAliases"
+              },
+              []
+            ]
+          },
+          "ViewerCertificate": {
+            "Fn::If": [
+              "AttachDomains",
+              {
+                "AcmCertificateArn": {
+                  "Ref": "CmsCertificateArn"
+                },
+                "SslSupportMethod": "sni-only",
+                "MinimumProtocolVersion": "TLSv1.2_2021"
+              },
+              {
+                "CloudFrontDefaultCertificate": true
+              }
+            ]
+          }
+        }
+      }
+    },
+    "PublicMediaCors": {
+      "Type": "AWS::CloudFront::ResponseHeadersPolicy",
+      "Properties": {
+        "ResponseHeadersPolicyConfig": {
+          "Name": {
+            "Fn::Sub": "${AWS::StackName}-public-media-cors"
+          },
+          "CorsConfig": {
+            "AccessControlAllowCredentials": false,
+            "AccessControlAllowHeaders": {
+              "Items": [
+                "*"
+              ]
+            },
+            "AccessControlAllowMethods": {
+              "Items": [
+                "GET",
+                "HEAD"
+              ]
+            },
+            "AccessControlAllowOrigins": {
+              "Items": [
+                {
+                  "Ref": "PublicOrigin"
+                },
+                {
+                  "Ref": "CmsOrigin"
+                }
+              ]
+            },
+            "OriginOverride": true
+          }
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "ArtifactBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "IgnorePublicAcls": true,
+          "BlockPublicPolicy": true,
+          "RestrictPublicBuckets": true
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Condition": "CreateArtifactBucket"
+    },
+    "ArtifactBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Condition": "CreateArtifactBucket",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "Bucket": {
+          "Ref": "ArtifactBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "ArtifactBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${ArtifactBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "ReleaseBucket": {
+      "Value": {
+        "Ref": "ReleaseBucket"
+      }
+    },
+    "PrivateMediaBucket": {
+      "Value": {
+        "Ref": "PrivateMediaBucket"
+      }
+    },
+    "PublicMediaBucket": {
+      "Value": {
+        "Ref": "PublicMediaBucket"
+      }
+    },
+    "CmsBucket": {
+      "Value": {
+        "Ref": "CmsBucket"
+      }
+    },
+    "WebBuild": {
+      "Value": {
+        "Ref": "WebBuild"
+      }
+    },
+    "KvsArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "ReleaseKvs",
+          "Arn"
+        ]
+      }
+    },
+    "WebDistributionId": {
+      "Value": {
+        "Ref": "WebDistribution"
+      }
+    },
+    "WebDomain": {
+      "Value": {
+        "Fn::GetAtt": [
+          "WebDistribution",
+          "DomainName"
+        ]
+      }
+    },
+    "MediaDomain": {
+      "Value": {
+        "Fn::GetAtt": [
+          "MediaDistribution",
+          "DomainName"
+        ]
+      }
+    },
+    "CmsDistributionId": {
+      "Value": {
+        "Ref": "CmsDistribution"
+      }
+    },
+    "CmsDomain": {
+      "Value": {
+        "Fn::GetAtt": [
+          "CmsDistribution",
+          "DomainName"
+        ]
+      }
+    },
+    "ArtifactBucket": {
+      "Condition": "CreateArtifactBucket",
+      "Value": {
+        "Ref": "ArtifactBucket"
+      }
+    }
+  }
+}

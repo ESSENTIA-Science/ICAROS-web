@@ -17,3 +17,8 @@ it('shows attachment controls and disables them in demo mode', () => {
   expect(html).toMatch(/<input[^>]*type="file"[^>]*disabled=""/)
   expect(html).toContain('제거')
 })
+
+it('shows an inline preview for an attached image', () => {
+  const html = renderToStaticMarkup(<PostAttachments attachments={[{ mediaId: 'media-1', kind: 'image', title: '발사 장면' }]} onChange={() => {}} onInsert={() => {}} disabled />)
+  expect(html).toContain('이미지 미리보기 불러오는 중')
+})

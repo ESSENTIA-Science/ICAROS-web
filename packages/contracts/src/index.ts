@@ -8,6 +8,8 @@ export interface RecordBase {
   readonly updatedAt: string
 }
 
+export interface VehicleSpec { readonly label: string; readonly value: string; readonly unit: string }
+
 export interface Rocket extends RecordBase {
   readonly name: string
   readonly series: string
@@ -15,6 +17,7 @@ export interface Rocket extends RecordBase {
   readonly maxAltitudeM: string
   readonly sizeM: string
   readonly payloadKg: string
+  readonly specs?: VehicleSpec[]
 }
 
 export interface SiteContent extends RecordBase {

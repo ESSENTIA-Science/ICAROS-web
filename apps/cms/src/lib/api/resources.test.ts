@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resourcesApi } from './resources'
+import { createHash } from 'node:crypto'
 
 const version = '2026-09-30T08:12:13.123456Z'
 const nextVersion = '2026-09-30T08:12:14.123456Z'
@@ -18,6 +19,17 @@ function fetchWith(data: unknown) {
 }
 
 describe('resources API DTO adapter', () => {
+  it('round-trips member profile photos and sends null to remove them', async () => {
+    const member = { id, version, name: '부원', imageMediaId: mediaId, published: true }
+    const fetcher = fetchWith([member])
+    await expect(resourcesApi.list('members')).resolves.toEqual([member])
+    fetcher.mockResolvedValueOnce(reply({ ...member, version: nextVersion }))
+    await resourcesApi.update('members', id, version, { imageMediaId: mediaId, published: true })
+    expect(JSON.parse(fetcher.mock.calls[1]?.[1].body)).toEqual({ imageMediaId: mediaId, published: true })
+    fetcher.mockResolvedValueOnce(reply({ ...member, version: nextVersion, imageMediaId: null }))
+    await resourcesApi.update('members', id, version, { imageMediaId: null })
+    expect(JSON.parse(fetcher.mock.calls[2]?.[1].body)).toEqual({ imageMediaId: null })
+  })
   it('updates the single donation summary without creating or deleting it', async () => {
     const draft = { id: 'current', version, roundLabel: '2차', goal: 1000000, amount: 350000 }
     const fetcher = fetchWith([draft])
@@ -61,6 +73,14 @@ describe('resources API DTO adapter', () => {
     fetcher.mockResolvedValueOnce(reply({ id }))
     await resourcesApi.remove('missions', id, nextVersion)
     expect(fetcher.mock.calls[3]?.[0]).toBe(`/api/admin/content/missions/${id}`)
+  })
+  it('round-trips panel CTA text and destination', async () => {
+    const panel = { id, version, headline: '첫 발사', mediaId, ctaLabel: '임무 보기', ctaHref: '/missions' }
+    const fetcher = fetchWith([panel])
+    await expect(resourcesApi.list('panels')).resolves.toMatchObject([{ ctaLabel: '임무 보기', ctaHref: '/missions' }])
+    fetcher.mockResolvedValueOnce(reply({ ...panel, version: nextVersion }))
+    await resourcesApi.update('panels', id, version, { ctaLabel: '기록 보기', ctaHref: '/posts' })
+    expect(JSON.parse(fetcher.mock.calls[1]?.[1].body)).toEqual({ ctaLabel: '기록 보기', ctaHref: '/posts' })
   })
   it.each([
     ['departments', 'departments', { id, version, name: '추진', sortOrder: 2 }, { id, version, name: '추진', position: 2 }],
@@ -137,8 +157,34 @@ describe('resources API DTO adapter', () => {
 })
 
 describe('media upload', () => {
+  it('hashes the converted WebP bytes, size and MIME rather than the original JPEG', async () => {
+    const converted = new Blob(['converted-webp'], { type: 'image/webp' })
+    const bitmap = { width: 200, height: 100, close: vi.fn() }
+    vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue(bitmap))
+    vi.stubGlobal('document', { createElement: () => ({ getContext: () => ({ drawImage() {} }),
+      toBlob: (callback: (blob: Blob) => void) => callback(converted) }) })
+    const calls: Array<[string, RequestInit]> = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      calls.push([url, init])
+      if (url.endsWith('/presign')) return reply({ mediaId, uploadUrl: 'https://upload.example/converted', contentType: 'image/webp' }, 201)
+      if (url.endsWith('/confirm')) return reply({ id: mediaId })
+      return new Response(null, { status: 200 })
+    }))
+    await resourcesApi.upload(new File(['original-jpeg'], 'photo.jpg', { type: 'image/jpeg' }))
+    const expected = createHash('sha256').update('converted-webp').digest('base64')
+    expect(JSON.parse(String(calls[0]![1].body))).toEqual({ kind: 'media', contentType: 'image/webp',
+      size: converted.size, originalFilename: 'photo.webp', checksumSha256: expected })
+    const uploaded = calls[1]![1].body as File
+    expect(await uploaded.text()).toBe('converted-webp')
+    expect(new Headers(calls[1]![1].headers).get('x-amz-checksum-sha256')).toBe(expected)
+    expect(new Headers(calls[1]![1].headers).get('if-none-match')).toBe('*')
+    expect(new Headers(calls[1]![1].headers).has('content-length')).toBe(false)
+    expect(bitmap.close).toHaveBeenCalled()
+  })
+
   it('presigns, PUTs bytes, and confirms the media ID', async () => {
     const file = new File(['RIFFxxxxWEBPdata'], 'image.webp', { type: 'image/webp' })
+    const checksumSha256 = createHash('sha256').update('RIFFxxxxWEBPdata').digest('base64')
     const calls: Array<[string, RequestInit]> = []
     vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
       calls.push([url, init])
@@ -148,8 +194,9 @@ describe('media upload', () => {
     }))
     await expect(resourcesApi.upload(file)).resolves.toEqual({ id: mediaId })
     expect(calls.map(([url]) => url)).toEqual(['/api/admin/media/presign', 'https://upload.example/one', '/api/admin/media/confirm'])
-    expect(JSON.parse(String(calls[0]![1].body))).toEqual({ kind: 'media', contentType: 'image/webp', size: file.size, originalFilename: 'image.webp' })
-    expect(calls[1]![1]).toMatchObject({ method: 'PUT', body: file, headers: { 'Content-Type': 'image/webp' } })
+    expect(JSON.parse(String(calls[0]![1].body))).toEqual({ kind: 'media', contentType: 'image/webp', size: file.size, originalFilename: 'image.webp', checksumSha256 })
+    expect(calls[1]![1]).toMatchObject({ method: 'PUT', body: file, headers: { 'Content-Type': 'image/webp', 'If-None-Match': '*', 'x-amz-checksum-sha256': checksumSha256 } })
+    expect(new Headers(calls[1]![1].headers).has('content-length')).toBe(false)
     expect(JSON.parse(String(calls[2]![1].body))).toEqual({ mediaId })
   })
 

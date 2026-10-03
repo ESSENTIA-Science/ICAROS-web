@@ -9,7 +9,7 @@ import styles from './MemberCard.module.css'
  *
  * 부원 다수가 미성년자다. 스냅샷의 소개글은 자유 텍스트이므로 이미지 마크다운을
  * 그대로 내보내면 승인되지 않은 사진이 공개 정적 HTML과 CDN에 남을 수 있다.
- * 초상 공개 정책이 정해지기 전까지 프로필은 공용 플레이스홀더만 허용한다.
+ * 프로필은 공개 스냅샷에서 승인한 로컬 이미지만 사용한다.
  *
  * `skipHtml` 은 원시 HTML(`<img src=…>`)을 따로 막는다 — 마크다운 문법과 HTML 은 서로
  * 다른 경로라 둘 다 필요하다.
@@ -20,7 +20,7 @@ const BIO_DISALLOWED: readonly string[] = ['img']
  * 스냅샷의 `school` 값을 화면에 표시한다.
  * 부원 다수가 미성년자라 이름·역할·학교 외의 식별 정보는 넣지 않는다.
  *
- * 현재 공개 스냅샷은 공용 아바타만 허용한다. 사진 유무로 프레임의 **톤**만 바꾼다 —
+ * 사진 유무로 프레임의 **톤**만 바꾼다 —
  * 채우는 방식은 양쪽이 같고(`cover`), 기본 아바타 쪽만 대비를 낮춘다 (`MemberCard.module.css`).
  * 이니셜이나 부서 색을 채워 넣지 않는 이유: 없는 정보를 있는 것처럼 보이게 만드는 장식이고,
  * 23장이 전부 다른 색으로 빛나면 명단이 아니라 색표가 된다.
@@ -35,7 +35,7 @@ const BIO_DISALLOWED: readonly string[] = ['img']
  * 좁은 칸에 선다. 스타일만 카드 크기로 낮췄고 파이프라인은 손대지 않았다.
  */
 export default function MemberCard({ member }: { member: MemberDto }) {
-  const bio = member.bioMd
+  const bio = member.bioMd?.trim() || null
 
   return (
     <li className={styles.card} data-bio={bio === null ? undefined : ''} data-reveal-item="">

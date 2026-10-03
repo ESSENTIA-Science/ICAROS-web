@@ -1,9 +1,10 @@
+import { getVehicleSpecs } from '../lib/vehicleSpecs'
 import type { ContentKind, ContentMap, Editable } from '../lib/api/types'
 
 export default function Preview<K extends ContentKind>({ kind, draft }: { kind: K; draft: Editable<K> }) {
   if (kind === 'rockets') {
     const value = draft as Editable<'rockets'>
-    return <div className="previewBody"><span className="eyebrow">VEHICLES / {value.series || 'SERIES'}</span><h3>{value.name || '기체 이름'}</h3><p className="previewStats">고도 {value.maxAltitudeM || '—'} m · 전장 {value.sizeM || '—'} m · 페이로드 {value.payloadKg || '—'} kg</p><p className="previewText">{value.descriptionMd || '설명을 입력하세요.'}</p></div>
+    return <div className="previewBody"><span className="eyebrow">VEHICLES / {value.series || 'SERIES'}</span><h3>{value.name || '기체 이름'}</h3><dl className="vehicleSpecsPreview">{getVehicleSpecs(value).map((item, index) => <div key={index}><dt>{item.label}</dt><dd>{item.value} {item.unit}</dd></div>)}</dl><p className="previewText">{value.descriptionMd || '설명을 입력하세요.'}</p></div>
   }
   if (kind === 'site') {
     const value = draft as Editable<'site'>

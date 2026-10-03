@@ -28,10 +28,19 @@
 }
 
 /* 사진 + 이름/역할/학교. 소개글 유무와 무관하게 이 덩어리의 조판은 항상 같다 */
-.main { display: grid; gap: var(--sp-3); align-content: start; }
+.main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  align-content: start;
+  width: 100%;
+  max-width: var(--member-col, 15rem);
+  min-width: 0;
+}
 
 .figure {
   position: relative;
+  min-width: 0;
   /* 실제 프로필 사진 4장이 전부 3:4 세로다. 프레임을 그 비율로 두면 얼굴이 잘리지 않는다 */
   aspect-ratio: 3 / 4;
   background: var(--bg-sunken);
@@ -64,7 +73,12 @@
   opacity: 0.85;
 }
 
-.body { display: grid; gap: var(--sp-1); }
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  gap: var(--sp-1);
+}
 
 .name {
   font-size: var(--fs-body);
@@ -80,6 +94,7 @@
 }
 
 .school {
+  overflow-wrap: anywhere;
   font-size: var(--fs-caption);
   line-height: var(--lh-body-s);
   color: var(--fg-muted);
@@ -93,6 +108,7 @@
  * 한 줄이 읽기 한계를 훌쩍 넘긴다. 남는 자리는 그냥 비워 둔다.
  */
 .bio {
+  min-width: 0;
   max-width: var(--measure);
   color: var(--fg-muted);
   font-size: var(--fs-body);
@@ -146,12 +162,6 @@
   color: var(--fg);
 }
 
-@media (max-width: 999px) {
-  /* 격자가 2~3열로 줄어든다. 사진 칸을 15rem 으로 붙들고 있으면 글 칸이 먼저 짜부라진다.
-     조판 규칙은 그대로 두고 **변수만** 카드 안에서 좁힌다 — 위 선언이 그대로 다시 계산된다 */
-  .card[data-bio] { --member-col: 12rem; }
-}
-
 @media (max-width: 599px) {
   /**
    * 2열 격자다 — 옆에 글을 세울 가로 폭이 실제로 없다. 억지로 나누면 글 칸이 9~10글자로
@@ -162,6 +172,6 @@
     grid-template-columns: minmax(0, 1fr);
     row-gap: var(--sp-4);
   }
-  .card[data-bio] .main { max-width: calc((100% - var(--grid-gap-x)) / 2); }
+  .card[data-bio] .main { max-width: min(var(--member-col), calc((100% - var(--grid-gap-x)) / 2)); }
   .bio { font-size: var(--fs-body-s); }
 }

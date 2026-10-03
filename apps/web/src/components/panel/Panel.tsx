@@ -81,9 +81,13 @@ export default function Panel({ panel, first }: { panel: LandingPanel; first: bo
 
           {panel.ctaLabel && panel.ctaHref ? (
             <Link href={panel.ctaHref} className={styles.cta} lang="ko">
-              {panel.ctaLabel}
-              <span className={styles.ctaArrow} aria-hidden="true">
-                →
+              <span className={styles.ctaCopy}>
+                <span className={styles.ctaLabel}>{panel.ctaLabel}</span>
+              </span>
+              <span className={styles.ctaIcon} aria-hidden="true">
+                <svg className={styles.ctaArrow} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 12h15m-6-6 6 6-6 6" />
+                </svg>
               </span>
             </Link>
           ) : null}

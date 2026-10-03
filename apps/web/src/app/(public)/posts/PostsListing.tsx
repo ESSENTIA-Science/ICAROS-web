@@ -3,8 +3,8 @@ import PostCard from '@/components/posts/PostCard'
 import { instagramHandle, instagramUrl } from '@/lib/content'
 import { getSnapshot } from '@/lib/content/snapshot'
 import { getFeed } from '@/lib/posts/feed'
+import { POSTS_PAGE_SIZE, postPageCount } from '@/lib/posts/pagination'
 import styles from './page.module.css'
-const PAGE_SIZE = 12
 
 /** 외부 링크 표시. 아이콘 폰트도 글리프도 쓰지 않는다 — Contact 행 끝의 1px 화살표와 같은 도형이다. */
 function ExternalArrow() {
@@ -22,8 +22,10 @@ function ExternalArrow() {
 }
 
 export function PostsListing({ page }: { page: number }) {
-  const feed = getFeed(page, PAGE_SIZE)
-  const content = getSnapshot().site
+  const snapshot = getSnapshot()
+  const feed = getFeed(page, POSTS_PAGE_SIZE)
+  const content = snapshot.site
+  const totalPages = postPageCount(snapshot.posts.length)
   // 값이 없으면 아무것도 그리지 않는다. 랜딩 섹션들과 같은 규칙이다.
   const instagram = content['contact.instagram']
 
@@ -33,7 +35,7 @@ export function PostsListing({ page }: { page: number }) {
    * 첫 카드에 사진이 없는 일이 실제로 흔하다 — 상류 글 다수가 본문에 쓸 수 있는 사진이
    * 없어서 대체 면으로 나가고, 목록은 날짜순이라 그런 글이 맨 앞에 오는 것을 우리가 정할 수
    * 없다. `i === 0` 으로 두면 그 순간 선점이 아무 데도 걸리지 않고 LCP 이미지는 다시
-   * `lazy` 가 된다 (2026-08-28 실측: 12칸 중 첫 칸이 사진 없는 글이었다).
+   * `lazy` 가 된다 (2026-08-28 실측: 첫 칸이 사진 없는 글이었다).
    *
    * 첫 세 카드 밖은 켜지 않는다. 한 열에서도 첫 화면에 걸칠 수 있는 범위만 선점한다.
    */
@@ -95,7 +97,20 @@ export function PostsListing({ page }: { page: number }) {
                   이전
                 </Link>
               ) : null}
-              <span className={`${styles.pageNum} num`}>{page + 1}</span>
+              <ol className={styles.pageList}>
+                {Array.from({ length: totalPages }, (_, index) => (
+                  <li key={index}>
+                    <Link
+                      href={index === 0 ? '/posts' : `/posts/page/${index + 1}`}
+                      className={styles.pageNum}
+                      aria-current={index === page ? 'page' : undefined}
+                      aria-label={`${index + 1}페이지`}
+                    >
+                      {index + 1}
+                    </Link>
+                  </li>
+                ))}
+              </ol>
               {feed.hasNext ? (
                 <Link href={`/posts/page/${page + 2}`} className={styles.link}>다음</Link>
               ) : null}
