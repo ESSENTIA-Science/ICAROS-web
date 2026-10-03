@@ -11,6 +11,11 @@
     "PrivateMediaBucketName": {
       "Type": "String"
     },
+    "LegacyMediaBucketNames": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|[a-z0-9.-]+(,[a-z0-9.-]+)*"
+    },
     "PublicMediaBucketName": {
       "Type": "String"
     },
@@ -314,7 +319,6 @@
         },
         "MemorySize": 1024,
         "Timeout": 30,
-        "ReservedConcurrentExecutions": 1,
         "Code": {
           "S3Bucket": {
             "Ref": "ArtifactBucket"
@@ -369,6 +373,9 @@
             },
             "S3_BUCKET": {
               "Ref": "PrivateMediaBucketName"
+            },
+            "ICAROS_LEGACY_MEDIA_BUCKETS": {
+              "Ref": "LegacyMediaBucketNames"
             },
             "S3_PREFIX": "icaros-web",
             "RELEASE_BUCKET": {
@@ -444,7 +451,6 @@
         },
         "MemorySize": 1024,
         "Timeout": 900,
-        "ReservedConcurrentExecutions": 1,
         "Code": {
           "S3Bucket": {
             "Ref": "ArtifactBucket"
@@ -499,6 +505,9 @@
             },
             "S3_BUCKET": {
               "Ref": "PrivateMediaBucketName"
+            },
+            "ICAROS_LEGACY_MEDIA_BUCKETS": {
+              "Ref": "LegacyMediaBucketNames"
             },
             "S3_PREFIX": "icaros-web",
             "RELEASE_BUCKET": {
@@ -891,7 +900,6 @@
         },
         "MemorySize": 256,
         "Timeout": 15,
-        "ReservedConcurrentExecutions": 2,
         "Code": {
           "S3Bucket": {
             "Ref": "ArtifactBucket"
