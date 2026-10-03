@@ -11,9 +11,11 @@
 완료됐다. CodeBuild 성공 후 자동 callback이 게시 상태를 `published`로 바꾸고 KVS
 release pointer를 새 버전으로 전환했다. 공개 홈·기체·기록 HTML이
 `media.icaros.kr`을 참조하며 이미지 200을 확인했다. 사용자가 보고한 한 관리자
-계정의 Cognito callback 401은 해당 계정이 CMS DB에 매핑되지 않은 문제로 좁혔고,
-기존 Cognito 관리자 그룹 2명 모두 활성 DB 계정에 매핑했다. 해당 사용자 계정의
-브라우저 재로그인 결과는 대기 중이다.
+계정의 Cognito callback 401은 해당 계정이 CMS DB에 매핑되지 않은 문제로 좁혔다.
+이후 사용자 요청에 따라 기존 Cognito 사용자 2명을 모두 삭제하고 활성 CMS 세션 2개를
+폐기했다. 삭제 직후 사용자 수 0을 확인했다. 이후 콘솔에서 새 사용자 1명이 생성됐으며
+첫 조회 시 비밀번호 변경 대기 상태로, 이메일 검증과 관리자 그룹 추가는 아직 확인되지 않았다.
+검증된 관리자 그룹 구성원은 첫 로그인 때 CMS DB에 자동 등록되도록 Lambda를 갱신했다.
 
 ## 확인한 경로
 
@@ -25,14 +27,14 @@ release pointer를 새 버전으로 전환했다. 공개 홈·기체·기록 HTM
 | 공개 `/admin` | 운영 CMS로 308 |
 | 공개 `/api/admin/*` | 404 |
 | CMS `/admin/` | 운영 200 |
-| CMS 관리자 API | 미인증 403, Cognito 로그인 후 콘텐츠 조회 200 |
+| CMS 관리자 API | 미인증 403, 기존 계정의 Cognito 로그인 후 콘텐츠 조회 200 확인; 신규 계정은 생성 전 |
 | 공개 미디어 | `media.icaros.kr`에서 이미지 200 |
 | 멤버 사진 프록시 | 선택된 사진 200·`private, no-store`, 없는 ID 404 |
 | Cloudflare DNS·TLS | 운영 네 도메인의 CloudFront 응답과 TLS 검증 성공 |
 | 데스크톱·모바일 홈/기체/기록/멤버 | 브라우저 200, 가로 넘침·완료된 이미지 오류·페이지 예외 0 |
 
-기존 Cognito pool/client/group을 재사용했다. 운영 CMS의 OAuth state/cookie 왕복과
-관리자 세션 발급을 브라우저에서 확인했다. Lambda의 외부 HTTPS는 기존 ESSENTIA API
+기존 Cognito pool/client/group을 재사용했다. 계정 삭제 전 운영 CMS의 OAuth state/cookie
+왕복과 관리자 세션 발급을 브라우저에서 확인했다. Lambda의 외부 HTTPS는 기존 ESSENTIA API
 EC2의 전용 CONNECT proxy를 사용한다. AWS CLI 작업은 `essentia` 프로필과 서울 리전으로
 수행했다. 공유 DB는 TLS 검증을 사용하며 `public` 스키마를 변경하지 않았다.
 
@@ -44,7 +46,8 @@ EC2의 전용 CONNECT proxy를 사용한다. AWS CLI 작업은 `essentia` 프로
 ## 구현 및 검증
 
 - Web/CMS 워크스페이스 검사와 정적 합성 콘텐츠 빌드 통과.
-- API typecheck·lint·build 및 테스트 210개 통과.
+- API typecheck·lint·build 및 테스트 212개 통과. Cognito 첫 로그인 시 관리자 DB 등록은
+  운영 DB 트랜잭션에서 검증 후 rollback했다.
 - 인프라 계약 테스트와 CloudFormation 스택 적용 완료.
 - 실제 CodeBuild 두 차례 성공, 자동 게시 callback·KVS release pointer·공개 200 확인.
 - CodeBuild 이벤트의 ARN 형식과 첫 게시의 빈 KVS 포인터 처리 오류를 실환경에서
@@ -52,8 +55,8 @@ EC2의 전용 CONNECT proxy를 사용한다. AWS CLI 작업은 `essentia` 프로
 
 ## 남은 확인과 운영 위험
 
-1. 사용자가 보고한 Cognito callback 실패에 대해 DB 매핑을 복구했다. 해당 계정의
-   새 브라우저 로그인 성공 여부를 확인한다.
+1. 콘솔에서 새 사용자의 비밀번호 설정·이메일 검증·기존 관리자 그룹 추가를 마친 뒤,
+   첫 로그인과 CMS DB 자동 등록을 브라우저에서 확인해야 한다.
 2. 영상·PDF 업로드/재접속 미리보기, CMS의 개별 CRUD·자동 저장,
    실패 재시도, WebGL fallback과 디자인의 시각적 품질은 아직 검증하지 않았다.
 3. DB 게시 상태와 KVS pointer는 원자적이지 않다. callback 유실과 부분 승격의
