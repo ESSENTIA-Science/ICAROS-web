@@ -86,7 +86,7 @@ export default function PublicationControls() {
     {open && <div className="publicationBackdrop"><section className="card publicationDialog" role="dialog" aria-modal="true" aria-labelledby="publication-title">
       <h2 id="publication-title">변경사항 반영하기</h2>
       <p>자동 저장된 변경사항을 모아 전체 사이트에 반영합니다.</p>
-      <p>반영에는 약 1~2분이 걸리며 빌드 상황에 따라 더 걸릴 수 있습니다. 완료될 때까지 이 페이지를 닫지 마세요.</p>
+      <p>반영에는 보통 5~8분이 걸리며 빌드 상황에 따라 더 걸릴 수 있습니다. 상태는 이 브라우저에서 다시 확인할 수 있습니다.</p>
       <p>게시글은 ESSENTIA 커뮤니티에 먼저 공개됩니다. ICAROS 웹은 빌드가 완료된 뒤 갱신됩니다.</p>
       <p className="hint">반영 중 추가로 수정한 내용은 다음 반영에 포함됩니다.</p>
       {message && <p className="notice" role="status">{message}</p>}

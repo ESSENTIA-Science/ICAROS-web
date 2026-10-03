@@ -6,7 +6,7 @@ FROM pg_stat_ssl WHERE pid = pg_backend_pid();
 
 -- Presence plus runtime DML is distinct from schema/table ownership or migration privileges.
 WITH required(name) AS (
-  VALUES ('admin_users'), ('admin_sessions'), ('departments'), ('missions'),
+  VALUES ('admin_users'), ('admin_sessions'), ('departments'), ('member_departments'), ('missions'),
     ('publication_state'), ('publication_jobs'), ('publication_counter'),
     ('publication_allocations'), ('members'), ('media'), ('page_panels'),
     ('site_settings'), ('rockets'), ('vehicle_types'), ('rocket_series')
