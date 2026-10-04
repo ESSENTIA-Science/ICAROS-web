@@ -1,6 +1,6 @@
 # ICAROS 게시 관측과 알림
 
-이 폴더는 운영 게시 경로와 분리된 CloudWatch 경보·Slack/Discord 알림 스택이다. **현재 webhook이 없어 실제 전송은 구성하거나 확인하지 않았다.** `EnableDelivery=false`가 기본이다. 2026-10-04 운영에는 이 상태로 API/callback 오류·스로틀과 callback 전달 실패 큐의 CloudWatch 경보 5개를 적용했다. 알림 Lambda·로그 구독·EventBridge rule·IAM role은 생성되지 않았다. Delivery 활성화는 webhook Secret 준비와 별도 운영 변경 검토 후 진행한다.
+이 폴더는 운영 게시 경로와 분리된 CloudWatch 경보·Slack/Discord 알림 스택이다. **Discord webhook은 Secrets Manager에 저장됐고 Slack webhook은 아직 없다. 실제 전송은 구성하거나 확인하지 않았다.** `EnableDelivery=false`가 기본이다. 2026-10-04 운영에는 이 상태로 API/callback 오류·스로틀과 callback 전달 실패 큐의 CloudWatch 경보 5개를 적용했다. 알림 Lambda·로그 구독·EventBridge rule·IAM role은 생성되지 않았다. Delivery 활성화는 두 webhook Secret 값 준비와 별도 운영 변경 검토 후 진행한다.
 
 ## 신호와 의미
 
@@ -21,7 +21,7 @@ callback 로그 입력 계약:
 ## webhook 준비와 적용 순서
 
 1. [Slack incoming webhook](https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/)용 전용 채널과 [Discord server integration webhook](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks)용 전용 채널을 만든다. URL을 티켓·터미널 출력·저장소에 붙이지 않는다.
-2. 저장소 밖 0600 파일에 `{"SLACK_WEBHOOK_URL":"<Slack URL>","DISCORD_WEBHOOK_URL":"<Discord URL>"}` JSON을 작성한다. 승인된 AWS 계정에서 [Secrets Manager `create-secret --secret-string file://...`](https://docs.aws.amazon.com/cli/latest/reference/secretsmanager/create-secret.html)로 저장하고 파일을 안전하게 지운다. Secret **ARN만** private CloudFormation parameter에 전달한다. 두 URL이 모두 필요하다.
+2. Discord webhook은 기존 Secrets Manager JSON Secret에 저장돼 있다. Slack URL을 받으면 같은 Secret의 `SLACK_WEBHOOK_URL` 필드를 추가한다. `DISCORD_WEBHOOK_URL` 값은 유지한다. Secret **ARN만** private CloudFormation parameter에 전달한다. 두 URL이 모두 필요하다. URL을 저장소·터미널 출력·CloudFormation parameter에 직접 넣지 않는다.
 3. 형제 ICAROS-api의 callback `publication.terminal` log patch `ca91f3f`는 2026-10-04 운영 API·callback Lambda에 적용했고 코드 해시를 확인했다. 같은 날 callback log group의 기존 subscription filter가 0개임을 확인했다. 실제 게시를 실행해 새 로그가 발생하는 검증은 아직 하지 않았다.
 4. `npm ci --prefix infra/aws/alerts --ignore-scripts --no-audit --no-fund`, `node --test infra/aws/alerts/notifier.test.mjs`, `node infra/aws/alerts/template.mjs > infra/aws/alerts/template.json`, `aws cloudformation validate-template --template-body file://infra/aws/alerts/template.json`으로 로컬 검증한다. 이후 별도 승인된 절차에서 `handler.mjs`·`notifier.mjs`·production `node_modules`를 ZIP으로 패키징해 versioned S3 artifact에 올린다. CloudFormation parameter `ArtifactBucket`/`ArtifactKey`/`ArtifactVersion`, 기존 `CodeBuildProject`, API/callback Lambda 이름, callback log group, callback EventBridge·async DLQ **이름**, `WebhookSecretArn`, `EnableDelivery=true`를 입력한다. CloudFormation change set의 IAM·구독·알람 변경을 검토한 뒤 적용한다.
 5. 실제 테스트 빌드와 게시 1회를 수행해 **빌드 종료와 게시 종료가 각각** Slack·Discord에 도착하는지 확인한다. 실패 시험은 별도 테스트 환경에서 하고, 운영 게시 실패를 의도적으로 만들지 않는다. Lambda Errors/ALARM 및 DLQ 깊이가 0으로 돌아오는지 본다. 검증 전에는 전달 완료로 보고하지 않는다.

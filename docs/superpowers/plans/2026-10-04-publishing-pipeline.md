@@ -8,13 +8,13 @@
 
 **Tech Stack:** Node.js 22, Next.js 16 static export, AWS SDK for JavaScript v3, S3, CodeBuild, CloudFront KeyValueStore, PostgreSQL 17.
 
-**Spec:** Architecture decisions and contract in this document. This plan spans the `ICAROS-web` and sibling `ICAROS-api` repositories; neither repository is deployed by executing local tests.
+**Spec:** [Publishing architecture review and measured baseline](../../2026-10-04-publishing-architecture-review.md). This plan spans the `ICAROS-web` and sibling `ICAROS-api` repositories; neither repository is deployed by executing local tests.
 
 ## Evidence and architecture decisions
 
 ### Baseline and bottleneck
 
-The 2026-10-04 production CodeBuild log measured 371 staged files, about 20 seconds for Next.js build, and 278 seconds for staging. The existing `infra/release/build.mjs` starts a separate synchronous `aws s3 cp` process for each file after `prepareReleaseExport()`. This is the main measured delay, though the 278 seconds may include shared-asset uploads and export preparation; phase timing must be added before assigning all of it to staging PUTs. Recent complete builds took roughly 5–7 minutes (`docs/2026-10-04-publish-and-member-departments.md`).
+The 2026-10-04 production sample of seven successful CodeBuild jobs measured 366–371 staged files, a median 20.1 seconds for the Next.js build log segment, and a median 276.2 seconds between Next completion and staging completion. The existing `infra/release/build.mjs` starts a separate synchronous `aws s3 cp` process for each file after `prepareReleaseExport()`. This is the main suspected delay, though that 276.2-second segment includes shared-asset uploads and export preparation; phase timing must be added before assigning all of it to staging PUTs. The seven CodeBuild phase sums ranged from 319 to 484 seconds, median 387 seconds. See the spec for measurement boundaries.
 
 The sibling API's `src/publication-runtime/aws.ts` then makes sequential `GetObject` calls for every manifest file in `read()`. `activate()` calls `read()` again, then sequentially downloads and uploads every file. `src/publish/index.ts` awaits `launcher.promote()` inside `repository.withLock()`, which holds a `publication_state` row lock throughout network I/O. One observed completion callback held that lock for about 46 seconds. The latter is a separate measured latency and availability problem, not part of the 278-second CodeBuild staging number.
 
