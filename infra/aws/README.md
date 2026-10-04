@@ -11,6 +11,7 @@
 - `media-proxy.mjs`, `package.json`, `package-lock.json`, `proxy.package.json`: 별도 Node22 artifact. public/private selected copies, active index/member allowlist, MIME/hash/size 검증, no-store. SigV4a pinned side-effect import 포함.
 - `NETWORK.md`: 선택된 proxy 구성과 IPv6/NAT 대안·비용·운영 비교.
 - `preflight.sql`: 읽기 검증 쿼리. migration 아님.
+- `alerts/`: 독립 CloudWatch 경보와 Slack·Discord 게시 알림 스택. 현재 경보 5개만 운영 적용됐고, webhook이 없어 채널 전달은 비활성화됐다. 세부 절차는 [alerts/README.md](alerts/README.md).
 
 ```sh
 npm ci --prefix infra/aws --ignore-scripts --no-audit --no-fund

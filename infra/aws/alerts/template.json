@@ -1,0 +1,765 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "ICAROS build/publication notifications and CloudWatch alarms. Separate from publish critical path.",
+  "Parameters": {
+    "CodeBuildProject": {
+      "Type": "String",
+      "MinLength": 1
+    },
+    "ApiFunctionName": {
+      "Type": "String",
+      "MinLength": 1
+    },
+    "CallbackFunctionName": {
+      "Type": "String",
+      "MinLength": 1
+    },
+    "CallbackLogGroupName": {
+      "Type": "String",
+      "MinLength": 1
+    },
+    "CallbackEventDlqName": {
+      "Type": "String",
+      "MinLength": 1
+    },
+    "CallbackAsyncDlqName": {
+      "Type": "String",
+      "MinLength": 1
+    },
+    "WebhookSecretArn": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|arn:[^:]+:secretsmanager:[^:]+:[0-9]{12}:secret:.+",
+      "Description": "Existing Secrets Manager JSON secret with SLACK_WEBHOOK_URL and DISCORD_WEBHOOK_URL; pass ARN only."
+    },
+    "ArtifactBucket": {
+      "Type": "String",
+      "MinLength": 1
+    },
+    "ArtifactKey": {
+      "Type": "String",
+      "MinLength": 1
+    },
+    "ArtifactVersion": {
+      "Type": "String",
+      "MinLength": 1
+    },
+    "EnableDelivery": {
+      "Type": "String",
+      "AllowedValues": [
+        "false",
+        "true"
+      ],
+      "Default": "false"
+    }
+  },
+  "Conditions": {
+    "DeliveryEnabled": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableDelivery"
+        },
+        "true"
+      ]
+    }
+  },
+  "Rules": {
+    "RequireWebhookSecretForDelivery": {
+      "RuleCondition": {
+        "Fn::Equals": [
+          {
+            "Ref": "EnableDelivery"
+          },
+          "true"
+        ]
+      },
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "WebhookSecretArn"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Enabling delivery requires an existing webhook secret ARN."
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "AlertLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/icaros/${AWS::StackName}/alerts"
+        },
+        "RetentionInDays": 30
+      },
+      "Condition": "DeliveryEnabled"
+    },
+    "DedupTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "pk",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "pk",
+            "KeyType": "HASH"
+          }
+        ],
+        "TimeToLiveSpecification": {
+          "AttributeName": "expiresAt",
+          "Enabled": true
+        },
+        "SSESpecification": {
+          "SSEEnabled": true
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        }
+      },
+      "Condition": "DeliveryEnabled"
+    },
+    "DeliveryDlq": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "MessageRetentionPeriod": 1209600,
+        "SqsManagedSseEnabled": true
+      },
+      "Condition": "DeliveryEnabled"
+    },
+    "AlertRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "deliver",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "AlertLogs",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "secretsmanager:GetSecretValue",
+                  "Resource": {
+                    "Ref": "WebhookSecretArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "DedupTable",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "lambda:InvokeFunction",
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-notifier"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "sqs:SendMessage",
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "DeliveryDlq",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "Condition": "DeliveryEnabled"
+    },
+    "AlertFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-notifier"
+        },
+        "Runtime": "nodejs22.x",
+        "Handler": "handler.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "AlertRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 15,
+        "MemorySize": 256,
+        "Code": {
+          "S3Bucket": {
+            "Ref": "ArtifactBucket"
+          },
+          "S3Key": {
+            "Ref": "ArtifactKey"
+          },
+          "S3ObjectVersion": {
+            "Ref": "ArtifactVersion"
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "CODEBUILD_PROJECT": {
+              "Ref": "CodeBuildProject"
+            },
+            "WEBHOOK_SECRET_ARN": {
+              "Ref": "WebhookSecretArn"
+            },
+            "DEDUP_TABLE": {
+              "Ref": "DedupTable"
+            },
+            "ALERT_FUNCTION_ARN": {
+              "Fn::Sub": "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-notifier"
+            }
+          }
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "AlertLogs"
+          }
+        }
+      },
+      "Condition": "DeliveryEnabled"
+    },
+    "AlertAsyncFailure": {
+      "Type": "AWS::Lambda::EventInvokeConfig",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "AlertFunction"
+        },
+        "Qualifier": "$LATEST",
+        "MaximumEventAgeInSeconds": 3600,
+        "MaximumRetryAttempts": 2,
+        "DestinationConfig": {
+          "OnFailure": {
+            "Destination": {
+              "Fn::GetAtt": [
+                "DeliveryDlq",
+                "Arn"
+              ]
+            }
+          }
+        }
+      },
+      "Condition": "DeliveryEnabled"
+    },
+    "BuildRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "EventPattern": {
+          "source": [
+            "aws.codebuild"
+          ],
+          "detail-type": [
+            "CodeBuild Build State Change"
+          ],
+          "detail": {
+            "project-name": [
+              {
+                "Ref": "CodeBuildProject"
+              }
+            ],
+            "build-status": [
+              "SUCCEEDED",
+              "FAILED",
+              "FAULT",
+              "STOPPED",
+              "TIMED_OUT"
+            ]
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Id": "alerts",
+            "Arn": {
+              "Fn::GetAtt": [
+                "AlertFunction",
+                "Arn"
+              ]
+            },
+            "RetryPolicy": {
+              "MaximumEventAgeInSeconds": 3600,
+              "MaximumRetryAttempts": 12
+            },
+            "DeadLetterConfig": {
+              "Arn": {
+                "Fn::GetAtt": [
+                  "DeliveryDlq",
+                  "Arn"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "Condition": "DeliveryEnabled"
+    },
+    "BuildInvoke": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "AlertFunction"
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "BuildRule",
+            "Arn"
+          ]
+        }
+      },
+      "Condition": "DeliveryEnabled"
+    },
+    "PublicationLogs": {
+      "Type": "AWS::Logs::SubscriptionFilter",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "CallbackLogGroupName"
+        },
+        "FilterPattern": "\"publication.terminal\"",
+        "DestinationArn": {
+          "Fn::GetAtt": [
+            "AlertFunction",
+            "Arn"
+          ]
+        }
+      },
+      "DependsOn": "LogsInvoke",
+      "Condition": "DeliveryEnabled"
+    },
+    "LogsInvoke": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "AlertFunction"
+        },
+        "Principal": {
+          "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+        },
+        "SourceArn": {
+          "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${CallbackLogGroupName}:*"
+        },
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        }
+      },
+      "Condition": "DeliveryEnabled"
+    },
+    "DeliveryDlqPolicy": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "Queues": [
+          {
+            "Ref": "DeliveryDlq"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sqs:SendMessage",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "DeliveryDlq",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "aws:SourceArn": [
+                    {
+                      "Fn::GetAtt": [
+                        "BuildRule",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "AlarmRule",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "Condition": "DeliveryEnabled"
+    },
+    "ApiErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "icaros-${AWS::StackName}-api-errors"
+        },
+        "AlarmDescription": "api-errors: inspect source logs/queue before replay or rollback",
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "DatapointsToAlarm": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "ApiFunctionName"
+            }
+          }
+        ]
+      }
+    },
+    "CallbackErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "icaros-${AWS::StackName}-callback-errors"
+        },
+        "AlarmDescription": "callback-errors: inspect source logs/queue before replay or rollback",
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "DatapointsToAlarm": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "CallbackFunctionName"
+            }
+          }
+        ]
+      }
+    },
+    "CallbackThrottles": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "icaros-${AWS::StackName}-callback-throttles"
+        },
+        "AlarmDescription": "callback-throttles: inspect source logs/queue before replay or rollback",
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Throttles",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "DatapointsToAlarm": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "CallbackFunctionName"
+            }
+          }
+        ]
+      }
+    },
+    "AlertErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "icaros-${AWS::StackName}-alert-errors"
+        },
+        "AlarmDescription": "alert-errors: inspect source logs/queue before replay or rollback",
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "DatapointsToAlarm": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "AlertFunction"
+            }
+          }
+        ]
+      },
+      "Condition": "DeliveryEnabled"
+    },
+    "CallbackEventDlq": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "icaros-${AWS::StackName}-callback-event-dlq"
+        },
+        "AlarmDescription": "callback-event-dlq: inspect source logs/queue before replay or rollback",
+        "Namespace": "AWS/SQS",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Statistic": "Maximum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "DatapointsToAlarm": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "Dimensions": [
+          {
+            "Name": "QueueName",
+            "Value": {
+              "Ref": "CallbackEventDlqName"
+            }
+          }
+        ]
+      }
+    },
+    "CallbackAsyncDlq": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "icaros-${AWS::StackName}-callback-async-dlq"
+        },
+        "AlarmDescription": "callback-async-dlq: inspect source logs/queue before replay or rollback",
+        "Namespace": "AWS/SQS",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Statistic": "Maximum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "DatapointsToAlarm": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "Dimensions": [
+          {
+            "Name": "QueueName",
+            "Value": {
+              "Ref": "CallbackAsyncDlqName"
+            }
+          }
+        ]
+      }
+    },
+    "AlertDlq": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "icaros-${AWS::StackName}-alert-dlq"
+        },
+        "AlarmDescription": "alert-dlq: inspect source logs/queue before replay or rollback",
+        "Namespace": "AWS/SQS",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Statistic": "Maximum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "DatapointsToAlarm": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "Dimensions": [
+          {
+            "Name": "QueueName",
+            "Value": {
+              "Fn::GetAtt": [
+                "DeliveryDlq",
+                "QueueName"
+              ]
+            }
+          }
+        ]
+      },
+      "Condition": "DeliveryEnabled"
+    },
+    "BuildRuleDelivery": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "icaros-${AWS::StackName}-build-rule-delivery"
+        },
+        "AlarmDescription": "build-rule-delivery: inspect source logs/queue before replay or rollback",
+        "Namespace": "AWS/Events",
+        "MetricName": "FailedInvocations",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "DatapointsToAlarm": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "Dimensions": [
+          {
+            "Name": "RuleName",
+            "Value": {
+              "Ref": "BuildRule"
+            }
+          }
+        ]
+      },
+      "Condition": "DeliveryEnabled"
+    },
+    "AlarmRule": {
+      "Type": "AWS::Events::Rule",
+      "Condition": "DeliveryEnabled",
+      "Properties": {
+        "EventPattern": {
+          "source": [
+            "aws.cloudwatch"
+          ],
+          "detail-type": [
+            "CloudWatch Alarm State Change"
+          ],
+          "detail": {
+            "alarmName": [
+              {
+                "Ref": "ApiErrors"
+              },
+              {
+                "Ref": "CallbackErrors"
+              },
+              {
+                "Ref": "CallbackThrottles"
+              },
+              {
+                "Ref": "AlertErrors"
+              },
+              {
+                "Ref": "CallbackEventDlq"
+              },
+              {
+                "Ref": "CallbackAsyncDlq"
+              },
+              {
+                "Ref": "AlertDlq"
+              },
+              {
+                "Ref": "BuildRuleDelivery"
+              }
+            ],
+            "state": {
+              "value": [
+                "ALARM",
+                "OK"
+              ]
+            }
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Id": "alerts",
+            "Arn": {
+              "Fn::GetAtt": [
+                "AlertFunction",
+                "Arn"
+              ]
+            },
+            "RetryPolicy": {
+              "MaximumEventAgeInSeconds": 3600,
+              "MaximumRetryAttempts": 12
+            },
+            "DeadLetterConfig": {
+              "Arn": {
+                "Fn::GetAtt": [
+                  "DeliveryDlq",
+                  "Arn"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "AlarmInvoke": {
+      "Type": "AWS::Lambda::Permission",
+      "Condition": "DeliveryEnabled",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "AlertFunction"
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "AlarmRule",
+            "Arn"
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "AlertFunctionName": {
+      "Condition": "DeliveryEnabled",
+      "Value": {
+        "Ref": "AlertFunction"
+      }
+    },
+    "AlertDeadLetterQueueUrl": {
+      "Condition": "DeliveryEnabled",
+      "Value": {
+        "Ref": "DeliveryDlq"
+      }
+    }
+  }
+}

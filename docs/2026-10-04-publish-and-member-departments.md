@@ -24,6 +24,8 @@ PostgreSQL 17 임시 DB에서 이관, 복수 소속 생성·수정, 이미 소�
 CloudFormation 갱신이 완료됐고 두 함수의 코드 해시가 배포 파일과 일치한다.
 CMS와 공개 사이트 HTTP 200, 인증 API의 예상 응답, 완료 이벤트 연결을 확인했다.
 실제 관리자 계정으로 새 게시를 실행한 검증은 아직 하지 않았다.
+같은 날 게시 완료 `publication.terminal` 구조화 로그 패치도 운영 API·callback Lambda에 적용했다.
+CloudWatch 경보 5개는 활성화했으며 Slack·Discord 전달은 webhook 준비 전까지 비활성이다.
 
 다중 부서 기능은 운영 스키마 백업과 승인 후 API 마이그레이션 009를 적용하고,
 API·CMS를 갱신한 다음
