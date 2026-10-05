@@ -1,0 +1,177 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ICAROS OpenNext ISR public runtime with immutable snapshot publication
+Parameters:
+  BucketName:
+    Type: String
+  ServerCodeKey:
+    Type: String
+  RevalidationCodeKey:
+    Type: String
+  BuildId:
+    Type: String
+  ApiRoleName:
+    Type: String
+  ApiFunctionArn:
+    Type: String
+Resources:
+  TagCache:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: tag, AttributeType: S }
+        - { AttributeName: path, AttributeType: S }
+        - { AttributeName: revalidatedAt, AttributeType: N }
+      KeySchema:
+        - { AttributeName: tag, KeyType: HASH }
+        - { AttributeName: path, KeyType: RANGE }
+      GlobalSecondaryIndexes:
+        - IndexName: revalidate
+          KeySchema:
+            - { AttributeName: path, KeyType: HASH }
+            - { AttributeName: revalidatedAt, KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+  RevalidationDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      MessageRetentionPeriod: 1209600
+  RevalidationQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      VisibilityTimeout: 120
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt RevalidationDLQ.Arn
+        maxReceiveCount: 3
+  MainRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: PublicRuntimeData
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource:
+                  - !Sub 'arn:aws:s3:::${BucketName}/snapshots/*'
+                  - !Sub 'arn:aws:s3:::${BucketName}/control/g-pointer.json'
+                  - !Sub 'arn:aws:s3:::${BucketName}/_cache/g/*'
+              - Effect: Allow
+                Action: [s3:PutObject, s3:DeleteObject]
+                Resource: !Sub 'arn:aws:s3:::${BucketName}/_cache/g/*'
+              - Effect: Allow
+                Action: [dynamodb:BatchWriteItem, dynamodb:Query, dynamodb:GetItem,
+                  dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem]
+                Resource:
+                  - !GetAtt TagCache.Arn
+                  - !Sub '${TagCache.Arn}/index/*'
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt RevalidationQueue.Arn
+  MainFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: nodejs22.x
+      Architectures: [arm64]
+      Handler: index.handler
+      Role: !GetAtt MainRole.Arn
+      MemorySize: 1024
+      Timeout: 30
+      Code:
+        S3Bucket: !Ref BucketName
+        S3Key: !Ref ServerCodeKey
+      Environment:
+        Variables:
+          ICAROS_SNAPSHOT_BUCKET: !Ref BucketName
+          ICAROS_POINTER_KEY: control/g-pointer.json
+          ICAROS_RUNTIME_POINTER: /tmp/icaros-pointer.json
+          CACHE_BUCKET_NAME: !Ref BucketName
+          CACHE_BUCKET_REGION: ap-northeast-2
+          CACHE_BUCKET_KEY_PREFIX: _cache/g
+          CACHE_DYNAMO_TABLE: !Ref TagCache
+          REVALIDATION_QUEUE_REGION: ap-northeast-2
+          REVALIDATION_QUEUE_URL: !Ref RevalidationQueue
+          OPEN_NEXT_BUILD_ID: !Ref BuildId
+  MainFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt MainFunction.Arn
+      AuthType: AWS_IAM
+  RevalidationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: QueueReceive
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [sqs:ReceiveMessage, sqs:DeleteMessage, sqs:GetQueueAttributes]
+                Resource: !GetAtt RevalidationQueue.Arn
+  RevalidationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: nodejs22.x
+      Architectures: [arm64]
+      Handler: index.handler
+      Role: !GetAtt RevalidationRole.Arn
+      MemorySize: 512
+      Timeout: 30
+      Code:
+        S3Bucket: !Ref BucketName
+        S3Key: !Ref RevalidationCodeKey
+  RevalidationMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt RevalidationQueue.Arn
+      FunctionName: !Ref RevalidationFunction
+      BatchSize: 1
+      FunctionResponseTypes: [ReportBatchItemFailures]
+      Enabled: true
+  ApiGPermissions:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: icaros-g-publication
+      Roles: [!Ref ApiRoleName]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: [s3:GetObject, s3:PutObject]
+            Resource: !Sub 'arn:aws:s3:::${BucketName}/control/g-pointer.json'
+          - Effect: Allow
+            Action: lambda:InvokeFunction
+            Resource:
+              - !GetAtt MainFunction.Arn
+              - !Ref ApiFunctionArn
+Outputs:
+  WebFunctionName:
+    Value: !Ref MainFunction
+  WebFunctionArn:
+    Value: !GetAtt MainFunction.Arn
+  WebFunctionUrl:
+    Value: !GetAtt MainFunctionUrl.FunctionUrl
+  TagCacheName:
+    Value: !Ref TagCache
+  RevalidationDLQUrl:
+    Value: !Ref RevalidationDLQ

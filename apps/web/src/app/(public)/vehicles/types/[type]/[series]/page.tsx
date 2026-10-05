@@ -4,11 +4,11 @@ import { getSnapshot } from '@/lib/content/snapshot'
 import VehiclesListing from '../../../VehiclesListing'
 import { pageMetadata } from '@/lib/seo'
 
-export const dynamicParams = false
+export const dynamicParams = true
+export const revalidate = 3600
 export function generateStaticParams() {
   const tax = getSnapshot().taxonomy
-  return tax.series.length ? tax.series.map((series) => ({ type: series.typeId, series: series.id }))
-    : [{ type: tax.types[0]?.id ?? '__empty-type', series: '__empty-series' }]
+  return tax.series.map((series) => ({ type: series.typeId, series: series.id }))
 }
 export async function generateMetadata({ params }: { params: Promise<{ type: string; series: string }> }): Promise<Metadata> {
   const { type, series } = await params

@@ -1,4 +1,5 @@
 import 'server-only'
+import { readFileSync } from 'node:fs'
 import { loadAndValidateSnapshot } from '../../../scripts/snapshot-contract.mjs'
 import type { LandingPanel } from '@/lib/panels'
 import type { RocketDetail } from '@/app/(public)/vehicles/_data'
@@ -48,9 +49,20 @@ export type Snapshot = {
 }
 
 let cached: Snapshot | undefined
+let cachedPointer: string | undefined
 export function getSnapshot(): Snapshot {
-  if (cached) return cached
-  const data = loadAndValidateSnapshot(process.env.ICAROS_SNAPSHOT, process.env.ICAROS_SNAPSHOT_SHA256) as Snapshot
+  let pointerValue: string | undefined
+  let snapshotPath = process.env.ICAROS_SNAPSHOT
+  let snapshotSha = process.env.ICAROS_SNAPSHOT_SHA256
+  if (process.env.ICAROS_RUNTIME_POINTER) {
+    pointerValue = readFileSync(process.env.ICAROS_RUNTIME_POINTER, 'utf8')
+    if (cached && cachedPointer === pointerValue) return cached
+    const selected = JSON.parse(pointerValue) as { path: string; sha256: string }
+    snapshotPath = selected.path
+    snapshotSha = selected.sha256
+    // Remember the pointer only after the selected snapshot passes validation.
+  } else if (cached) return cached
+  const data = loadAndValidateSnapshot(snapshotPath, snapshotSha) as Snapshot
   for (const post of data.posts) {
     if (typeof post.displayDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(post.displayDate) ||
       Number.isNaN(Date.parse(`${post.displayDate}T00:00:00Z`)) ||
@@ -59,6 +71,7 @@ export function getSnapshot(): Snapshot {
     }
   }
   cached = data
+  cachedPointer = pointerValue
   return data
 }
 

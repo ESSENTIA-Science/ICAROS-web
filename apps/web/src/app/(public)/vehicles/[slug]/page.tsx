@@ -20,10 +20,11 @@ import styles from './page.module.css'
 type Params = { slug: string }
 
 /** Build every published vehicle path from the pinned snapshot. */
-export const dynamicParams = false
+export const dynamicParams = true
+export const revalidate = 3600
 export function generateStaticParams(): { slug: string }[] {
   const vehicles = getSnapshot().vehicles
-  return vehicles.length ? vehicles.map((vehicle) => ({ slug: vehicle.slug })) : [{ slug: '__empty-vehicle' }]
+  return vehicles.map((vehicle) => ({ slug: vehicle.slug }))
 }
 
 export async function generateMetadata({
