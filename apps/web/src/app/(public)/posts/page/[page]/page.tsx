@@ -1,15 +1,15 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getSnapshot } from '@/lib/content/snapshot'
-import { POSTS_PAGE_SIZE, postPageCount } from '@/lib/posts/pagination'
+import { postPageCount } from '@/lib/posts/pagination'
 import { PostsListing } from '../../PostsListing'
 import { pageMetadata } from '@/lib/seo'
 
-export const dynamicParams = false
+export const dynamicParams = true
+export const revalidate = 3600
 export function generateStaticParams(): { page: string }[] {
   const count = postPageCount(getSnapshot().posts.length) - 1
-  return count > 0 ? Array.from({ length: count }, (_, index) => ({ page: String(index + 2) }))
-    : [{ page: '__empty-page' }]
+  return Array.from({ length: Math.max(0, count) }, (_, index) => ({ page: String(index + 2) }))
 }
 export async function generateMetadata({ params }: { params: Promise<{ page: string }> }): Promise<Metadata> {
   const { page } = await params
@@ -18,7 +18,6 @@ export async function generateMetadata({ params }: { params: Promise<{ page: str
 export default async function PostsPageNumber({ params }: { params: Promise<{ page: string }> }) {
   const { page } = await params
   const number = Number(page)
-  if (!Number.isInteger(number) || number < 2 ||
-    (number > postPageCount(getSnapshot().posts.length) && getSnapshot().posts.length > POSTS_PAGE_SIZE)) notFound()
+  if (!Number.isInteger(number) || number < 2 || number > postPageCount(getSnapshot().posts.length)) notFound()
   return <PostsListing page={number - 1} />
 }

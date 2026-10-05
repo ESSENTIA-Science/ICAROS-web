@@ -8,6 +8,7 @@ import { pageMetadata } from '@/lib/seo'
 
 /** Snapshot member records are already approved for public export. */
 const UNASSIGNED_SQUAD_LABEL = '기타'
+export const revalidate = 3600
 
 export const metadata: Metadata = pageMetadata({ title: 'Members', description: 'ICAROS를 구성하는 추진공학부·전자부·비행제어부 등 부서별 부원 명단.', path: '/member' })
 

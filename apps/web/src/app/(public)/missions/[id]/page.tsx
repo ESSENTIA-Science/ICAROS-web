@@ -6,13 +6,14 @@ import { getSnapshot } from '@/lib/content/snapshot'
 import { pageMetadata } from '@/lib/seo'
 import styles from './page.module.css'
 
-export const dynamicParams = false
+export const dynamicParams = true
+export const revalidate = 3600
 const outcomeLabel = { success: '성공', partial: '부분 성공', failure: '실패', planned: '예정' } as const
 const allowedBodyElements = ['img', 'p', 'br', 'strong', 'em', 'a', 'ul', 'ol', 'li', 'blockquote', 'code', 'pre', 'h2', 'h3', 'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'div']
 
 export function generateStaticParams() {
   const missions = getSnapshot().missions
-  return missions.length ? missions.map((mission) => ({ id: mission.id })) : [{ id: '__empty-mission' }]
+  return missions.map((mission) => ({ id: mission.id }))
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {

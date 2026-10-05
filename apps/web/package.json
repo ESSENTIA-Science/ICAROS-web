@@ -7,8 +7,7 @@
     "dev": "next dev --port 5174",
     "prebuild": "node scripts/check-snapshot.mjs",
     "build": "next build",
-    "postbuild": "node scripts/prune-empty-pages.mjs",
-    "test": "node --test scripts/snapshot-contract.test.mjs",
+    "test": "node --test scripts/*.test.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "check:snapshot": "node scripts/check-snapshot.mjs"

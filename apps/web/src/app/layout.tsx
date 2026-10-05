@@ -5,6 +5,8 @@ import { getSnapshot } from '@/lib/content/snapshot'
 import Loader from '@/components/landing/Loader'
 import './globals.css'
 
+export const revalidate = 3600
+
 const display = Archivo({ subsets: ['latin'], axes: ['wdth'], variable: '--font-display', display: 'swap' })
 const mono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400'], variable: '--font-mono', display: 'swap' })
 export function generateMetadata(): Metadata {

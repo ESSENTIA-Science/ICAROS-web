@@ -12,6 +12,8 @@ import Contact, { hasContactContent } from '@/components/landing/Contact'
 import type { SectionTheme } from '@/components/landing/Section'
 import { isInternalCtaHref } from '@/lib/cta'
 
+export const revalidate = 3600
+
 const loadContent = async (): Promise<SiteContent> => getSnapshot().site
 const SECTION_THEME: Readonly<Record<string, SectionTheme>> = {
   hero: 'ink',

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { getSnapshot } from '@/lib/content/snapshot'
 import VehiclesListing from './VehiclesListing'
 import { pageMetadata } from '@/lib/seo'
+export const revalidate = 3600
 
 export function generateMetadata(): Metadata {
   const { types, series } = getSnapshot().taxonomy

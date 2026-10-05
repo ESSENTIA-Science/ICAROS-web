@@ -5,10 +5,11 @@ import PostMarkdown from '@/components/posts/PostMarkdown'
 import { getSnapshot } from '@/lib/content/snapshot'
 import { pageMetadata, excerptDescription } from '@/lib/seo'
 import styles from '../../[id]/page.module.css'
-export const dynamicParams = false
+export const dynamicParams = true
+export const revalidate = 3600
 export function generateStaticParams() {
   const posts = getSnapshot().posts.filter(post => post.source === 'legacy')
-  return posts.length ? posts.map(post => ({ slug: post.slug! })) : [{ slug: '__empty-legacy' }]
+  return posts.map(post => ({ slug: post.slug! }))
 }
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params

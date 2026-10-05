@@ -5,12 +5,11 @@ import PostMarkdown from '@/components/posts/PostMarkdown'
 import { getSnapshot } from '@/lib/content/snapshot'
 import { pageMetadata, excerptDescription } from '@/lib/seo'
 import styles from './page.module.css'
-export const dynamicParams = false
+export const dynamicParams = true
+export const revalidate = 3600
 export function generateStaticParams() {
   const posts = getSnapshot().posts.filter(post => post.source === 'community')
-  // Static export needs one parameter even when the local archive has no ESSENTIA posts.
-  // The placeholder is removed from out/ by postbuild.
-  return posts.length ? posts.map(post => ({ id: post.id })) : [{ id: '__empty-community' }]
+  return posts.map(post => ({ id: post.id }))
 }
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params
