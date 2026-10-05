@@ -6,10 +6,14 @@ ICAROS 웹 저장소에서 작업하는 에이전트를 위한 안내.
 > 운영 식별자(RDS 엔드포인트·버킷명·계정 번호·관리자 이메일)를 커밋하지 마십시오.
 > 실제 값은 `docs/.local/identifiers.md` (추적 안 됨)에 있고, 문서에는 플레이스홀더만 씁니다.
 
-## 정적 웹 분리 구조 (2026-09-30)
+## 운영 구조 (2026-10-06)
 
-현재 새 구조는 `apps/web`(공개 정적 FE), `apps/cms`(관리자 UI),
+현재 구조는 `apps/web`(공개 OpenNext ISR), `apps/cms`(관리자 UI),
 `packages/contracts`(CMS 공통 타입)이다. 관리자 Lambda API는 형제 `ICAROS-api` 저장소에 있다.
+공개 사이트는 AWS Lambda·S3·CloudFront에서 제공한다. CMS 콘텐츠 게시는 API가
+검증된 snapshot pointer를 갱신하는 G 경로이며 코드 빌드를 실행하지 않는다.
+Web·CMS 코드 변경은 `main`의 GitHub Actions가, API 코드 변경은 API 저장소의
+`refactor/repo-split-cognito` GitHub Actions가 AWS에 배포한다.
 아래의 기존 `src/`, `scripts/`, DB 마이그레이션, Next.js 명령 설명은
 `legacy/`에 보존한 기존 앱에 적용된다. 기존 앱 실행은 `legacy/`에서 한다.
 새 워크스페이스는 루트 `npm run typecheck`, `npm run lint`, `npm run test`로 검사하고,
@@ -23,10 +27,8 @@ ICAROS 웹 저장소에서 작업하는 에이전트를 위한 안내.
 고체연료 사운딩 로켓과 UAV/VTVL 두 갈래로 활동하며, 사이트는 공개 기록 + 후원 창구다.
 UI 문구는 한국어, 섹션 헤딩과 슬로건만 영문. 마케팅 과장 없이 실패도 실패로 적는 톤.
 
-**Next.js 16 앱이 `icaros.kr` 에서 서비스 중이다. 프로덕션 브랜치는 `main` 이다** —
-푸시하면 자동 배포된다. (2026-08-27 이전에는 `rebuild/next16` 에서 배포됐는데 Vercel 설정은
-`main` 이라 자동 승격이 안 됐고, 배포마다 `vercel deploy --prod` 로 우회해야 했다.
-그 우회를 잊으면 조용히 옛 커밋이 계속 서비스됐다. `main` 으로 병합해 없앴다.)
+**Next.js 16 앱이 `icaros.kr` 에서 서비스 중이다. 프로덕션 브랜치는 `main` 이다.**
+운영 코드 배포는 `.github/workflows/deploy-web.yml`을 사용한다.
 
 설계 문서는 `docs/icaros-rebuild/` 에 있고 **확정 결정은 `DECISIONS.md` 에 있다 — 재논의하지 말 것.**
 
