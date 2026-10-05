@@ -4,6 +4,7 @@ import { instagramHandle, instagramUrl } from '@/lib/content'
 import { getSnapshot } from '@/lib/content/snapshot'
 import { getFeed } from '@/lib/posts/feed'
 import { POSTS_PAGE_SIZE, postPageCount } from '@/lib/posts/pagination'
+import { visiblePosts } from '@/lib/posts/visible.mjs'
 import styles from './page.module.css'
 
 /** 외부 링크 표시. 아이콘 폰트도 글리프도 쓰지 않는다 — Contact 행 끝의 1px 화살표와 같은 도형이다. */
@@ -25,7 +26,7 @@ export function PostsListing({ page }: { page: number }) {
   const snapshot = getSnapshot()
   const feed = getFeed(page, POSTS_PAGE_SIZE)
   const content = snapshot.site
-  const totalPages = postPageCount(snapshot.posts.length)
+  const totalPages = postPageCount(visiblePosts(snapshot.posts).length)
   // 값이 없으면 아무것도 그리지 않는다. 랜딩 섹션들과 같은 규칙이다.
   const instagram = content['contact.instagram']
 

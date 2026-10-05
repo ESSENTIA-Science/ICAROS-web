@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import PostMarkdown from '@/components/posts/PostMarkdown'
 import { getSnapshot } from '@/lib/content/snapshot'
 import { pageMetadata, excerptDescription } from '@/lib/seo'
+import { visiblePosts } from '@/lib/posts/visible.mjs'
 import styles from '../../[id]/page.module.css'
 export const dynamicParams = true
 export const revalidate = 3600
@@ -14,7 +15,11 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params
   const post = getSnapshot().posts.find(post => post.source === 'legacy' && post.slug === slug)
-  return post ? pageMetadata({ title: post.title, description: excerptDescription(post.excerpt || post.contentMd, 'ICAROS의 제작·시험·발사 기록.'), path: `/posts/legacy/${slug}`, image: post.thumb?.src, type: 'article' }) : { title: '기록을 찾을 수 없습니다', robots: { index: false } }
+  if (!post) return { title: '기록을 찾을 수 없습니다', robots: { index: false } }
+  const mirror = visiblePosts(getSnapshot().posts).includes(post) ? undefined :
+    getSnapshot().posts.find(item => item.source === 'community' && item.title === post.title && item.contentMd === post.contentMd)
+  const path = mirror ? `/posts/${mirror.id}` : `/posts/legacy/${slug}`
+  return pageMetadata({ title: post.title, description: excerptDescription(post.excerpt || post.contentMd, 'ICAROS의 제작·시험·발사 기록.'), path, image: post.thumb?.src, type: 'article' })
 }
 export default async function LegacyPostPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
