@@ -12,7 +12,7 @@ This repository contains the public web and CMS. The API lives in a separate rep
 
 The public `/missions` section records launch outcomes separately from `/posts`. Local development seeds the ICX-1A and RAON launch records from dated legacy articles; later Mission edits use their own records.
 
-The architecture and migration stages are recorded in [`ICAROS-web-architecture.md`](ICAROS-web-architecture.md). The current production site remains on the legacy Next.js application. This branch is for local implementation and verification; production cutover, migration, and AWS changes require a separate decision.
+The [master history](docs/ICAROS-WEB-HISTORY.md) traces the site from the 2025 React app through the October 2026 production publishing changes, with the complete Git commit index. [`ICAROS-web-architecture.md`](ICAROS-web-architecture.md) is the September 30 design proposal, not a description of the current deployment. The production public routes now use the G snapshot runtime from `feature/open-next-publishing-20261005`; this branch still contains the earlier static export implementation. Production cutover, migration, and AWS changes require a separate decision.
 
 ## Local preview
 
