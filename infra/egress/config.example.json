@@ -6,6 +6,7 @@
     "cognitoJwks": "jwks.example.invalid",
     "essentia": "essentia.example.invalid",
     "codebuild": "codebuild.example.invalid",
-    "kvs": "kvs.example.invalid"
+    "kvs": "kvs.example.invalid",
+    "lambda": "lambda.example.invalid"
   }
 }

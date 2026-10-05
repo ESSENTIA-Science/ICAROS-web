@@ -9,7 +9,8 @@ import { renderConfig } from './render-config.mjs'
 const input = {
   privateIpv4: '10.200.10.10', lambdaCidrs: ['10.200.241.0/24', '10.200.242.0/24'],
   hosts: { cognitoAuth: 'auth.example.invalid', cognitoJwks: 'jwks.example.invalid',
-    essentia: 'essentia.example.invalid', codebuild: 'codebuild.example.invalid', kvs: 'kvs.example.invalid' },
+    essentia: 'essentia.example.invalid', codebuild: 'codebuild.example.invalid', kvs: 'kvs.example.invalid',
+    lambda: 'lambda.example.invalid' },
 }
 
 // Evaluate the generated ACL subset, not a second copy of the renderer's policy.
@@ -132,6 +133,7 @@ test('valid private address families and real SDK endpoint shapes remain accepte
     cognitoAuth: 'placeholder.auth.ap-northeast-2.amazoncognito.com',
     cognitoJwks: 'cognito-idp.ap-northeast-2.amazonaws.com', essentia: 'essentia.example.invalid',
     codebuild: 'codebuild.ap-northeast-2.amazonaws.com', kvs: '000000000000.cloudfront-kvs.global.api.aws',
+    lambda: 'lambda.ap-northeast-2.amazonaws.com',
   } }))
 })
 

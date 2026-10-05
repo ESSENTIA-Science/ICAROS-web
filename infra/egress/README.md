@@ -38,12 +38,13 @@ Debian bookworm의 [Squid ARM64 패키지](https://packages.debian.org/bookworm/
 | `essentia` | 실제 ESSENTIA HTTPS origin hostname. port 443의 기존 TLS endpoint 필요 |
 | `codebuild` | 실제 AWS SDK가 선택한 CodeBuild HTTPS endpoint hostname |
 | `kvs` | 실제 SDK가 KVS ARN으로 선택한 account별 `<account>.cloudfront-kvs.global.api.aws` hostname |
+| `lambda` | G 게시 완료 및 사전 검사에 쓰는 AWS Lambda API hostname (`lambda.<region>.amazonaws.com`) |
 
 AWS endpoint를 suffix 전체로 허용하지 않는다. region/FIPS/endpoint override를 바꾸면 부모가 **새 실제 hostname**으로 재렌더한다.
 KVS endpoint는 현재 설치 SDK `@aws-sdk/client-cloudfront-keyvaluestore` endpoint ruleset에서 확인했다.
 S3는 기존 VPC gateway endpoint로 직접 접근하며 이 host allowlist에 포함하지 않는다.
 Lambda의 `ICAROS_HTTPS_PROXY=http://<기존-EC2-private-IPv4>:3128`은 부모의 검증된
-undici/HttpsProxyAgent 연결을 사용한다. Cognito auth/JWKS, ESSENTIA, CodeBuild/KVS 각각 적용해야 한다.
+undici/HttpsProxyAgent 연결을 사용한다. Cognito auth/JWKS, ESSENTIA, CodeBuild/KVS/Lambda 각각 적용해야 한다.
 단순히 환경 변수만 설정해서 모든 SDK가 자동으로 proxy를 쓰는 것으로 가정하지 않는다.
 
 ```sh
@@ -92,13 +93,13 @@ docker run --rm --platform=linux/arm64 --network=none --user=proxy --read-only -
 
 부모가 확인할 배포 조건:
 
-1. 실제 private IPv4가 이 API EC2의 NIC에 있고 3128이 비어 있어야 한다. DNS가 다섯 목적지를 해석하고 기존 EC2 경로로 443에 닿아야 한다.
+1. 실제 private IPv4가 이 API EC2의 NIC에 있고 3128이 비어 있어야 한다. DNS가 여섯 목적지를 해석하고 기존 EC2 경로로 443에 닿아야 한다.
 2. 기존 API EC2 SG의 inbound3128을 **Lambda SG만** 허용한다. host ACL에는 실제 Lambda CIDR만 넣는다.
    public3128/전체 VPC inbound를 열지 않는다. host network에는 Docker `-p`/bridge SNAT를 추가하지 않는다.
 3. Docker engine이 이미 설치/운영 가능한지와 host memory headroom을 확인한다. container의 **128 MiB/0.25 CPU hard limit**에 Docker daemon overhead는 포함되지 않는다.
    이 artifact는 운영 RSS/처리량을 측정한 결과가 아니다.
 4. parser 통과 후 부모가 `systemctl daemon-reload`와 `systemctl enable --now icaros-egress.service`로 시작한다.
-5. 실제 Lambda 경로에서 다섯 허용 host CONNECT:443 성공 및 unknown host/IP/port/plain GET/외부 source 거절을 검사한다.
+5. 실제 Lambda 경로에서 여섯 허용 host CONNECT:443 성공 및 unknown host/IP/port/plain GET/외부 source 거절을 검사한다.
    테스트 클라이언트에서 token/credentials/body를 출력하지 않는다. 기존 ESSENTIA API latency/memory와 container OOM/restart count를 함께 확인한다.
 
 unit은 `Type=oneshot` + `RemainAfterExit=yes`, Docker는 `--restart=unless-stopped`다.

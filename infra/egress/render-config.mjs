@@ -3,7 +3,7 @@ import { isIP } from 'node:net'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const hostKeys = ['cognitoAuth', 'cognitoJwks', 'essentia', 'codebuild', 'kvs']
+const hostKeys = ['cognitoAuth', 'cognitoJwks', 'essentia', 'codebuild', 'kvs', 'lambda']
 const invalid = () => { throw new TypeError('Invalid egress configuration') }
 const plainObject = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 const exactKeys = (value, keys) => plainObject(value) && Object.keys(value).length === keys.length &&
