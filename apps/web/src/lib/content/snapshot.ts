@@ -6,6 +6,7 @@ import type { RocketDetail } from '@/app/(public)/vehicles/_data'
 import type { MemberDto } from '@/app/(public)/member/_data'
 import type { VehicleTaxonomy } from '@/components/rocket/series'
 import { postPageCount } from '@/lib/posts/pagination'
+import { visiblePosts } from '@/lib/posts/visible.mjs'
 
 export type PublishedPost = {
   id: string
@@ -77,13 +78,14 @@ export function getSnapshot(): Snapshot {
 
 export function exportedRoutes(): string[] {
   const snapshot = getSnapshot()
+  const posts = visiblePosts(snapshot.posts)
   return [
     '/', '/vehicles', '/member', '/posts', '/missions',
-    ...Array.from({ length: postPageCount(snapshot.posts.length) - 1 }, (_, index) => `/posts/page/${index + 2}`),
+    ...Array.from({ length: postPageCount(posts.length) - 1 }, (_, index) => `/posts/page/${index + 2}`),
     ...snapshot.taxonomy.types.map((type) => `/vehicles/types/${type.id}`),
     ...snapshot.taxonomy.series.map((series) => `/vehicles/types/${series.typeId}/${series.id}`),
     ...snapshot.vehicles.map((vehicle) => `/vehicles/${vehicle.slug}`),
     ...snapshot.missions.map((mission) => `/missions/${mission.id}`),
-    ...snapshot.posts.map((post) => post.source === 'legacy' ? `/posts/legacy/${post.slug}` : `/posts/${post.id}`),
+    ...posts.map((post) => post.source === 'legacy' ? `/posts/legacy/${post.slug}` : `/posts/${post.id}`),
   ]
 }
