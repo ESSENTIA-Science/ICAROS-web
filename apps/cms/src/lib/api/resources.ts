@@ -87,7 +87,7 @@ async function request(path: string, init: RequestInit = {}): Promise<unknown> {
 
 const outbound: Record<string, Partial<Record<keyof ResourceRecord, string>>> = {
   departments: { name: 'name', position: 'sortOrder' },
-  members: { name: 'name', description: 'bioMd', departmentIds: 'departmentIds', position: 'sortOrder', imageMediaId: 'imageMediaId', published: 'published' },
+  members: { name: 'name', description: 'bioMd', departmentId: 'departmentId', position: 'sortOrder', imageMediaId: 'imageMediaId', published: 'published' },
   'vehicle-types': { name: 'label', position: 'sortOrder' },
   'vehicle-series': { name: 'label', description: 'descriptionMd', typeId: 'typeId', position: 'sortOrder' },
   panels: { title: 'headline', description: 'body', mediaId: 'mediaId', position: 'sortOrder', ctaLabel: 'ctaLabel', ctaHref: 'ctaHref', published: 'published' },
@@ -106,11 +106,6 @@ function record(kind: ResourceKind, value: unknown): ResourceRecord {
   const result = { ...value } as Record<string, unknown>
   if (kind === 'vehicles' && (!Array.isArray(result.galleryMediaIds) || result.galleryMediaIds.some(id => typeof id !== 'string'))) {
     throw new ApiError('기체 갤러리 응답 형식이 올바르지 않습니다.', 200)
-  }
-  if (kind === 'members') {
-    if (result.departmentIds === undefined) result.departmentIds = result.departmentId ? [result.departmentId] : []
-    if (!Array.isArray(result.departmentIds) || result.departmentIds.some(id => typeof id !== 'string'))
-      throw new ApiError('멤버 부서 응답 형식이 올바르지 않습니다.', 200)
   }
   for (const [local, remote] of Object.entries(outbound[kind] ?? {})) {
     if (remote !== local && Object.hasOwn(result, remote)) {
@@ -133,14 +128,6 @@ function fields(kind: ResourceKind, draft: Partial<ResourceRecord>): Record<stri
     if (kind === 'vehicles' && key === 'galleryMediaIds') {
       if (!Array.isArray(value) || value.some(id => typeof id !== 'string')) return invalid('갤러리 형식이 올바르지 않습니다.')
       result[target] = value
-      continue
-    }
-    if (kind === 'members' && key === 'departmentIds') {
-      const ids = value
-      if (!Array.isArray(ids) || ids.length > 20 || ids.some(id => typeof id !== 'string' ||
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) ||
-        new Set(ids.map(id => id.toLowerCase())).size !== ids.length) return invalid('소속 부서 형식이 올바르지 않습니다.')
-      result[target] = ids
       continue
     }
     if (value !== null && !['string', 'number', 'boolean'].includes(typeof value)) return invalid(`입력 형식이 올바르지 않습니다: ${key}`)

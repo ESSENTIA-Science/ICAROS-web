@@ -180,9 +180,6 @@ export function validateSnapshot(data, publicRoot = resolve(process.cwd(), 'publ
   }
   for (const member of data.members) {
     if (member.published !== true || !member.id || !member.name) throw new Error('Invalid published member')
-    if (member.squads !== undefined && (!Array.isArray(member.squads) || member.squads.length > 20 ||
-      member.squads.some(name => typeof name !== 'string' || !name.trim() || name.length > 120) ||
-      new Set(member.squads).size !== member.squads.length)) throw new Error(`Invalid member departments: ${member.id}`)
     const placeholder = '/assets/img/member/profile.webp'
     const approvedPhoto = member.hasPhoto === true && member.imageSrc !== placeholder &&
       /^\/assets\/[a-zA-Z0-9_./-]+\.(?:jpg|jpeg|png|webp|avif|gif)$/i.test(member.imageSrc) &&

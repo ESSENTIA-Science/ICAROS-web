@@ -35,8 +35,7 @@ test('archive-only snapshot exports no placeholder community route', () => {
   data.media.portrait = portrait
   data.members = [null, '', '   ', '소개글이 있는 카드입니다.'].map((bioMd, index) => ({
     ...data.members[0], id: `member-layout-${index}`, name: `합성 부원 ${index}`,
-    squad: `합성 단일 부서 ${index}`, squads: index === 0 ? ['합성 단일 부서 0', '합성 부서 추가'] : [`합성 단일 부서 ${index}`],
-    bioMd, imageSrc: portrait, hasPhoto: true,
+    squad: `합성 단일 부서 ${index}`, bioMd, imageSrc: portrait, hasPhoto: true,
     school: index === 0 ? '합성긴학교명을공백없이표시하는검증학교' : null,
   }))
   const temp = resolve(webRoot, 'fixtures/.archive-only-snapshot.test.json')
@@ -76,13 +75,12 @@ test('archive-only snapshot exports no placeholder community route', () => {
     assert.match(post, /<img[^>]+alt="IMG_0002.jpeg"/)
     const members = readFileSync(rendered('member.html'), 'utf8')
     const cards = [...members.matchAll(/<li\b[^>]*data-reveal-item=""[^>]*>[\s\S]*?<\/li>/g)].map(match => match[0])
-    assert.match(members, /합성 부서 추가/)
-    assert.equal(cards.length, 5)
-    for (const card of cards.slice(0, 4)) assert.doesNotMatch(card, /data-bio=/)
-    assert.match(cards[4], /data-bio=""/)
-    assert.match(cards[4], /소개글이 있는 카드입니다\./)
+    assert.equal(cards.length, 4)
+    for (const card of cards.slice(0, 3)) assert.doesNotMatch(card, /data-bio=/)
+    assert.match(cards[3], /data-bio=""/)
+    assert.match(cards[3], /소개글이 있는 카드입니다\./)
     for (let index = 0; index < cards.length; index++) {
-      assert.match(cards[index], new RegExp(`alt="합성 부원 ${[0, 0, 1, 2, 3][index]} 프로필 사진"`))
+      assert.match(cards[index], new RegExp(`alt="합성 부원 ${index} 프로필 사진"`))
       assert.match(cards[index], /src="\/assets\/models\/icx-2-poster.png"/)
       assert.doesNotMatch(cards[index], /data-empty=/)
     }

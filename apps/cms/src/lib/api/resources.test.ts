@@ -20,7 +20,7 @@ function fetchWith(data: unknown) {
 
 describe('resources API DTO adapter', () => {
   it('round-trips member profile photos and sends null to remove them', async () => {
-    const member = { id, version, name: '부원', imageMediaId: mediaId, published: true, departmentIds: [] }
+    const member = { id, version, name: '부원', imageMediaId: mediaId, published: true }
     const fetcher = fetchWith([member])
     await expect(resourcesApi.list('members')).resolves.toEqual([member])
     fetcher.mockResolvedValueOnce(reply({ ...member, version: nextVersion }))
@@ -84,7 +84,7 @@ describe('resources API DTO adapter', () => {
   })
   it.each([
     ['departments', 'departments', { id, version, name: '추진', sortOrder: 2 }, { id, version, name: '추진', position: 2 }],
-    ['members', 'members', { id, version, name: '김', bioMd: '소개', sortOrder: 3 }, { id, version, name: '김', description: '소개', position: 3, departmentIds: [] }],
+    ['members', 'members', { id, version, name: '김', bioMd: '소개', sortOrder: 3 }, { id, version, name: '김', description: '소개', position: 3 }],
     ['vehicle-types', 'vehicle-types', { id: 'rocket', version, label: '로켓', sortOrder: 4 }, { id: 'rocket', version, name: '로켓', position: 4 }],
     ['vehicle-series', 'rocket-series', { id: 'icx', version, label: 'ICX', descriptionMd: '설명', sortOrder: 5 }, { id: 'icx', version, name: 'ICX', description: '설명', position: 5 }],
     ['panels', 'panels', { id, version, headline: '첫 발사', body: '설명', mediaId, sortOrder: 6 }, { id, version, title: '첫 발사', description: '설명', mediaId, position: 6 }],
@@ -122,14 +122,6 @@ describe('resources API DTO adapter', () => {
     expect(fetcher.mock.calls[0]?.[0]).toBe('/api/admin/content/rocket-series/icx')
     expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ method: 'PUT', headers: { 'If-Match': version } })
     expect(JSON.parse(fetcher.mock.calls[0]?.[1].body)).toEqual({ label: 'ICX II', descriptionMd: '새 설명', sortOrder: 7 })
-  })
-
-  it('sends multiple member departments in their selected order', async () => {
-    const departments = ['59f0649e-ed79-47a2-bf9d-e299204641b8', 'f86d389e-4e9c-4df0-a45c-d17f73676e45']
-    const fetcher = fetchWith({ id, version: nextVersion, name: '김', departmentIds: departments })
-    await expect(resourcesApi.update('members', id, version, { name: '김', departmentIds: departments }))
-      .resolves.toMatchObject({ departmentIds: departments })
-    expect(JSON.parse(fetcher.mock.calls[0]?.[1].body)).toEqual({ name: '김', departmentIds: departments })
   })
 
   it('deletes with If-Match and an encoded ID', async () => {

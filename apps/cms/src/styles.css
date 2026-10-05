@@ -67,10 +67,6 @@ main { padding-top: var(--sp-6); padding-bottom: var(--sp-7); }
 .editorGrid { display: grid; grid-template-columns: minmax(27rem, 1fr) minmax(27rem, 1fr); gap: var(--sp-4); align-items: start; }
 .hint, .empty { font-size: 1.3rem; color: var(--fg-muted); }
 .fields { display: grid; gap: var(--sp-4); margin-block: var(--sp-5); }
-.departmentChoices { display: grid; gap: var(--sp-2); margin: 0; border: 1px solid var(--rule); padding: var(--sp-3); }
-.departmentChoices legend { padding-inline: var(--sp-1); font-size: 1.3rem; font-weight: 600; }
-.departmentChoices label { display: flex; align-items: center; gap: var(--sp-2); font-weight: 400; }
-.departmentChoices input[type='checkbox'] { width: auto; min-width: auto; margin: 0; accent-color: var(--sig); }
 label { display: grid; gap: var(--sp-2); font-size: 1.3rem; font-weight: 600; }
 input, textarea { min-width: 0; width: 100%; background: var(--bg-raised); color: var(--fg); border: 1px solid var(--rule-strong); padding: var(--sp-2) var(--sp-3); font-weight: 400; }
 textarea { resize: vertical; }

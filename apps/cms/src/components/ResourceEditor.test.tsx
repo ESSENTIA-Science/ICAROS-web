@@ -44,14 +44,6 @@ describe('ResourceEditor read-only mode', () => {
     const html = renderToStaticMarkup(<ResourceEditor kind="members" />)
     expect(html).toContain('aria-label="설명 (Markdown) 서식 도구"')
   })
-  it('renders independent department choices for a member', () => {
-    state.overrides.set(2, { name: '멤버', departmentIds: ['dept-1'] })
-    state.overrides.set(7, [{ id: 'dept-1', version: 'v1', name: '추진' }, { id: 'dept-2', version: 'v1', name: '전자' }])
-    const html = renderToStaticMarkup(<ResourceEditor kind="members" />)
-    expect(html).toContain('소속 부서')
-    expect(html).toMatch(/type="checkbox"[^>]*checked=""[^>]*\/>추진/)
-    expect(html).toMatch(/type="checkbox"[^>]*\/>전자/)
-  })
   it('shows panel CTA label and internal destination controls', () => {
     const html = renderToStaticMarkup(<ResourceEditor kind="panels" />)
     expect(html).toContain('이동 버튼 문구')
