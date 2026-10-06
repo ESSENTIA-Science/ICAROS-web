@@ -1,0 +1,7 @@
+:global(html):has(.home) {
+  scroll-snap-type: y mandatory;
+}
+
+.home > section {
+  scroll-snap-align: start;
+}

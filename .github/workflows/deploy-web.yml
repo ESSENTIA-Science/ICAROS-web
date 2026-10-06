@@ -1,0 +1,51 @@
+name: Deploy public Web to AWS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-web.yml'
+      - 'apps/web/**'
+      - 'infra/g/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: icaros-public-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AWS_REGION: ap-northeast-2
+      ICAROS_G_BUCKET: ${{ vars.ICAROS_G_BUCKET }}
+      ICAROS_G_STACK: ${{ vars.ICAROS_G_STACK }}
+      ICAROS_PUBLIC_DISTRIBUTION_ID: ${{ vars.ICAROS_PUBLIC_DISTRIBUTION_ID }}
+      ICAROS_WEB_FUNCTION: ${{ vars.ICAROS_WEB_FUNCTION }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck && npm run lint && npm run test
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.ICAROS_WEB_DEPLOY_ROLE_ARN }}
+          aws-region: ap-northeast-2
+      - run: python3 infra/g/deploy.py prepare
+      - name: Build OpenNext from the verified snapshot
+        run: |
+          rm -rf apps/web/.open-next
+          cd apps/web
+          ../../node_modules/.bin/open-next build
+      - run: python3 infra/g/deploy.py publish

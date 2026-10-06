@@ -1,0 +1,26 @@
+name: Check workspace
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - refactor/**
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test
+      - run: npm ci --prefix infra/aws
+      - run: node --test infra/cloudfront/release-router.test.mjs infra/aws/*.test.mjs
+      - run: npm run build:web:fixture
+      - run: npm run build -w @icaros/cms

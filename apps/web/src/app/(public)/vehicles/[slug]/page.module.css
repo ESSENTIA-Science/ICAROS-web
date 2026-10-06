@@ -1,0 +1,233 @@
+/**
+ * 상세는 그림과 본문을 나란히 놓고, 갤러리는 그 아래 별도 행에 둔다.
+ * 데스크톱의 기체 프레임은 모델·사진 구분 없이 정보 그리드 높이를 채운다.
+ */
+.sheet {
+  display: grid;
+  /* 하위 페이지의 헤더는 문서 흐름에 놓여 있으므로 높이 예산에서 제외한다. */
+  padding-block: var(--sp-5) var(--sp-8);
+  min-height: calc(100svh - var(--nav-h));
+}
+
+/**
+ * 1행 = 돌아가기, 2행 = 본문, 3행 = 갤러리(있는 경우).
+ * 엔진과 갤러리가 길어지면 페이지가 자연스럽게 늘어난다.
+ */
+.shell {
+  display: grid;
+  grid-template-rows: auto auto;
+  /* 갤러리가 없을 때 .sheet 의 min-height 여백이 두 auto 행에 배분되지 않게 한다. */
+  align-content: start;
+  gap: var(--sp-6);
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--tr-mono);
+  color: var(--fg-muted);
+  transition: var(--t-color);
+  justify-self: start;
+}
+.back:hover { color: var(--fg); }
+
+/**
+ * 2열 × 2행. **DOM 순서와 시각 배치를 분리한다.**
+ * 마크업은 읽는 순서대로다 — 제목(h1) → 그림 → 설명·제원·엔진.
+ * 배치는 그림을 왼쪽 열에 세우고, 제목과 본문을 오른쪽 열 위아래로 나눈다.
+ *
+ * `order` 가 아니라 명시 배치(grid-column/grid-row)를 쓴 이유:
+ *  ① `order` 로는 `.head` 와 `.main` 을 오른쪽 한 열의 두 행으로 쪼개면서
+ *     `.aside` 를 그 두 행에 걸치게 할 수 없다. 이건 1차원 재정렬이 아니라 2차원 배치다.
+ *  ② 명시 배치는 소스 순서를 바꿔도 그대로다.
+ *  ③ 3D 모델이 있으면 왼쪽 열에 확대 버튼이 들어간다. DOM 순서에서 제목 뒤,
+ *     설명 앞에 있으므로 읽는 순서와 탭 순서를 유지한다.
+ *
+ * 그림 열은 상한 너비를 두고 높이만 정보 내용에 맞춘다.
+ */
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 26rem) minmax(0, 1fr);
+  /* 2행의 최소값은 `auto`(= .main 의 min-content)다. `minmax(0, 1fr)` 로 바꾸지 말 것 —
+     엔진 12개짜리 표가 행 밖으로 흘러 푸터를 덮는다. 그때는 페이지가 길어지는 편이 옳다. */
+  grid-template-rows: auto 1fr;
+  column-gap: var(--sp-8);
+  row-gap: var(--sp-6);
+}
+
+.head {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  gap: var(--sp-2);
+}
+
+/**
+ * 왼쪽 열 — 그림. 두 행에 걸쳐 정보 그리드 높이를 채운다.
+ */
+.aside {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  min-height: 0;
+}
+
+/**
+ * 3D 트랙의 마운트 지점(`[data-rocket-viewer]`). 여기에 캔버스를 만들지 않는다.
+ * 박스 크기는 이 CSS 가 정하므로 나중에 캔버스가 붙어도 레이아웃이 흔들리지 않고,
+ * 포스터(`[data-viewer-poster]`)는 WebGL 을 쓸 수 없는 클라이언트의 폴백으로 남는다 (C12).
+ *
+ * 데스크톱에서는 모델·사진 모두 정보 그리드 높이를 채운다.
+ */
+.stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  background: var(--bg-sunken);
+  border: 1px solid var(--rule);
+}
+
+/* 측정된 영역이라는 표시 — 1px L 자 코너 마크 둘. 시그널 컬러의 허용 용법(작은 마크) */
+.stage::before,
+.stage::after {
+  content: '';
+  position: absolute;
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 0 solid var(--sig);
+  pointer-events: none;
+}
+.stage::before {
+  top: var(--sp-3);
+  left: var(--sp-3);
+  border-top-width: 1px;
+  border-left-width: 1px;
+}
+.stage::after {
+  right: var(--sp-3);
+  bottom: var(--sp-3);
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+}
+
+.poster { position: absolute; inset: 0; }
+
+.img { object-fit: contain; padding: var(--sp-5); }
+
+.noImage {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(135deg, transparent 0 8px, var(--rule) 8px 9px);
+}
+
+/**
+ * 오른쪽 열 아래 — 설명 · 제원 · 엔진.
+ * 여기는 `min-height` 를 0 으로 누르지 않는다. 표가 길어지면 행이, 그리고 페이지가 자라야 한다.
+ */
+.main {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+/* h1 기본값(--fs-h1, 최대 7.2rem)은 한 화면 안에서 제목 하나가 가져가기엔 너무 큰 높이다 */
+.title {
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  letter-spacing: var(--tr-h2);
+}
+/* globals 의 `:lang(ko)` 가드와 특이도가 동률이라 모듈이 이긴다 — 한글 이름이면 되돌린다 */
+.title:lang(ko) { letter-spacing: 0; }
+
+.block { flex: 0 0 auto; }
+.overviewBlock { flex: 0 0 auto; }
+.overviewBlock .overviewProse { width: 100%; max-width: none; }
+
+.blockTitle {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  font-weight: 400;
+  line-height: var(--lh-mono);
+  letter-spacing: var(--tr-mono);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  padding-bottom: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+/**
+ * ── 짧은 뷰포트 1단 (노트북) ──
+ * 폭이 아니라 **높이**로 건다. 기본 조판은 707px(엔진 3개)을 요구하는데 그건
+ * 1366×768·1440×900 노트북에서 브라우저 크롬을 빼면 바로 넘치는 값이다.
+ * 여백·표 행간을 한 단계씩 조여 3개 604px · 5개 699px 로 내린다.
+ *
+ * `min-width: 900px` 로 묶는 이유: 한 화면 조판 자체가 900 이상에서만 성립한다.
+ * 이 가드가 없으면 가로로 돌린 폰(844×390)이 이 블록을 함께 밟는다.
+ */
+@media (min-width: 900px) and (max-height: 899px) {
+  .sheet { padding-block: var(--sp-4) var(--sp-6); }
+  .shell { gap: var(--sp-5); }
+  .grid { row-gap: var(--sp-5); }
+  .main { gap: var(--sp-5); }
+  .blockTitle { padding-bottom: var(--sp-2); margin-bottom: var(--sp-3); }
+}
+
+/**
+ * ── 짧은 뷰포트 2단 ──
+ * 1366×768 에서 크롬을 빼면 뷰포트가 650px 안팎이다. 1단(604/699)으로는 엔진 5개가 넘친다.
+ * 제목을 h2 → h3 로 내리고 남은 여백을 마저 조여 3개 504px · 5개 583px 로 만든다.
+ * 여기까지다 — 엔진 7개 이상은 그대로 넘치게 둔다(억지로 한 화면에 넣으면 표가 못 읽힌다).
+ */
+@media (min-width: 900px) and (max-height: 767px) {
+  .sheet { padding-block: var(--sp-3) var(--sp-5); }
+  .shell { gap: var(--sp-4); }
+  .grid { row-gap: var(--sp-4); }
+  .main { gap: var(--sp-4); }
+  .head { gap: var(--sp-1); }
+  .title { font-size: var(--fs-h3); line-height: var(--lh-h3); letter-spacing: var(--tr-h3); }
+}
+
+/**
+ * 좁은 화면에서는 한 화면을 강제하지 않는다 — 세로로 흐르게 두고 여백만 줄인다.
+ * (예전 블록 간격은 --section-pad-l = 6.4rem 이었고, 지금은 .main 의 gap 3.2rem 이다.)
+ */
+@media (max-width: 899px) {
+  .sheet {
+    min-height: 0;
+    padding-block: var(--sp-5) var(--section-pad);
+  }
+  /* 1열로 접는다. 명시 배치를 풀지 않으면 `grid-column: 2` 가 암시 열을 하나 더 만든다. */
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    gap: var(--sp-7);
+  }
+  .head,
+  .aside,
+  .main {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .aside { gap: var(--sp-5); }
+  /* 한 열이 되면 그림이 폭을 다 먹어 높이가 두 배가 된다 — 폭을 눌러 화면 안에 붙잡는다 */
+  .stage { flex: 0 0 auto; width: min(26rem, 62%); aspect-ratio: 3 / 5; }
+
+}
+
+@media (max-width: 599px) {
+  .sheet { padding-block: var(--sp-4) var(--section-pad); }
+  .shell { gap: var(--sp-5); }
+  .main { gap: var(--sp-5); }
+  .img { padding: var(--sp-4); }
+}
+
+.gallery { margin-top: var(--sp-8); }

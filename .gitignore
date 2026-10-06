@@ -1,6 +1,8 @@
 node_modules/
+__pycache__/
 dist/
 .next/
+.open-next/
 out/
 *.tsbuildinfo
 next-env.d.ts
@@ -32,6 +34,7 @@ certs/
 asset/
 .legacy-archive-tmp/
 .legacy-import-tmp/
+apps/web/public/assets/local-media/
 
 # infra:sg-plan 산출물 — 계정 식별자와 대역 목록이 들어간다. 커밋하지 않는다
 sg-plan.json

@@ -1,0 +1,63 @@
+.tabs {
+  border-bottom: 1px solid var(--rule);
+}
+
+/* 분류 줄이 시리즈 줄보다 위에 있다는 것을 괘선 세기로도 말한다.
+   두 줄이 같은 굵기면 어느 쪽이 어느 쪽을 좁히는지 순서로만 추측하게 된다. */
+.tabs[data-level='primary'] {
+  border-bottom-color: var(--rule-strong);
+}
+
+/* 분류 줄이 없을 때(분류가 하나뿐이라 TabNav 가 null 을 돌려줄 때) 시리즈 줄이 위로 붙는다.
+   인접 형제 선택자라 그 판정을 컴포넌트가 아니라 DOM 이 한다 — 조건이 코드 두 곳으로 갈리지 않는다. */
+.tabs + .tabs {
+  margin-top: var(--sp-5);
+}
+
+.list {
+  display: flex;
+  gap: var(--sp-6);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.list::-webkit-scrollbar { display: none; }
+
+.tab {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding-block: var(--sp-4);
+  white-space: nowrap;
+  font-family: var(--ff-mono);
+  font-size: var(--fs-mono);
+  letter-spacing: var(--tr-mono);
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  /* 활성 표시선을 여기에 겹쳐 두면 탭 사이 간격이 흔들리지 않는다 */
+  border-bottom: 1px solid transparent;
+  margin-bottom: -1px;
+  transition: var(--t-color);
+}
+
+.tabs[data-level='primary'] .tab {
+  font-size: var(--fs-body);
+}
+
+.tab:hover { color: var(--fg); }
+
+.tab[data-active] {
+  color: var(--fg);
+  /* 시그널 컬러는 1px 마크로만 쓴다 — 텍스트에는 올리지 않는다 */
+  border-bottom-color: var(--sig);
+}
+
+/**
+ * 라벨은 CMS 값이라 한국어가 들어올 수 있다. globals.css 의 `:lang(ko)` 가드는
+ * 같은 특이도(0,1,0)에 소스 순서가 뒤인 이 모듈에 진다 — 그래서 여기서 다시 적는다.
+ * 한글은 자간 0.02em 을 넘으면 깨지고, uppercase 는 한글에서 아무것도 하지 않는다.
+ */
+.label:lang(ko) {
+  font-family: var(--ff-body);
+  letter-spacing: 0.02em;
+  text-transform: none;
+}

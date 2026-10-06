@@ -1,0 +1,31 @@
+.section { min-height: 70vh; padding-block: var(--section-pad-xl); }
+.inner { display: grid; justify-items: start; gap: var(--sp-6); max-width: var(--measure); }
+.back { font-size: var(--fs-body-s); color: var(--fg-muted); }
+.back:hover { color: var(--fg); text-decoration: underline; }
+.header { display: grid; gap: var(--sp-3); }
+.title { font-size: var(--fs-h2); line-height: var(--lh-h2); }
+.summary { color: var(--fg-muted); }
+.facts { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-block: 1px solid var(--rule-strong); }
+.facts div { display: grid; gap: var(--sp-2); padding-block: var(--sp-4); }
+.facts dt { font-size: var(--fs-body-s); color: var(--fg-muted); }
+.facts dd { margin: 0; overflow-wrap: anywhere; }
+.prose { width: 100%; display: grid; gap: var(--sp-5); font-size: var(--fs-article); line-height: var(--lh-body); color: var(--fg-muted); overflow-wrap: anywhere; }
+.prose :global(p > img) { display: block; max-width: 100%; height: auto; margin-inline: auto; }
+.prose :global(h2), .prose :global(h3) { color: var(--fg); }
+.prose :global(a) { text-decoration: underline; text-underline-offset: var(--sp-1); }
+.prose :global(ul), .prose :global(ol) { padding-left: var(--sp-5); }
+.prose :global(ul) { list-style: disc; }
+.prose :global(ol) { list-style: decimal; }
+.prose :global(blockquote) { border-left: 2px solid var(--rule-strong); padding-left: var(--sp-4); }
+.prose :global(pre), .prose :global(table) { max-width: 100%; overflow-x: auto; }
+.prose :global(table) { display: block; width: 100%; }
+.prose :global(th), .prose :global(td) { padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--rule); text-align: left; white-space: nowrap; }
+.prose :global(th) { color: var(--fg); border-bottom-color: var(--rule-strong); }
+@media (max-width: 699px) { .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 768px) {
+  .section .inner { max-width: none; padding-inline: 15%; }
+}
+
+@media (min-width: 1200px) {
+  .prose :global(p > img) { max-width: clamp(50%, calc(100% - 100vw + 1200px), 100%); }
+}

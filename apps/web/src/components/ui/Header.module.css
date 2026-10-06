@@ -1,0 +1,142 @@
+/* 하위 페이지에서는 문서 흐름에 놓고, 사진 패널이 있는 홈에서만 화면 위에 고정한다. */
+.nav {
+  position: relative;
+  z-index: var(--z-nav);
+  color: var(--fg);
+  background: var(--n-950);
+  border-bottom: 1px solid transparent;
+  transition:
+    background var(--dur-3) var(--ease-out),
+    border-color var(--dur-3) var(--ease-out),
+    backdrop-filter var(--dur-3) var(--ease-out);
+}
+
+.nav[data-home] {
+  position: fixed;
+  inset: 0 0 auto 0;
+  background: transparent;
+}
+
+/* 스크롤이 첫 화면을 벗어나면 앉는다. 사진 밝기를 알 수 없는 상태로 계속 떠 있으면
+   흰 글자가 언젠가 밝은 사진 위에 놓인다. */
+.nav[data-home][data-scrolled] {
+  background: color-mix(in srgb, var(--n-950) 32%, transparent);
+  backdrop-filter: var(--blur-glass);
+  border-bottom-color: var(--rule);
+}
+
+/* 맨 위에서는 사진이 어떤 밝기일지 알 수 없다. 얇은 그늘을 깔아 글자를 보장한다 —
+   띠가 아니라 그라디언트라 화면을 자르지 않는다. */
+.nav[data-home]::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 -3.2rem 0;
+  z-index: -1;
+  background: linear-gradient(to bottom, rgb(0 0 0 / 0.55) 0%, rgb(0 0 0 / 0) 100%);
+  pointer-events: none;
+  transition: opacity var(--dur-3) var(--ease-out);
+}
+.nav[data-home][data-scrolled]::before { opacity: 0; }
+
+.inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-5);
+  height: var(--nav-h);
+  width: 100%;
+  padding-inline: var(--page-pad);
+}
+
+/* 클릭 영역을 내비 높이(--nav-h)까지 늘린다. 워드마크 높이(2rem)에 딱 맞추면 72px 짜리 내비
+   안에서 실제로 눌리는 띠가 20px 뿐이고 위아래 26px 은 눌러도 아무 일이 없다 —
+   "로고를 눌러도 메인으로 안 간다"는 보고가 여기서 나온다. 손가락 기준으로는 WCAG 2.5.8 의
+   24×24 CSS px 도 넘지 못한다. 늘리는 것은 히트 영역뿐이고 워드마크 위치는 그대로다. */
+.brand {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+}
+.wordmark { height: 2rem; width: auto; }
+
+.list { display: flex; align-items: center; gap: var(--sp-7); }
+
+/* 사진 위에서도 메뉴를 바로 읽을 수 있도록 글자 크기와 대비를 확보한다. */
+.link {
+  position: relative;
+  font-family: var(--ff-mono);
+  font-size: 1.3rem;
+  line-height: 1;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--n-0);
+  transition: color var(--dur-2) var(--ease-out);
+  padding-block: var(--sp-3);
+}
+.link:hover { color: var(--n-0); }
+
+/* 밑줄이 글자 폭만큼 자라 붙는다. 색만 바꾸는 것보다 손이 닿았다는 느낌이 정확하다. */
+.link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--sp-2);
+  height: 1px;
+  background: currentColor;
+  scale: 0 1;
+  transform-origin: left;
+  transition: scale var(--dur-2) var(--ease-out);
+}
+.link:hover::after { scale: 1 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .link::after { transition: none; }
+}
+
+.toggle { display: none; }
+
+@media (max-width: 767px) {
+  .toggle {
+    display: grid;
+    gap: 0.5rem;
+    padding: var(--sp-2);
+    margin-right: calc(var(--sp-2) * -1);
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+  .bar {
+    display: block;
+    width: 2.2rem;
+    height: 1px;
+    background: var(--fg);
+  }
+
+  .menu {
+    position: fixed;
+    inset: var(--nav-h) 0 auto 0;
+    z-index: var(--z-overlay);
+    background: var(--n-950);
+    border-bottom: 1px solid var(--rule);
+    /* 닫힘 상태를 display:none 이 아니라 가시성으로 다뤄 포커스가 새지 않게 한다 */
+    visibility: hidden;
+    opacity: 0;
+    /* visibility 는 전환이 끝날 때까지 `visible` 로 남는다 — 닫는 동안 투명해진 패널이
+       그 시간만큼 아래의 탭을 먹는다. 포인터는 전환 없이 즉시 끊어 둔다. */
+    pointer-events: none;
+    transform: translateY(-0.8rem);
+    transition: opacity var(--dur-2) var(--ease-out),
+      transform var(--dur-2) var(--ease-out), visibility var(--dur-2);
+  }
+  .menuOpen { visibility: visible; opacity: 1; transform: none; pointer-events: auto; }
+
+  .list {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: var(--sp-4) var(--page-pad) var(--sp-7);
+  }
+  .list li + li { border-top: 1px solid var(--rule); }
+  .link { display: block; padding-block: var(--sp-5); font-size: var(--fs-body); }
+}

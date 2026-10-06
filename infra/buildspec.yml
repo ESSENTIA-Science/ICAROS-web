@@ -1,0 +1,12 @@
+version: 0.2
+env:
+  shell: bash
+phases:
+  build:
+    commands:
+      - |
+        set -euo pipefail
+        export PATH="/usr/local/n/versions/node/${NODE_22_VERSION}/bin:$PATH"
+        node -e 'if (process.versions.node.split(".")[0] !== "22") process.exit(1)'
+        npm ci
+        node infra/release/build.mjs
