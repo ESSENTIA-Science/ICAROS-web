@@ -21,4 +21,6 @@ Web은 현재 G pointer의 snapshot을 SHA-256으로 검증한 뒤 빌드한다.
 
 운영 DB에는 `member_departments`가 없어 다중 부서 API 코드를 배포하면 CMS 멤버 읽기가 실패한다. 이번 코드 배포에는 운영 DB 호환 API와 CMS UI를 사용한다. 다중 부서 기능은 migration 적용·검증·브라우저 E2E를 거쳐 별도 배포해야 한다.
 
-Vercel 프로젝트와 Git 배포 연결은 AWS 코드 배포·CMS 게시·브라우저 검증이 모두 끝난 뒤 제거한다. `legacy/`의 과거 소스와 문서는 이력 검토용이며 운영 배포 대상이 아니다.
+Web·CMS·API의 첫 GitHub Actions 운영 배포를 검증했다. Vercel Git 배포 연결과 `icaros-web` 프로젝트 전체를 제거했으며 `icaros.kr`와 `www.icaros.kr`는 AWS CloudFront에서 응답한다. `legacy/`의 과거 소스와 문서는 이력 검토용이며 운영 배포 대상이 아니다.
+
+Web 사전 검증의 게시물 페이지 수는 공개 화면과 같은 `visiblePosts` 결과를 사용한다. 원본과 ESSENTIA 게시글이 내용까지 일치하는 경우 공개 목록에서는 한 건으로 세므로, 필터 전 snapshot 건수로 페이지를 계산하면 존재하지 않는 페이지를 검사하게 된다.
