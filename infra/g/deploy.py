@@ -79,6 +79,7 @@ def archive(source, target, wrapper=None):
         if wrapper:
             (copy / 'index.mjs').rename(copy / 'open-next-entry.mjs')
             shutil.copy2(wrapper, copy / 'index.mjs')
+            shutil.copy2(ROOT / 'apps/web/src/lib/posts/visible.mjs', copy / 'visible-posts.mjs')
         with zipfile.ZipFile(target, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=7) as result:
             for item in copy.rglob('*'):
                 if item.is_symlink():

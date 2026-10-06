@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { handler as openNextHandler } from './open-next-entry.mjs'
+import { visiblePosts } from './visible-posts.mjs'
 
 const bucket = process.env.ICAROS_SNAPSHOT_BUCKET
 const pointerKey = process.env.ICAROS_POINTER_KEY ?? 'control/pointer.json'
@@ -52,7 +53,7 @@ async function preflight(event, context) {
   for (const vehicle of data.vehicles) paths.add(`/vehicles/${vehicle.slug}/`)
   for (const mission of data.missions) paths.add(`/missions/${mission.id}/`)
   for (const post of data.posts) paths.add(post.source === 'legacy' ? `/posts/legacy/${post.slug}/` : `/posts/${post.id}/`)
-  for (let page = 2; page <= Math.ceil(data.posts.length / 15); page++) paths.add(`/posts/page/${page}/`)
+  for (let page = 2; page <= Math.ceil(visiblePosts(data.posts).length / 15); page++) paths.add(`/posts/page/${page}/`)
   for (const path of paths) {
     const request = { version: '2.0', routeKey: '$default', rawPath: path, rawQueryString: '',
       headers: { host: 'icaros.kr' }, requestContext: { http: { method: 'GET', path, protocol: 'HTTP/1.1',
