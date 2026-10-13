@@ -45,9 +45,11 @@ try {
   assert.ok(await rendered(350) > 0, 'detail autoRotate should resume')
   const requests = (await read()).requests
   const detailNetworkRequests = glbNetworkRequests
-  await patch({ active: false }); await page.waitForTimeout(100)
+  await page.evaluate(() => window.graphicsHarness.setDelayed({ active: false }, 200))
+  await page.waitForFunction(() => window.graphicsHarness.committedActive === false)
   assert.equal(await rendered(350), 0, 'inactive detail must not render')
   await patch({ active: true })
+  await page.waitForFunction(() => window.graphicsHarness.committedActive === true)
   assert.ok(await rendered(350) > 0, 'detail reentry should resume')
   assert.equal((await read()).requests, requests, 'active transitions must not reload the GLB')
   assert.equal(glbNetworkRequests, detailNetworkRequests, 'reentry must not dispatch another network request')

@@ -68,6 +68,7 @@ let setOptions
 function Fixture() {
   const [options, update] = useState({ mode: 'detail', active: true, reduced: false, autoRotate: true, enabledMobile: false, src: DEFAULT_STAGE.src })
   useEffect(() => { setOptions = update }, [update])
+  useEffect(() => { window.graphicsHarness.committedActive = options.active }, [options.active])
   if (options.mode === 'none') return null
   if (options.mode === 'detail-stage') return React.createElement(ModelStage, { src: options.src, label: 'synthetic-stage' }, React.createElement('div', null, 'synthetic poster'))
   if (options.mode === 'stage') return React.createElement(HeroStage, { src: options.src, autoRotate: options.autoRotate, enabledMobile: options.enabledMobile })
@@ -79,6 +80,7 @@ root.render(React.createElement(Fixture))
 window.graphicsHarness = {
   stats,
   set: options => setOptions(previous => ({ ...previous, ...options })),
+  setDelayed: (options, milliseconds) => setTimeout(() => setOptions(previous => ({ ...previous, ...options })), milliseconds),
   texturedModel,
   reset: () => { for (const key of Object.keys(stats)) stats[key] = key === 'memories' ? [] : 0 },
   unmount: () => root.unmount(),
