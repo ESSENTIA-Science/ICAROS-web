@@ -35,9 +35,27 @@ try {
   browser = await chromium.launch({ executablePath, headless: true })
   await check('mobile menu 390→844 releases scroll and focus trap', async () => {
     const page = await newPage({ viewport: { width: 390, height: 844 } })
+    let navigations = 0
+    page.on('framenavigated', frame => { if (frame === page.mainFrame()) navigations++ })
+    const browserErrors = []
+    page.on('pageerror', error => browserErrors.push(`pageerror: ${error.message}`))
+    page.on('console', message => { if (message.type() === 'error') browserErrors.push(`console: ${message.text()}`) })
+    page.on('requestfailed', request => browserErrors.push(`requestfailed: ${request.url()} ${request.failure()?.errorText}`))
+    page.on('response', response => { if (response.status() >= 400) browserErrors.push(`response: ${response.status()} ${response.url()}`) })
     await page.goto(`${base}?hydrateDelay=5500`)
     // The first Vite/React hydration can take longer on a cold CI runner.
-    await page.waitForSelector('html[data-test-hydrated]', { timeout: 15000 })
+    try { await page.waitForSelector('html[data-test-hydrated]', { timeout: 15000 }) }
+    catch (error) {
+      const state = await page.evaluate(() => ({
+        readyState: document.readyState,
+        scriptLoaded: document.documentElement.dataset.testScriptLoaded ?? null,
+        hydrated: document.documentElement.dataset.testHydrated ?? null,
+        enhanced: document.querySelector('header')?.hasAttribute('data-enhanced') ?? null,
+        scripts: Array.from(document.scripts, script => script.src),
+        resources: performance.getEntriesByType('resource').slice(-12).map(entry => entry.name),
+      })).catch(inspectError => ({ inspectionError: String(inspectError) }))
+      throw new Error(`${error.message}\nHydration diagnostics: ${JSON.stringify({ state, navigations, browserErrors: browserErrors.slice(0, 12), serverOutput: serverOutput.slice(-2000) })}`)
+    }
     await page.getByRole('button', { name: '메뉴 열기' }).click()
     assert.equal(await page.evaluate(() => document.body.style.overflow), 'hidden')
     await page.setViewportSize({ width: 844, height: 390 })

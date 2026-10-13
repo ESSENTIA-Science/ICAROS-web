@@ -39,6 +39,7 @@ export function App() {
   </>
 }
 if (typeof document !== 'undefined') {
+  document.documentElement.dataset.testScriptLoaded = 'true'
   const hydrate = () => hydrateRoot(document.getElementById('root')!, <App />)
   const delay = Number(new URLSearchParams(location.search).get('hydrateDelay'))
   if (delay > 0) setTimeout(hydrate, delay)
