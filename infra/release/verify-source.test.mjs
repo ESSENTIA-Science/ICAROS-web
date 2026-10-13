@@ -23,7 +23,7 @@ test('checks run on the approved clean SHA and include egress before returning v
     ['audit', '--omit=dev', '--audit-level=moderate'],
     ['run', 'test:infra'],
     ['run', 'build:web:fixture'], ['run', 'build', '--workspace', '@icaros/cms'],
-    ['run', 'test:browser'],
+    ['run', 'test:browser'], ['run', 'build:g:fixture'], ['run', 'test:g:runtime'],
   ])
   assert.ok(calls.some(([file, args]) => file === 'npm' && args.join(' ') === 'run test:infra'))
   assert.equal(calls.filter(([, args]) => args[0] === 'rev-parse').length, 2)
@@ -33,6 +33,13 @@ test('a failed required check stops subsequent checks and never returns a verifi
   const calls = []
   assert.throws(() => verifySource(revision, execute(calls, 'run lint')), /synthetic check failed/)
   assert.equal(calls.some(([, args]) => args.join(' ') === 'run test'), false)
+})
+
+test('a failed G runtime gate blocks the final source approval', () => {
+  const calls = []
+  assert.throws(() => verifySource(revision, execute(calls, 'run test:g:runtime')), /synthetic check failed/)
+  assert.equal(calls.at(-1)[1].join(' '), 'run test:g:runtime')
+  assert.equal(calls.filter(([, args]) => args[0] === 'rev-parse').length, 1)
 })
 
 test('wrong revision, modified tracked files, and untracked source all block verification', () => {

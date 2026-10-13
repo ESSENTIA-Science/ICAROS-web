@@ -24,5 +24,7 @@ export function verifySource(revision, run = execute) {
   run('npm', ['run', 'build:web:fixture'])
   run('npm', ['run', 'build', '--workspace', '@icaros/cms'])
   run('npm', ['run', 'test:browser'])
+  run('npm', ['run', 'build:g:fixture'])
+  run('npm', ['run', 'test:g:runtime'])
   return assertSource(revision, run)
 }
