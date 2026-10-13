@@ -83,6 +83,63 @@ async function setup(state, tab = 'members') {
 }
 const updates = state => state.calls.filter(call => call.method === 'PUT' && !call.pathname.endsWith('/order'))
 try {
+  await scenario('department leader choices save and clear independently across departments without changing members', async () => {
+    const state = fixture(); state.records.members[0].departmentIds = [first, second]
+    state.records.members.push({ id: '55555555-5555-4555-8555-555555555555', version: 'v1', name: 'unassigned', departmentIds: [], published: false })
+    const { page, context, errors } = await setup(state, 'departments')
+    await page.locator('.listItems button').first().click()
+    const select = page.getByRole('combobox', { name: '맨 위에 표시할 멤버', exact: true })
+    await select.waitFor({ timeout: 3000 })
+    assert.equal(await select.locator('option').count(), 2)
+    await select.selectOption(memberId); await waitUntil(() => state.records.departments[0].leadMemberId === memberId)
+    await page.locator('.listItems button').nth(1).click(); await select.selectOption(memberId)
+    await waitUntil(() => state.records.departments[1].leadMemberId === memberId)
+    await page.locator('.listItems button').first().click(); await select.selectOption('')
+    await waitUntil(() => state.records.departments[0].leadMemberId === null)
+    assert.equal(state.records.departments[1].leadMemberId, memberId)
+    assert.equal(state.calls.filter(call => call.method === 'PUT' && call.pathname.includes('/members/')).length, 0)
+    await page.getByRole('button', { name: '새 항목', exact: true }).click()
+    assert.equal(await select.locator('option').count(), 1); assert.equal(await select.inputValue(), '')
+    assert.deepEqual(errors, []); await context.close()
+  })
+  await scenario('department leader refresh performs zero writes and locks choice during latest GET', async () => {
+    const state = fixture(); const { page, context } = await setup(state, 'departments')
+    await page.locator('.listItems button').first().click()
+    const select = page.getByRole('combobox', { name: '맨 위에 표시할 멤버', exact: true })
+    state.records.departments[0] = { ...state.records.departments[0], leadMemberId: memberId, version: 'v2' }
+    let release
+    state.readGate = { kind: 'departments', promise: new Promise(resolve => { release = resolve }) }
+    await page.getByRole('button', { name: '새로고침', exact: true }).click()
+    await waitUntil(() => state.readGate.used); assert.equal(await select.isDisabled(), true)
+    release(); await waitUntil(async () => await select.inputValue() === memberId && !await select.isDisabled())
+    assert.equal(updates(state).length, 0)
+    state.records.members[0].departmentIds = []
+    state.records.departments[0] = { ...state.records.departments[0], leadMemberId: null, version: 'v3' }
+    await page.getByRole('button', { name: '새로고침', exact: true }).click()
+    await waitUntil(async () => await select.locator('option').count() === 1 && !await select.isDisabled())
+    assert.equal(await select.inputValue(), ''); assert.equal(updates(state).length, 0); await context.close()
+  })
+  await scenario('department leader conflicts preserve the local selection and explicitly reapply or discard latest', async () => {
+    for (const reapply of [true, false]) {
+      const state = fixture(); const { page, context } = await setup(state, 'departments')
+      await page.locator('.listItems button').first().click()
+      const select = page.getByRole('combobox', { name: '맨 위에 표시할 멤버', exact: true })
+      state.records.departments[0] = { ...state.records.departments[0], leadMemberId: null, version: 'v2' }
+      await select.selectOption(memberId); await page.getByText('다른 관리자의 변경과 충돌했습니다.', { exact: false }).waitFor()
+      assert.equal(await select.inputValue(), memberId)
+      const count = updates(state).length
+      await page.getByRole('button', { name: '내 수정본 유지하며 최신본 확인', exact: true }).click()
+      await page.getByRole('button', { name: reapply ? '내 수정본 재적용' : '수정본 폐기', exact: true }).click()
+      if (reapply) {
+        await waitUntil(() => state.records.departments[0].leadMemberId === memberId)
+        assert.equal(updates(state).at(-1).version, 'v2')
+      } else {
+        await waitUntil(async () => await select.inputValue() === '')
+        await page.getByRole('button', { name: '새로고침', exact: true }).click(); assert.equal(updates(state).length, count)
+      }
+      await context.close()
+    }
+  })
   await scenario('member and mission no-edit refresh issues zero PUT and shows latest administrator values', async () => {
     for (const kind of ['members', 'missions']) {
       const state = fixture(); const { page, context, errors } = await setup(state, kind)

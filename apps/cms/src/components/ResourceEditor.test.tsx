@@ -156,3 +156,21 @@ describe('ResourceEditor autosave', () => {
     expect(resourcesApi.update).toHaveBeenNthCalledWith(2, 'departments', active.id, 'v2', { name: '새 이름' })
   })
 })
+
+it('offers only assigned members as department leader options and saves clearing the selection', async () => {
+  vi.stubEnv('VITE_ICAROS_DEMO', '0')
+  const active = { id: 'department', version: 'v1', name: '부서', leadMemberId: 'assigned' }
+  state.overrides.set(0, [active]); state.overrides.set(1, active.id)
+  state.overrides.set(2, { ...active, leadMemberId: null }); state.overrides.set(3, false)
+  state.overrides.set(10, [{ id: 'assigned', name: '배정 멤버', departmentIds: [active.id] }, { id: 'other', name: '다른 멤버', departmentIds: [] }])
+  vi.mocked(resourcesApi.update).mockResolvedValue({ ...active, leadMemberId: null, version: 'v2' })
+  try {
+    const html = renderToStaticMarkup(<ResourceEditor kind="departments" />)
+    expect(html).toContain('맨 위에 표시할 멤버')
+    expect(html).toContain('미지정 (기존 순서)')
+    expect(html).toContain('<option value="assigned">배정 멤버</option>')
+    expect(html).not.toContain('<option value="other">')
+    await vi.mocked(useAutosave).mock.calls.at(-1)![0].save()
+    expect(resourcesApi.update).toHaveBeenCalledWith('departments', 'department', 'v1', { name: '부서', leadMemberId: null })
+  } finally { vi.unstubAllEnvs() }
+})

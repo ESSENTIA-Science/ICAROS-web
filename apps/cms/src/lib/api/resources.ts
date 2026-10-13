@@ -86,7 +86,7 @@ async function request(path: string, init: RequestInit = {}): Promise<unknown> {
 }
 
 const outbound: Record<string, Partial<Record<keyof ResourceRecord, string>>> = {
-  departments: { name: 'name', position: 'sortOrder' },
+  departments: { name: 'name', position: 'sortOrder', leadMemberId: 'leadMemberId' },
   members: { name: 'name', description: 'bioMd', departmentIds: 'departmentIds', position: 'sortOrder', imageMediaId: 'imageMediaId', published: 'published' },
   'vehicle-types': { name: 'label', position: 'sortOrder' },
   'vehicle-series': { name: 'label', description: 'descriptionMd', typeId: 'typeId', position: 'sortOrder' },
@@ -98,6 +98,7 @@ const outbound: Record<string, Partial<Record<keyof ResourceRecord, string>>> = 
 
 function invalid(message: string): never { throw new ApiError(message, 400) }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 function record(kind: ResourceKind, value: unknown): ResourceRecord {
   if (!value || typeof value !== 'object' || !('id' in value) || typeof value.id !== 'string' ||
       !('version' in value) || typeof value.version !== 'string') {
@@ -106,6 +107,11 @@ function record(kind: ResourceKind, value: unknown): ResourceRecord {
   const result = { ...value } as Record<string, unknown>
   if (kind === 'vehicles' && (!Array.isArray(result.galleryMediaIds) || result.galleryMediaIds.some(id => typeof id !== 'string'))) {
     throw new ApiError('기체 갤러리 응답 형식이 올바르지 않습니다.', 200)
+  }
+  if (kind === 'departments') {
+    if (result.leadMemberId === undefined) result.leadMemberId = null
+    if (result.leadMemberId !== null && (typeof result.leadMemberId !== 'string' || !UUID.test(result.leadMemberId)))
+      throw new ApiError('부서 우선 표시 멤버 응답 형식이 올바르지 않습니다.', 200)
   }
   if (kind === 'members') {
     if (result.departmentIds === undefined) result.departmentIds = result.departmentId ? [result.departmentId] : []
@@ -130,6 +136,7 @@ function fields(kind: ResourceKind, draft: Partial<ResourceRecord>): Record<stri
     if (kind === 'panels' && key === 'mediaKind') continue
     const target = mapping[key as keyof ResourceRecord]
     if (!target) return invalid(`지원하지 않는 입력 필드: ${key}`)
+    if (kind === 'departments' && key === 'leadMemberId' && value !== null && (typeof value !== 'string' || !UUID.test(value))) return invalid('부서 우선 표시 멤버 형식이 올바르지 않습니다.')
     if (kind === 'vehicles' && key === 'galleryMediaIds') {
       if (!Array.isArray(value) || value.some(id => typeof id !== 'string')) return invalid('갤러리 형식이 올바르지 않습니다.')
       result[target] = value

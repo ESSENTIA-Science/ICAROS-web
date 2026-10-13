@@ -104,3 +104,21 @@ it('measures repeated feed work using the current synthetic count and a growth f
   })
   console.log('Synthetic feed measurement (single process; not a full Next build):', JSON.stringify(samples))
 })
+
+import { groupBySquad, type MemberDto } from '../src/app/(public)/member/_data'
+it('moves only each department leader first while preserving all remaining order and roles', () => {
+  const a = '123e4567-e89b-42d3-a456-426614174010', b = '123e4567-e89b-42d3-a456-426614174011'
+  const member = (id: string, departmentIds: string[]): MemberDto => ({ id, name: id, role: 'original', squad: null, departmentIds, school: null, bioMd: null, imageSrc: '', hasPhoto: false })
+  const people = [member('first', [a, b]), member('second', [a, b]), member('third', [a, b]), member('none', [])]
+  const departments = [{ id: b, name: 'B', sortOrder: 1, leadMemberId: 'second' }, { id: a, name: 'A', sortOrder: 0, leadMemberId: 'third' }]
+  const groups = groupBySquad(people, departments)
+  expect(groups.map(group => [group.squad, group.members.map(person => person.id)])).toEqual([
+    ['A', ['third', 'first', 'second']], ['B', ['second', 'first', 'third']], [null, ['none']],
+  ])
+  expect(people.map(person => person.id)).toEqual(['first', 'second', 'third', 'none'])
+  expect(groups.flatMap(group => group.members).every(person => person.role === 'original')).toBe(true)
+  for (const leadMemberId of [null, undefined, 'missing']) {
+    expect(groupBySquad(people, [{ ...departments[1]!, leadMemberId }])[0]!.members.map(person => person.id)).toEqual(['first', 'second', 'third'])
+  }
+  expect(groupBySquad(people.filter(person => person.id !== 'third'), departments)[0]!.members.map(person => person.id)).toEqual(['first', 'second'])
+})

@@ -83,7 +83,7 @@ describe('resources API DTO adapter', () => {
     expect(JSON.parse(fetcher.mock.calls[1]?.[1].body)).toEqual({ ctaLabel: '기록 보기', ctaHref: '/posts' })
   })
   it.each([
-    ['departments', 'departments', { id, version, name: '추진', sortOrder: 2 }, { id, version, name: '추진', position: 2 }],
+    ['departments', 'departments', { id, version, name: '추진', sortOrder: 2 }, { id, version, name: '추진', position: 2, leadMemberId: null }],
     ['members', 'members', { id, version, name: '김', bioMd: '소개', sortOrder: 3 }, { id, version, name: '김', description: '소개', position: 3, departmentIds: [] }],
     ['vehicle-types', 'vehicle-types', { id: 'rocket', version, label: '로켓', sortOrder: 4 }, { id: 'rocket', version, name: '로켓', position: 4 }],
     ['vehicle-series', 'rocket-series', { id: 'icx', version, label: 'ICX', descriptionMd: '설명', sortOrder: 5 }, { id: 'icx', version, name: 'ICX', description: '설명', position: 5 }],
@@ -262,4 +262,25 @@ it('presigns member photos with member privacy intent before any entity attachme
   vi.stubGlobal('fetch', fetcher)
   await resourcesApi.upload(new File(['RIFFportrait'], 'portrait.webp', { type: 'image/webp' }), 'member')
   expect(JSON.parse(fetcher.mock.calls[0]![1].body)).toMatchObject({ kind: 'member', contentType: 'image/webp' })
+})
+
+it('normalizes older department DTOs and writes nullable leaders with the current version', async () => {
+  const fetcher = fetchWith([{ id, version, name: '부서', sortOrder: 0 }])
+  await expect(resourcesApi.list('departments')).resolves.toEqual([{ id, version, name: '부서', position: 0, leadMemberId: null }])
+  for (const leadMemberId of [mediaId, null]) {
+    fetcher.mockResolvedValueOnce(reply({ id, version: nextVersion, name: '부서', sortOrder: 0, leadMemberId }))
+    await expect(resourcesApi.update('departments', id, version, { leadMemberId })).resolves.toMatchObject({ leadMemberId })
+    const call = fetcher.mock.calls.at(-1)!
+    expect(JSON.parse(call[1].body)).toEqual({ leadMemberId })
+    expect(call[1].headers['If-Match']).toBe(version)
+  }
+})
+it('rejects malformed department leader DTOs and writes before sending', async () => {
+  for (const leadMemberId of ['', 'not-uuid', 3, [], {}]) {
+    fetchWith([{ id, version, name: '부서', leadMemberId }])
+    await expect(resourcesApi.list('departments')).rejects.toThrow()
+    const fetcher = fetchWith(receipt)
+    await expect(resourcesApi.update('departments', id, version, { leadMemberId } as never)).rejects.toThrow()
+    expect(fetcher).not.toHaveBeenCalled()
+  }
 })

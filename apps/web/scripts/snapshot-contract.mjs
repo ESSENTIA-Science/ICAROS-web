@@ -211,6 +211,14 @@ export function validateSnapshot(data, publicRoot = resolve(process.cwd(), 'publ
       throw new Error(`Member ${member.id} has non-public media`)
     }
   }
+  for (const department of data.departments ?? []) {
+    const leader = department.leadMemberId
+    if (leader === undefined || leader === null) continue
+    if (typeof leader !== 'string' || !UUID.test(leader) || !data.members.some(member =>
+      member.id.toLowerCase() === leader.toLowerCase() && member.departmentIds?.some(id => id.toLowerCase() === department.id.toLowerCase()))) {
+      throw new Error(`Invalid department leader: ${department.id}`)
+    }
+  }
   for (const url of Object.values(data.media)) if (!isPublicUrl(url, publicRoot) && !isPrivateMemberUrl(url)) throw new Error('Non-public media URL')
 }
 

@@ -77,6 +77,12 @@ function download(media, destination) {
   })
 }
 
+export function localDepartmentSnapshot(department, publishedMembers) {
+  const leader = department.lead_member_id
+  return { id: department.id, name: department.name, sortOrder: department.sort_order,
+    leadMemberId: leader && publishedMembers.some(member => member.id === leader && member.department_ids?.includes(department.id)) ? leader : null }
+}
+
 export function localMemberSnapshot(member, portrait, urlFor) {
   return {
     id: member.id, name: member.name, role: member.role, squad: member.public_squad,
@@ -156,7 +162,10 @@ async function main() {
     const vehicles = await query('select * from icaros.rockets where published order by sort_order, id')
     const models = await query('select rocket_id, glb_media_id, poster_media_id from icaros.rocket_models where rocket_id is not null and glb_media_id is not null order by updated_at desc, id')
     const engines = await query('select * from icaros.rocket_engines order by sort_order, id')
-    const departments = await query('select id, name, sort_order from icaros.departments order by sort_order, id')
+    const departments = await query(`select d.id, d.name, d.sort_order,
+      (select md.member_id from icaros.member_departments md join icaros.members m on m.id = md.member_id
+        where md.department_id = d.id and md.is_lead and m.published) as lead_member_id
+      from icaros.departments d order by d.sort_order, d.id`)
     const memberPhotos = await query('select image_media_id from icaros.members where image_media_id is not null')
     const members = await query(`select m.*, coalesce(d.name, m.squad) as public_squad,
       coalesce((select array_agg(assigned.name order by md.position)
@@ -329,7 +338,7 @@ async function main() {
         published: true,
       }
     }),
-    departments: rows.departments.map(department => ({ id: department.id, name: department.name, sortOrder: department.sort_order })),
+    departments: rows.departments.map(department => localDepartmentSnapshot(department, rows.members)),
     members: rows.members.map((member) => {
       const portrait = memberPortraitMedia(member, mediaById)
       return localMemberSnapshot(member, portrait, id => portraitUrls[id.toLowerCase()])

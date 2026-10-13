@@ -537,9 +537,11 @@ test('department catalogs and ID assignments validate while older snapshots rema
 })
 
 test('member department ID groups render catalog order and current section labels', () => {
-  const data = clone(); data.departments = departments
+  const data = clone(); const leadId = '123e4567-e89b-42d3-a456-426614174020'
+  data.departments = departments.map(department => ({ ...department, leadMemberId: leadId }))
   const bioId = '123e4567-e89b-42d3-a456-426614174012'; const sha = 'c'.repeat(64)
-  data.members = [{ ...data.members[0], id: 'multi', name: '합성 복수 부원', role: '저장된 역할',
+  data.members = [{ ...data.members[0], id: '123e4567-e89b-42d3-a456-426614174021', name: '기존 첫 부원', departmentIds: [departmentA, departmentB] },
+    { ...data.members[0], id: leadId, name: '합성 복수 부원', role: '저장된 역할',
     squad: '이전 부서명', squads: ['이전 부서명'], departmentIds: [departmentB, departmentA],
     bioMd: `텍스트 소개 ![승인 사진](/api/media/${bioId})` },
     { ...data.members[0], id: 'unassigned', name: '합성 미배정 부원', departmentIds: [] }]
@@ -559,8 +561,9 @@ test('member department ID groups render catalog order and current section label
     const headings = [...html.matchAll(/<h2[^>]*>([^<]+)<\/h2>/g)].map(match => match[1])
     assert.deepEqual(headings, ['전자부', '제작부', '기타'])
     const cards = [...html.matchAll(/<li\b[^>]*data-reveal-item=""[^>]*>[\s\S]*?<\/li>/g)].map(match => match[0])
-    assert.equal(cards.length, 3)
-    assert.match(cards[0], /전자부/); assert.match(cards[1], /제작부/); assert.match(cards[2], /기타/)
+    assert.equal(cards.length, 5)
+    assert.match(cards[0], /전자부/); assert.match(cards[0], /합성 복수 부원/); assert.match(cards[1], /기존 첫 부원/)
+    assert.match(cards[2], /제작부/); assert.match(cards[2], /합성 복수 부원/); assert.match(cards[3], /기존 첫 부원/); assert.match(cards[4], /기타/)
     assert.doesNotMatch(html, /저장된 역할|이전 부서명|승인 사진|\/api\/media\//)
     assert.match(html, /텍스트 소개/)
   } finally { rmSync(temp, { force: true }) }
@@ -644,4 +647,32 @@ test('video panels support legacy null dimensions but reject supplied invalid di
     const data = clone(); data.panels[0].mime = 'video/mp4'; data.panels[0].width = value
     assert.throws(() => validateSnapshot(data, publicRoot), /panel/)
   }
+})
+
+test('department leaders must reference a visible member assigned to that exact department', () => {
+  const leader = '123e4567-e89b-42d3-a456-426614174020'
+  const data = clone(); data.departments = [{ ...departments[1], leadMemberId: leader }]
+  data.members = [{ ...data.members[0], id: leader, departmentIds: [departmentA] }]
+  assert.doesNotThrow(() => validateSnapshot(data, publicRoot))
+  for (const leadMemberId of ['not-uuid', '', 3, [], '123e4567-e89b-42d3-a456-426614174099']) {
+    const invalid = structuredClone(data); invalid.departments[0].leadMemberId = leadMemberId
+    assert.throws(() => validateSnapshot(invalid, publicRoot), /department.*lead/i)
+  }
+  const detached = structuredClone(data); detached.members[0].departmentIds = []
+  assert.throws(() => validateSnapshot(detached, publicRoot), /department.*lead/i)
+  const hidden = structuredClone(data); hidden.members = []
+  assert.throws(() => validateSnapshot(hidden, publicRoot), /department.*lead/i)
+  data.departments[0].leadMemberId = null
+  assert.doesNotThrow(() => validateSnapshot(data, publicRoot))
+  delete data.departments[0].leadMemberId
+  assert.doesNotThrow(() => validateSnapshot(data, publicRoot))
+})
+test('local department projection exports visible assigned leaders and clears nonvisible leaders', async () => {
+  const { localDepartmentSnapshot } = await import('../../../scripts/build-web-local.mjs')
+  const leader = '123e4567-e89b-42d3-a456-426614174020'
+  const row = { id: departmentA, name: '전자부', sort_order: 0, lead_member_id: leader }
+  const visible = [{ id: leader, department_ids: [departmentA] }]
+  assert.deepEqual(localDepartmentSnapshot(row, visible), { id: departmentA, name: '전자부', sortOrder: 0, leadMemberId: leader })
+  for (const members of [[], [{ id: leader, department_ids: [departmentB] }]]) assert.equal(localDepartmentSnapshot(row, members).leadMemberId, null)
+  assert.equal(localDepartmentSnapshot({ ...row, lead_member_id: null }, visible).leadMemberId, null)
 })

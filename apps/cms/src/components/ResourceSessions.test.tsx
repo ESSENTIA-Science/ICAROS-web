@@ -150,7 +150,7 @@ it('starts a fresh create attempt after a previously created selection is remove
   change(tree, '', 'new name'); render(view)
   vi.mocked(resourcesApi.update).mockResolvedValue({ ...department, id: 'new', name: 'new name', version: 'v2' })
   await h.autosave!.save()
-  expect(resourcesApi.create).toHaveBeenLastCalledWith('departments', { name: 'new name' }, 'client-id')
+  expect(resourcesApi.create).toHaveBeenLastCalledWith('departments', { name: 'new name', leadMemberId: null }, 'client-id')
 })
 
 it.each(['departments', 'missions'] as const)('locks editable controls and selection during delayed %s refresh', async kind => {

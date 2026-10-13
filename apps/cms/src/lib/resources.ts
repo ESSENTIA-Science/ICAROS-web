@@ -4,6 +4,7 @@ export type ResourceRecord = {
   version: string
   name?: string
   title?: string
+  leadMemberId?: string | null
   departmentId?: string | null
   departmentIds?: string[]
   typeId?: string | null
@@ -50,7 +51,7 @@ export const resourceTabs: { id: ResourceKind; label: string; description: strin
   { id: 'missions', label: '미션', description: '발사 기록과 결과를 편집합니다.' },
 ]
 export const fields: Partial<Record<ResourceKind, (keyof ResourceRecord)[]>> = {
-  departments: ['name', 'position'],
+  departments: ['name', 'position', 'leadMemberId'],
   members: ['name', 'departmentIds', 'imageMediaId', 'description', 'published'],
   vehicles: ['name', 'typeId', 'seriesId', 'description', 'galleryMediaIds', 'modelMediaId', 'position', 'published'],
   'vehicle-types': ['name', 'position'],

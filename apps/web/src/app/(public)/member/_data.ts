@@ -2,7 +2,7 @@ import 'server-only'
 import { getSnapshot } from '@/lib/content/snapshot'
 export const MEMBER_PLACEHOLDER = '/assets/img/member/profile.webp'
 export type MemberDto = { id: string; name: string; role: string | null; squad: string | null; squads?: string[]; departmentIds?: string[]; school: string | null; bioMd: string | null; imageSrc: string; hasPhoto: boolean }
-export type Department = { id: string; name: string; sortOrder: number }
+export type Department = { id: string; name: string; sortOrder: number; leadMemberId?: string | null }
 export const listDepartmentsSafe = async (): Promise<readonly Department[]> => getSnapshot().departments ?? []
 export type MemberSquad = { squad: string | null; key: string; members: MemberDto[] }
 export const listMembersSafe = async (): Promise<MemberDto[]> => getSnapshot().members
@@ -19,6 +19,11 @@ export function groupBySquad(members: readonly MemberDto[], departments: readonl
       if (bucket) bucket.push(member)
       else groups.set(squad, [member])
     }
+  }
+  for (const department of catalog) {
+    const list = groups.get(department.id.toLowerCase())
+    const index = list?.findIndex(member => member.id.toLowerCase() === department.leadMemberId?.toLowerCase()) ?? -1
+    if (list && index > 0) list.unshift(...list.splice(index, 1))
   }
   const order = new Map(catalog.map((department, index) => [department.id.toLowerCase(), index]))
   const out: MemberSquad[] = [...groups].sort(([a], [b]) =>
