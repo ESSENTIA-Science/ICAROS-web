@@ -38,4 +38,9 @@ export function App() {
     <footer className={footer.footer} data-theme="dark"><p id="footer-copy" className={footer.copy}>Fixture copyright</p><a id="after-nav" href="#after-gallery">본문 링크</a></footer>
   </>
 }
-if (typeof document !== 'undefined') hydrateRoot(document.getElementById('root')!, <App />)
+if (typeof document !== 'undefined') {
+  const hydrate = () => hydrateRoot(document.getElementById('root')!, <App />)
+  const delay = Number(new URLSearchParams(location.search).get('hydrateDelay'))
+  if (delay > 0) setTimeout(hydrate, delay)
+  else hydrate()
+}

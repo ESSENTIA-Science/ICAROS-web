@@ -35,8 +35,9 @@ try {
   browser = await chromium.launch({ executablePath, headless: true })
   await check('mobile menu 390→844 releases scroll and focus trap', async () => {
     const page = await newPage({ viewport: { width: 390, height: 844 } })
-    await page.goto(base)
-    await page.waitForSelector('html[data-test-hydrated]')
+    await page.goto(`${base}?hydrateDelay=5500`)
+    // The first Vite/React hydration can take longer on a cold CI runner.
+    await page.waitForSelector('html[data-test-hydrated]', { timeout: 15000 })
     await page.getByRole('button', { name: '메뉴 열기' }).click()
     assert.equal(await page.evaluate(() => document.body.style.overflow), 'hidden')
     await page.setViewportSize({ width: 844, height: 390 })
