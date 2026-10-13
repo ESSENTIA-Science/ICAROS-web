@@ -83,14 +83,15 @@ test('runtime handler reads its packaged manifest token and disables SDK retries
   }
 })
 
-test('only revalidated success, redirects, and not-found responses acknowledge messages', async () => {
-  for (const status of [200, 307, 308, 404]) {
+test('only revalidated terminal success and not-found responses acknowledge messages', async () => {
+  for (const status of [200, 404]) {
     const handler = await create({ client: { send: async () => success(status) } })
     assert.deepEqual(await handler({ Records: [record('one')] }), { batchItemFailures: [] })
   }
-  for (const response of [success(500), { StatusCode: 403 }, { StatusCode: 202 },
+  for (const response of [success(307), success(308), success(500), { StatusCode: 403 }, { StatusCode: 202 },
     { ...success(200), FunctionError: 'Unhandled' }, { StatusCode: 200, Payload: Buffer.from('invalid-json') },
-    { StatusCode: 200, Payload: encoded(null) }, { StatusCode: 200, Payload: encoded({ statusCode: 200, headers: { 'x-nextjs-cache': 'HIT' } }) }]) {
+    { StatusCode: 200, Payload: encoded(null) },
+    { StatusCode: 200, Payload: encoded({ statusCode: 200, headers: { 'x-nextjs-cache': 'REVALIDATED', 'X-Nextjs-Cache': 'REVALIDATED' } }) }, { StatusCode: 200, Payload: encoded({ statusCode: 200, headers: { 'x-nextjs-cache': 'HIT' } }) }]) {
     const handler = await create({ client: { send: async () => response } })
     assert.deepEqual(await handler({ Records: [record('one')] }), { batchItemFailures: [{ itemIdentifier: 'one' }] })
   }
@@ -153,4 +154,140 @@ test('Invoke receives a bounded abort signal and exhausted Lambda budget does no
   const exhausted = await create({ client: { send: async () => assert.fail('budget exhausted') } })
   assert.deepEqual(await exhausted({ Records: [record('one')] }, { getRemainingTimeInMillis: () => 1000 }),
     { batchItemFailures: [{ itemIdentifier: 'one' }] })
+})
+
+test('canonical 308 follows one signed Invoke to the same Lambda with the current preview token', async () => {
+  const requests = []
+  const client = new LambdaClient({ region: 'ap-northeast-2', maxAttempts: 1,
+    credentials: { accessKeyId: 'SYNTHETICACCESSKEY', secretAccessKey: 'synthetic-only-secret' },
+    requestHandler: { async handle(request) {
+      requests.push(request)
+      assert.ok(request.headers.authorization?.startsWith('AWS4-HMAC-SHA256 '))
+      const response = requests.length === 1
+        ? { statusCode: 308, headers: { Location: '/member/' } }
+        : { statusCode: 200, headers: { 'X-Nextjs-Cache': 'REVALIDATED' } }
+      return { response: { statusCode: 200, headers: { 'content-type': 'application/json' }, body: encoded(response) } }
+    } },
+  })
+  try {
+    const handler = await create({ client })
+    assert.deepEqual(await handler({ Records: [record('one', { host: 'public.example.test', url: '/member' })] }), { batchItemFailures: [] })
+    assert.equal(requests.length, 2)
+    for (const request of requests) {
+      assert.equal(request.path, '/2015-03-31/functions/synthetic-web/invocations')
+      const event = JSON.parse(Buffer.from(request.body).toString())
+      assert.equal(event.requestContext.http.method, 'HEAD')
+      assert.equal(event.headers.host, 'public.example.test')
+      assert.deepEqual(Object.keys(event.headers).filter(name => name.toLowerCase() === 'x-prerender-revalidate'), ['x-prerender-revalidate'])
+      assert.equal(event.headers['x-prerender-revalidate'], 'current-build-secret')
+      assert.equal(event.headers['x-isr'], '1')
+    }
+    assert.deepEqual(requests.map(request => JSON.parse(Buffer.from(request.body).toString()).rawPath), ['/member', '/member/'])
+  } finally { client.destroy() }
+})
+
+test('same-host absolute and root-relative redirects preserve their path and encoded query', async () => {
+  for (const [statusCode, location] of [[307, '/member/?page=2&value=x%3Fy'], [308, 'https://public.example.test/member/?page=2&value=x%3Fy']]) {
+    const requests = []
+    const handler = await create({ client: { send: async command => {
+      assert.equal(command.input.FunctionName, 'synthetic-web')
+      requests.push(JSON.parse(Buffer.from(command.input.Payload).toString()))
+      return requests.length === 1 ? { StatusCode: 200, Payload: encoded({ statusCode, headers: { lOcAtIoN: location } }) } : success(200)
+    } } })
+    assert.deepEqual(await handler({ Records: [record('one', { host: 'public.example.test', url: '/member?page=2&value=x%3Fy' })] }), { batchItemFailures: [] })
+    assert.equal(requests.length, 2)
+    assert.equal(requests[1].rawPath, '/member/')
+    assert.equal(requests[1].requestContext.http.path, '/member/')
+    assert.equal(requests[1].rawQueryString, 'page=2&value=x%3Fy')
+  }
+})
+
+test('unsafe redirect locations fail before a second Invoke and preserve FIFO unprocessed IDs', async () => {
+  const locations = [undefined, null, 7, '', '//evil.example.test/member/', 'https://evil.example.test/member/',
+    'http://public.example.test/member/', 'https://public.example.test:8443/member/', 'https://user@public.example.test/member/',
+    'https://public.example.test/foo/../member/', 'https://public.example.test/%2e%2e/member/',
+    '/foo/../member/', '/%2e%2e/member/', '/foo%3f/../member/', '/%2f%2fevil.example.test/', '/%5cmember/', '/member/\r\n',
+    '/member/%0a', '/member/#fragment', '/member/?value=%zz', '/member/?value=%0a', '/member/']
+  for (const location of locations) {
+    let calls = 0
+    const handler = await create({ client: { send: async () => {
+      calls++
+      return { StatusCode: 200, Payload: encoded({ statusCode: 308, headers: { location } }) }
+    } } })
+    assert.deepEqual(await handler({ Records: [record('bad'), record('later')] }),
+      { batchItemFailures: [{ itemIdentifier: 'bad' }, { itemIdentifier: 'later' }] })
+    assert.equal(calls, 1)
+  }
+})
+
+test('a second redirect or unsupported redirect status never produces a third Invoke or acknowledges', async () => {
+  for (const second of [
+    { statusCode: 308, headers: { location: '/member' } },
+    { statusCode: 307, headers: { location: '/vehicles/', 'x-nextjs-cache': 'REVALIDATED' } },
+    { statusCode: 302, headers: { location: '/vehicles/' } },
+  ]) {
+    let calls = 0
+    const handler = await create({ client: { send: async () => ({ StatusCode: 200, Payload: encoded(++calls === 1
+      ? { statusCode: 308, headers: { location: '/member/' } } : second) }) } })
+    assert.deepEqual(await handler({ Records: [record('bad', { host: 'public.example.test', url: '/member' }), record('later')] }),
+      { batchItemFailures: [{ itemIdentifier: 'bad' }, { itemIdentifier: 'later' }] })
+    assert.equal(calls, 2)
+  }
+  for (const statusCode of [301, 302, 303]) {
+    let calls = 0
+    const handler = await create({ client: { send: async () => { calls++; return { StatusCode: 200, Payload: encoded({ statusCode, headers: { location: '/member/' } }) } } } })
+    assert.deepEqual(await handler({ Records: [record('one')] }), { batchItemFailures: [{ itemIdentifier: 'one' }] })
+    assert.equal(calls, 1)
+  }
+})
+
+test('redirect follow checks remaining context and the total deadline before its second Invoke', async () => {
+  let calls = 0, remaining = 10000
+  const handler = await create({ client: { send: async () => {
+    calls++; remaining = 1000
+    return { StatusCode: 200, Payload: encoded({ statusCode: 308, headers: { location: '/member/' } }) }
+  } } })
+  assert.deepEqual(await handler({ Records: [record('one', { host: 'public.example.test', url: '/member' })] }, { getRemainingTimeInMillis: () => remaining }),
+    { batchItemFailures: [{ itemIdentifier: 'one' }] })
+  assert.equal(calls, 1)
+  const originalNow = Date.now
+  let now = originalNow(), elapsedCalls = 0
+  Date.now = () => now
+  try {
+    const elapsed = await create({ client: { send: async () => {
+      elapsedCalls++; now += 29000
+      return { StatusCode: 200, Payload: encoded({ statusCode: 308, headers: { location: '/member/' } }) }
+    } } })
+    assert.deepEqual(await elapsed({ Records: [record('one', { host: 'public.example.test', url: '/member' })] }, { getRemainingTimeInMillis: () => 30000 }),
+      { batchItemFailures: [{ itemIdentifier: 'one' }] })
+    assert.equal(elapsedCalls, 1)
+  } finally { Date.now = originalNow }
+})
+
+
+test('ambiguous Location headers are rejected without following', async () => {
+  let calls = 0
+  const handler = await create({ client: { send: async () => {
+    calls++
+    return { StatusCode: 200, Payload: encoded({ statusCode: 308, headers: { location: '/member/', Location: '/vehicles/' } }) }
+  } } })
+  assert.deepEqual(await handler({ Records: [record('one', { host: 'public.example.test', url: '/member' })] }),
+    { batchItemFailures: [{ itemIdentifier: 'one' }] })
+  assert.equal(calls, 1)
+})
+
+test('second Invoke uses the reduced remaining context budget', async () => {
+  let remaining = 10000
+  const signals = []
+  const handler = await create({ client: { send: async (_, options) => {
+    signals.push(options.abortSignal)
+    remaining = 1005
+    return signals.length === 1 ? { StatusCode: 200, Payload: encoded({ statusCode: 308, headers: { location: '/member/' } }) } : success(200)
+  } } })
+  assert.deepEqual(await handler({ Records: [record('one', { host: 'public.example.test', url: '/member' })] }, { getRemainingTimeInMillis: () => remaining }),
+    { batchItemFailures: [] })
+  assert.equal(signals.length, 2)
+  await new Promise(resolve => setTimeout(resolve, 10))
+  assert.equal(signals[0].aborted, false)
+  assert.equal(signals[1].aborted, true)
 })

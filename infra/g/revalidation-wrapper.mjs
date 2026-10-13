@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda'
 
-const allowedStatuses = new Set([200, 307, 308, 404])
+const allowedStatuses = new Set([200, 404])
 
 function headEvent(record, previewModeId) {
   if (typeof record.body !== 'string' || Buffer.byteLength(record.body) > 16384) throw new Error('Invalid message')
@@ -28,6 +28,7 @@ export function createRevalidationHandler({ functionName, previewModeId,
   return async (event, context) => {
     if (!Array.isArray(event?.Records) || event.Records.some(record =>
       !record || typeof record.messageId !== 'string' || !record.messageId)) throw new Error('Invalid SQS event')
+    const deadline = Date.now() + (context?.getRemainingTimeInMillis?.() ?? 30000) - 1000
     for (let index = 0; index < event.Records.length; index++) {
       let stage = 'configuration'
       try {
@@ -35,19 +36,39 @@ export function createRevalidationHandler({ functionName, previewModeId,
           throw new Error('Missing revalidation configuration')
         }
         stage = 'message'
-        const request = headEvent(event.Records[index], previewModeId)
-        stage = 'invoke'
-        const timeout = Math.min(25000, (context?.getRemainingTimeInMillis?.() ?? 30000) - 1000)
-        if (timeout <= 0) throw new Error('Insufficient invocation time')
-        // SDK signs a fixed Lambda target; the queued host never selects an outbound destination.
-        const result = await client.send(new InvokeCommand({ FunctionName: functionName,
-          InvocationType: 'RequestResponse', Payload: Buffer.from(JSON.stringify(request)) }),
-        { abortSignal: AbortSignal.timeout(timeout) })
-        stage = 'response'
-        if (result.StatusCode !== 200 || result.FunctionError || !result.Payload) throw new Error('Invoke failed')
-        const response = JSON.parse(Buffer.from(result.Payload).toString('utf8'))
-        const cacheHeader = Object.entries(response?.headers ?? {}).find(([key]) => key.toLowerCase() === 'x-nextjs-cache')?.[1]
-        if (!allowedStatuses.has(response?.statusCode) || cacheHeader !== 'REVALIDATED') throw new Error('Revalidation failed')
+        let request = headEvent(event.Records[index], previewModeId)
+        for (let redirects = 0; ; redirects++) {
+          stage = 'invoke'
+          const timeout = Math.min(25000, deadline - Date.now(), (context?.getRemainingTimeInMillis?.() ?? 30000) - 1000)
+          if (timeout <= 0) throw new Error('Insufficient invocation time')
+          // SDK signs a fixed Lambda target; the queued host never selects an outbound destination.
+          const result = await client.send(new InvokeCommand({ FunctionName: functionName,
+            InvocationType: 'RequestResponse', Payload: Buffer.from(JSON.stringify(request)) }),
+          { abortSignal: AbortSignal.timeout(timeout) })
+          stage = 'response'
+          if (result.StatusCode !== 200 || result.FunctionError || !result.Payload) throw new Error('Invoke failed')
+          const response = JSON.parse(Buffer.from(result.Payload).toString('utf8'))
+          const header = name => {
+            const values = Object.entries(response?.headers ?? {}).filter(([key]) => key.toLowerCase() === name)
+            return values.length === 1 && typeof values[0][1] === 'string' ? values[0][1] : undefined
+          }
+          if (response?.statusCode === 307 || response?.statusCode === 308) {
+            stage = 'redirect'
+            if (redirects !== 0) throw new Error('Redirect limit exceeded')
+            let location = header('location')
+            if (!location?.startsWith('/')) {
+              const absolute = /^https:\/\/([^/?#]+)(\/[^#]*)?$/i.exec(location ?? '')
+              if (!absolute || absolute[1].toLowerCase() !== request.headers.host.toLowerCase()) throw new Error('Invalid redirect host')
+              location = absolute[2] ?? '/'
+            }
+            const next = headEvent({ body: JSON.stringify({ host: request.headers.host, url: location }) }, previewModeId)
+            if (next.rawPath === request.rawPath && next.rawQueryString === request.rawQueryString) throw new Error('Redirect loop')
+            request = next
+            continue
+          }
+          if (!allowedStatuses.has(response?.statusCode) || header('x-nextjs-cache') !== 'REVALIDATED') throw new Error('Revalidation failed')
+          break
+        }
       } catch {
         const batchItemFailures = event.Records.slice(index).map(record => ({ itemIdentifier: record.messageId }))
         console.warn('G revalidation batch failed', { failed: batchItemFailures.length, stage })
