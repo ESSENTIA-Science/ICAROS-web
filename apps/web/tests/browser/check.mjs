@@ -17,7 +17,10 @@ let browser
 const results = []
 async function check(name, run) {
   try { const detail = await run(); results.push({ name, status: 'PASS', detail }) }
-  catch (error) { results.push({ name, status: 'FAIL', error: error.message }) }
+  catch (error) {
+    results.push({ name, status: 'FAIL', error: error.message,
+      fixture: { exitCode: server.exitCode, signalCode: server.signalCode, output: serverOutput.slice(-4000) } })
+  }
 }
 async function newPage(options) {
   const page = await browser.newPage(options)
