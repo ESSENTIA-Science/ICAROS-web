@@ -174,7 +174,11 @@ for (const uploadIntent of [undefined, 'member'] as const) {
           return Response.json({ ok: true, data: { mediaId: '11111111-1111-4111-8111-111111111111', uploadUrl: 'https://upload.example/synthetic', contentType: 'image/webp' } })
         }
         if (path === 'https://upload.example/synthetic') { paths.push('PUT'); return new Response(null, { status: 200 }) }
-        if (path === '/api/admin/media/confirm') { paths.push('confirm'); return Response.json({ ok: true, data: { id: '11111111-1111-4111-8111-111111111111' } }) }
+        if (path === '/api/admin/media/confirm') {
+          paths.push('confirm')
+          if (galleryUpload) await new Promise(resolve => setTimeout(resolve, 100))
+          return Response.json({ ok: true, data: { id: '11111111-1111-4111-8111-111111111111' } })
+        }
         return originalFetch(input, init)
       }
       try {
@@ -183,10 +187,11 @@ for (const uploadIntent of [undefined, 'member'] as const) {
         const transfer = new DataTransfer()
         transfer.items.add(new File(['RIFFsynthetic-webp'], 'member.webp', { type: 'image/webp' }))
         input.files = transfer.files
-        await act(async () => {
-          input.dispatchEvent(new Event('change', { bubbles: true }))
-          for (let attempt = 0; attempt < 50 && !paths.includes('confirm'); attempt++) await new Promise(resolve => setTimeout(resolve, 10))
-        })
+        await act(async () => input.dispatchEvent(new Event('change', { bubbles: true })))
+        for (let attempt = 0; attempt < 100; attempt++) {
+          if (paths.includes('confirm') && (galleryUpload ? !button('본문에 적용').disabled : current.includes('/api/media/11111111-1111-4111-8111-111111111111'))) break
+          await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)) })
+        }
         assert(paths.join(',') === 'presign,PUT,confirm', `Incomplete upload protocol: ${paths}`)
         assert((presign as Record<string, unknown> | null)?.kind === (uploadIntent ?? 'media'), `Missing privacy intent: ${JSON.stringify(presign)}`)
         if (galleryUpload) await act(async () => button('본문에 적용').click())
