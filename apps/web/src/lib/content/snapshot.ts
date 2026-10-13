@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { loadAndValidateSnapshot } from '../../../scripts/snapshot-contract.mjs'
 import type { LandingPanel } from '@/lib/panels'
 import type { RocketDetail } from '@/app/(public)/vehicles/_data'
-import type { MemberDto } from '@/app/(public)/member/_data'
+import type { Department, MemberDto } from '@/app/(public)/member/_data'
 import type { VehicleTaxonomy } from '@/components/rocket/series'
 import { postPageCount } from '@/lib/posts/pagination'
 import { visiblePosts } from '@/lib/posts/visible.mjs'
@@ -43,6 +43,7 @@ export type Snapshot = {
   panels: (LandingPanel & { published: true })[]
   taxonomy: VehicleTaxonomy
   vehicles: (RocketDetail & { published: true })[]
+  departments?: Department[]
   members: (MemberDto & { published: true })[]
   posts: PublishedPost[]
   missions: PublishedMission[]
@@ -55,7 +56,16 @@ export function getSnapshot(): Snapshot {
   let pointerValue: string | undefined
   let snapshotPath = process.env.ICAROS_SNAPSHOT
   let snapshotSha = process.env.ICAROS_SNAPSHOT_SHA256
-  if (process.env.ICAROS_RUNTIME_POINTER) {
+  const scopedSha = (globalThis as typeof globalThis & {
+    __icarosSnapshotContext?: { getStore(): string | undefined }
+  }).__icarosSnapshotContext?.getStore()
+  if (scopedSha !== undefined) {
+    if (!/^[a-f0-9]{64}$/.test(scopedSha)) throw new Error('Invalid request snapshot SHA')
+    pointerValue = scopedSha
+    if (cached && cachedPointer === pointerValue) return cached
+    snapshotPath = `/tmp/icaros-snapshot-${scopedSha}.json`
+    snapshotSha = scopedSha
+  } else if (process.env.ICAROS_RUNTIME_POINTER) {
     pointerValue = readFileSync(process.env.ICAROS_RUNTIME_POINTER, 'utf8')
     if (cached && cachedPointer === pointerValue) return cached
     const selected = JSON.parse(pointerValue) as { path: string; sha256: string }
@@ -64,13 +74,6 @@ export function getSnapshot(): Snapshot {
     // Remember the pointer only after the selected snapshot passes validation.
   } else if (cached) return cached
   const data = loadAndValidateSnapshot(snapshotPath, snapshotSha) as Snapshot
-  for (const post of data.posts) {
-    if (typeof post.displayDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(post.displayDate) ||
-      Number.isNaN(Date.parse(`${post.displayDate}T00:00:00Z`)) ||
-      new Date(`${post.displayDate}T00:00:00Z`).toISOString().slice(0, 10) !== post.displayDate) {
-      throw new Error(`Post ${post.id} has invalid displayDate`)
-    }
-  }
   cached = data
   cachedPointer = pointerValue
   return data

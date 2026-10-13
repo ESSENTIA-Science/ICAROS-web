@@ -255,7 +255,7 @@ export default async function HomePage() {
 
       {/* 사진 패널이 먼저다. 랜딩이 무엇을 하는 팀인지 사진으로 말하고, 자료는 하위 페이지가 진다. */}
       {panels.map((panel, i) => (
-        <Panel key={panel.id} panel={panel} first={i === 0} />
+        <Panel key={panel.id} panel={panel} first={i === 0} supportAvailable={rendered.some(section => section.id === 'donate')} />
       ))}
 
       {/* index 는 배열 위치가 아니라 살아남은 순서다 — 화면에 나가지는 않지만 구멍은 만들지 않는다 */}

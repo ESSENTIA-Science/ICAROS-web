@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic'
 import Image from 'next/image'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
-import { probe, type BlockReason } from './capabilities'
+import { isMobileViewport, probe, subscribeMobileViewport, type BlockReason } from './capabilities'
 import { DEFAULT_STAGE, type StageConfig } from './config'
 import { trackRect } from './rect'
 import styles from './HeroStage.module.css'
@@ -87,6 +87,7 @@ export default function HeroStage(props: HeroStageProps) {
    * 실제 값은 하이드레이션 즉시 반영되고, 그 전에는 어차피 3D 가 마운트되지 않았다.
    */
   const reduced = useSyncExternalStore(subscribeReducedMotion, readReducedMotion, () => false)
+  const mobile = useSyncExternalStore(subscribeMobileViewport, isMobileViewport, () => false)
 
   /**
    * 타깃 박스 찾기 + 승격 판정.
@@ -109,10 +110,14 @@ export default function HeroStage(props: HeroStageProps) {
       }
       setElement(el)
       const blocked = probe({ enabledDesktop, enabledMobile })
-      setPhase(blocked === null ? { kind: 'mounting' } : { kind: 'poster', reason: blocked })
+      setPhase(previous => {
+        if (blocked !== null) return { kind: 'poster', reason: blocked }
+        // A retained Scene announces readiness once; keep its live phase across allowed breakpoints.
+        return previous.kind === 'live' ? previous : { kind: 'mounting' }
+      })
     })
     return () => cancelAnimationFrame(frame)
-  }, [targetName, enabledDesktop, enabledMobile])
+  }, [targetName, enabledDesktop, enabledMobile, mobile])
 
   /**
    * 포스터를 타깃 박스에 맞춰 붙인다. rect 를 React state 로 들고 있으면 스크롤마다 리렌더가 나서
@@ -129,7 +134,8 @@ export default function HeroStage(props: HeroStageProps) {
     })
   }, [element])
 
-  const mountScene = element !== null && (phase.kind === 'mounting' || phase.kind === 'live')
+  const enabled = mobile ? enabledMobile : enabledDesktop
+  const mountScene = enabled && element !== null && (phase.kind === 'mounting' || phase.kind === 'live')
 
   return (
     <div className={styles.layer} aria-hidden="true" data-phase={phase.kind}>
@@ -150,7 +156,7 @@ export default function HeroStage(props: HeroStageProps) {
             // 히어로 안에 있어 거의 항상 첫 화면이다. lazy 로 두면 하이드레이션 뒤에야 요청이 나간다.
             loading="eager"
             draggable={false}
-            data-hidden={phase.kind === 'live' ? 'true' : undefined}
+            data-hidden={enabled && phase.kind === 'live' ? 'true' : undefined}
           />
         ) : null}
       </div>

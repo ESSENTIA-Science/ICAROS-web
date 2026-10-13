@@ -1,5 +1,5 @@
 import { getVehicleSpecs } from '../lib/vehicleSpecs'
-import type { ContentKind, ContentMap, Editable } from '../lib/api/types'
+import type { ContentKind, Editable } from '../lib/api/types'
 
 export default function Preview<K extends ContentKind>({ kind, draft }: { kind: K; draft: Editable<K> }) {
   if (kind === 'rockets') {
@@ -13,5 +13,3 @@ export default function Preview<K extends ContentKind>({ kind, draft }: { kind: 
   const value = draft as Editable<'posts'>
   return <article className="previewBody"><span className="eyebrow">POSTS / {value.authorLabel || '작성자'}</span><p>{value.displayDate}</p><h3>{value.title || '글 제목'}</h3><p className="previewText">{value.bodyMd || '본문을 입력하세요.'}</p>{value.attachments.map((item, index) => <p key={`${item.mediaId}-${index}`}>{item.kind === 'pdf' ? 'PDF' : item.kind === 'video' ? '영상' : '이미지'} · {item.title}</p>)}</article>
 }
-
-export type AnyRecord = ContentMap[ContentKind]

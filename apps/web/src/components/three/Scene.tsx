@@ -1,7 +1,7 @@
 'use client'
 
-import { Canvas, useFrame, useLoader } from '@react-three/fiber'
-import { Component, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber'
+import { Component, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
   ACESFilmicToneMapping,
   Box3,
@@ -17,6 +17,9 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 
 import type { StageConfig } from './config'
 import { applyStageCamera } from './framing'
+import { trackRect } from './rect'
+import { bakeEnvironment } from './environment'
+import { readDocumentVisible, subscribeDocumentVisible } from './visibility'
 
 /**
  * 3D 씬 — **이 파일이 무거운 청크다.** `HeroStage` 가 `next/dynamic(..., { ssr: false })` 로만
@@ -71,7 +74,7 @@ interface RigProps {
  *
  * 터치 기기에서는 붙이지 않는다 — `pointermove` 가 탭마다 한 번씩 튀어 화면이 흔들린다.
  */
-function usePointerParallax(enabled: boolean) {
+function usePointerParallax(enabled: boolean, invalidate: () => void) {
   const pointer = useRef({ x: 0, y: 0 })
 
   useEffect(() => {
@@ -83,10 +86,12 @@ function usePointerParallax(enabled: boolean) {
         x: (e.clientX / window.innerWidth) * 2 - 1,
         y: (e.clientY / window.innerHeight) * 2 - 1,
       }
+      invalidate()
     }
     // 커서가 창을 벗어나면 중앙으로 되돌린다. 안 하면 마지막 위치에서 굳는다.
     const onLeave = () => {
       pointer.current = { x: 0, y: 0 }
+      invalidate()
     }
 
     window.addEventListener('pointermove', onMove, { passive: true })
@@ -95,13 +100,15 @@ function usePointerParallax(enabled: boolean) {
       window.removeEventListener('pointermove', onMove)
       document.removeEventListener('pointerleave', onLeave)
     }
-  }, [enabled])
+  }, [enabled, invalidate])
 
   return pointer
 }
 
 function CameraRig({ target, config, reducedMotion, boxRef, onFramed }: RigProps) {
-  const pointer = usePointerParallax(!reducedMotion)
+  const invalidate = useThree(state => state.invalidate)
+  const pointer = usePointerParallax(!reducedMotion, invalidate)
+  useEffect(() => trackRect(target, () => invalidate()), [target, invalidate])
   /**
    * 프레이밍이 한 번이라도 실패하면 카메라는 **기본 위치 그대로**다. 캔버스는 뷰포트 전체를
    * 덮고 있으므로 그 상태로 그리면 기체가 화면 정중앙에 뜨고, 스크롤해도 따라오지 않는다
@@ -147,10 +154,14 @@ function CameraRig({ target, config, reducedMotion, boxRef, onFramed }: RigProps
     // R3F 가 같은 시계로 자기 delta 를 뽑으므로 시간을 훔쳐 자동회전이 멈춘다.
     // 콜백 두 번째 인자가 이 프레임의 delta 다.
     const k = 1 - Math.pow(0.001, Math.min(delta, 0.1) * 8)
-    smoothed.current = {
-      x: MathUtils.lerp(smoothed.current.x, pointer.current.x, k),
-      y: MathUtils.lerp(smoothed.current.y, pointer.current.y, k),
-    }
+    const pointerTarget = reducedMotion ? { x: 0, y: 0 } : pointer.current
+    if (reducedMotion) smoothed.current = pointerTarget
+    const moving = Math.abs(smoothed.current.x - pointerTarget.x) > 0.0001 || Math.abs(smoothed.current.y - pointerTarget.y) > 0.0001
+    smoothed.current = moving ? {
+      x: MathUtils.lerp(smoothed.current.x, pointerTarget.x, k),
+      y: MathUtils.lerp(smoothed.current.y, pointerTarget.y, k),
+    } : pointerTarget
+    if (moving) state.invalidate()
 
     applyStageCamera(camera, box, rect, state.size, config, progress, smoothed.current)
     report(true)
@@ -203,18 +214,21 @@ function Model({ src, autoRotate, reducedMotion, boxRef, onDrew }: ModelProps) {
    * 카메라 거리가 숨쉬듯 흔들린다. 회전축이 Y 이고 기체가 거의 축대칭이라 한 번 잰 값으로 충분하다.
    */
   const box = useMemo(() => new Box3().setFromObject(gltf.scene), [gltf.scene])
+  const invalidate = useThree(state => state.invalidate)
   useEffect(() => {
     boxRef.current = box
+    invalidate()
     return () => {
       boxRef.current = null
     }
-  }, [box, boxRef])
+  }, [box, boxRef, invalidate])
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     if (frames.current < 2) {
       frames.current += 1
       // 로드 직후가 아니라 **실제로 두 프레임 그린 뒤** 포스터를 뗀다. 빈 캔버스가 노출되지 않는다.
       if (frames.current === 2) onDrew()
+      else state.invalidate()
       return
     }
     if (!autoRotate || reducedMotion) return
@@ -223,7 +237,7 @@ function Model({ src, autoRotate, reducedMotion, boxRef, onDrew }: ModelProps) {
   })
 
   return (
-    <group ref={group}>
+    <group ref={group} dispose={null}>
       <primitive object={gltf.scene} />
     </group>
   )
@@ -270,6 +284,8 @@ export default function Scene({ target, config, reducedMotion, onReady, onError 
   const boxRef = useRef<Box3 | null>(null)
   const envRef = useRef<WebGLRenderTarget | null>(null)
   const [visible, setVisible] = useState(true)
+  const documentVisible = useSyncExternalStore(subscribeDocumentVisible, readDocumentVisible, () => true)
+  const active = visible && documentVisible
 
   /**
    * 캔버스를 **언제 보여줄지**는 두 조건이 함께 정한다: 모델을 그렸고(`drew`),
@@ -326,7 +342,7 @@ export default function Scene({ target, config, reducedMotion, onReady, onError 
         그러면 프레이밍 보고도 없어 `shown` 이 영원히 false 다. 루프는 히어로가
         화면에 있는지로만 정하고, 노출 여부는 아래 `visibility` 가 따로 맡는다.
       */
-      frameloop={visible ? 'always' : 'never'}
+      frameloop={active ? (config.autoRotate && !reducedMotion ? 'always' : 'demand') : 'never'}
       dpr={[1, 2]}
       // 알파를 켜야 섹션 배경(테마별로 다르다)이 그대로 비친다. 캔버스가 배경색을 칠하면
       // 다크/라이트 테마 전환에서 사각형이 드러난다.
@@ -344,13 +360,12 @@ export default function Scene({ target, config, reducedMotion, onReady, onError 
         state.gl.toneMappingExposure = 1.05
 
         const pmrem = new PMREMGenerator(state.gl)
-        const rt = pmrem.fromScene(new RoomEnvironment(), 0.04)
-        pmrem.dispose()
+        const rt = bakeEnvironment(pmrem, new RoomEnvironment())
         state.scene.environment = rt.texture
         state.scene.environmentIntensity = 0.85
         envRef.current = rt
       }}
-      style={{ pointerEvents: 'none', visibility: visible && shown ? 'visible' : 'hidden' }}
+      style={{ pointerEvents: 'none', visibility: active && shown ? 'visible' : 'hidden' }}
     >
       <CameraRig
         target={target}

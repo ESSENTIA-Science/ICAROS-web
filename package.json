@@ -16,14 +16,25 @@
     "build:web:local": "node scripts/build-web-local.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present && npm run test:graphics && npm run test:public-ui && npm run test:g",
     "legacy:build": "npm run build --prefix legacy",
     "legacy:typecheck": "npm run typecheck --prefix legacy",
-    "legacy:lint": "npm run lint --prefix legacy"
+    "legacy:lint": "npm run lint --prefix legacy",
+    "test:graphics": "node --test apps/web/src/components/three/__tests__/lifecycle.test.mjs",
+    "test:public-ui": "vitest run --config apps/web/tests/public-ui.config.mts",
+    "test:g": "node --test infra/g/*.test.mjs scripts/package-g-release.test.mjs",
+    "test:browser": "node scripts/run-browser-checks.mjs",
+    "test:infra": "node --test infra/cloudfront/*.test.mjs infra/release/*.test.mjs infra/aws/*.test.mjs infra/aws/test/*.test.mjs infra/egress/*.test.mjs",
+    "build:g:fixture": "node scripts/build-g-fixture.mjs",
+    "test:g:runtime": "node infra/g/verify-member-freshness.mjs",
+    "verify:g": "node infra/g/verify-source.mjs",
+    "package:g": "node scripts/package-g-release.mjs"
   },
   "devDependencies": {
     "@aws-sdk/client-s3": "^3.1146.0",
     "@opennextjs/aws": "^4.1.7",
-    "pg": "^8.23.0"
+    "pg": "^8.23.0",
+    "playwright": "^1.64.0",
+    "@aws-sdk/client-lambda": "3.1146.0"
   }
 }

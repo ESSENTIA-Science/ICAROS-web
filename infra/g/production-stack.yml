@@ -128,6 +128,9 @@ Resources:
               - Effect: Allow
                 Action: [sqs:ReceiveMessage, sqs:DeleteMessage, sqs:GetQueueAttributes]
                 Resource: !GetAtt RevalidationQueue.Arn
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt MainFunction.Arn
   RevalidationFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -140,6 +143,9 @@ Resources:
       Code:
         S3Bucket: !Ref BucketName
         S3Key: !Ref RevalidationCodeKey
+      Environment:
+        Variables:
+          G_WEB_FUNCTION: !Ref MainFunction
   RevalidationMapping:
     Type: AWS::Lambda::EventSourceMapping
     Properties:
@@ -147,6 +153,8 @@ Resources:
       FunctionName: !Ref RevalidationFunction
       BatchSize: 1
       FunctionResponseTypes: [ReportBatchItemFailures]
+      ScalingConfig:
+        MaximumConcurrency: 2
       Enabled: true
   ApiGPermissions:
     Type: AWS::IAM::Policy

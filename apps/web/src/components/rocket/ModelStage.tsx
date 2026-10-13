@@ -10,6 +10,7 @@ export default function ModelStage({ src, label, children }: { src: string; labe
   const ref = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const [active, setActive] = useState(false)
+  const [visible, setVisible] = useState(false)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -18,17 +19,18 @@ export default function ModelStage({ src, label, children }: { src: string; labe
     const element = ref.current
     if (!element) return
     if (typeof IntersectionObserver === 'undefined') {
-      const timeout = window.setTimeout(() => setActive(true), 0)
+      const timeout = window.setTimeout(() => { setActive(true); setVisible(true) }, 0)
       return () => window.clearTimeout(timeout)
     }
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry?.isIntersecting) {
-        setActive(true)
-        observer.disconnect()
-      }
+    const preload = new IntersectionObserver(([entry]) => {
+      if (entry?.isIntersecting) { setActive(true); preload.disconnect() }
     }, { rootMargin: '200px' })
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry) setVisible(entry.isIntersecting)
+    })
+    preload.observe(element)
     observer.observe(element)
-    return () => observer.disconnect()
+    return () => { preload.disconnect(); observer.disconnect() }
   }, [])
 
   useEffect(() => {
@@ -64,7 +66,7 @@ export default function ModelStage({ src, label, children }: { src: string; labe
         aria-label={expanded ? `${label} 3D 모델 크게 보기` : undefined}
       >
         <div className={styles.poster} data-ready={ready ? '' : undefined}>{children}</div>
-        {active && !error ? <ModelViewer src={src} label={label} onReady={onReady} onError={onError} /> : null}
+        {active && !error ? <ModelViewer active={visible || expanded} src={src} label={label} onReady={onReady} onError={onError} /> : null}
         {error ? <p className={styles.status}>3D 모델을 불러오지 못했습니다. 사진을 표시합니다.</p> : null}
         <button
           ref={buttonRef}

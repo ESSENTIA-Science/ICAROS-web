@@ -7,6 +7,7 @@ import { resourcesApi } from '../lib/api/resources'
 import type { ResourceRecord } from '../lib/resources'
 import type { Rocket } from '../lib/api/types'
 import MarkdownField from './MarkdownField'
+import { editable } from '../lib/editor'
 import { useAutosave } from '../lib/useAutosave'
 
 type Draft = { id: string; name: string; series: string; descriptionMd: string; maxAltitudeM: string; sizeM: string; payloadKg: string; specs: VehicleSpec[] }
@@ -35,6 +36,10 @@ export default function VehicleCreate({ onCreated, onCancel }: {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [conflict, setConflict] = useState(false)
+  const [latestChecked, setLatestChecked] = useState(false)
+  const [latestVehicle, setLatestVehicle] = useState<Rocket | null>(null)
+  const recovery = useRef<Rocket | null>(null)
   const demo = import.meta.env.VITE_ICAROS_DEMO === '1'
   useEffect(() => {
     let cancelled = false
@@ -59,11 +64,13 @@ export default function VehicleCreate({ onCreated, onCancel }: {
     const task = async () => {
       setBusy(true); setAttempted(true); setError('')
       try {
-        const vehicle = await api.createVehicle({ ...draft, name: draft.name.trim() })
+        const { id, ...values } = draft
+        const vehicle = recovery.current ? await api.save('rockets', recovery.current.id, recovery.current.version, { ...editable('rockets', recovery.current), ...values, name: draft.name.trim() }) : await api.createVehicle({ ...values, id, name: draft.name.trim() })
         setCompleted(true)
         try { localStorage.removeItem(storageKey) } catch { /* The server draft is saved. */ }
         onCreated(vehicle)
       } catch (cause) {
+        if (typeof cause === 'object' && cause !== null && 'status' in cause && cause.status === 409) { setConflict(true); setLatestChecked(false) }
         setError(cause instanceof Error ? cause.message : '기체를 추가하지 못했습니다.')
         throw cause
       } finally { setBusy(false) }
@@ -71,8 +78,18 @@ export default function VehicleCreate({ onCreated, onCancel }: {
     request.current = task()
     try { await request.current } finally { request.current = null }
   }
-  const autosave = useAutosave({ key: 'vehicle-create', dirty, enabled: !demo && valid && !completed, fingerprint: JSON.stringify({ typeId, draft }), save: create })
+  const autosave = useAutosave({ key: 'vehicle-create', dirty, enabled: !demo && valid && !completed && !conflict, fingerprint: JSON.stringify({ typeId, draft }), save: create })
   useEffect(() => { if (cancelled) onCancel() }, [cancelled, onCancel])
+  async function readLatest() {
+    if (busy) return
+    setBusy(true); setError('')
+    try { setLatestVehicle((await api.list('rockets')).find(item => item.id === draft.id) ?? null); setLatestChecked(true) }
+    catch (cause) { setError(cause instanceof Error ? cause.message : '최신본을 불러오지 못했습니다.') }
+    finally { setBusy(false) }
+  }
+  function reapply() {
+    autosave.reset(); recovery.current = latestVehicle; setConflict(false); setError(''); setLatestChecked(false)
+  }
   function cancel() {
     if (busy) return
     try { localStorage.removeItem(storageKey) } catch { /* Clear the in-memory draft as well. */ }
@@ -83,6 +100,7 @@ export default function VehicleCreate({ onCreated, onCancel }: {
     <p className="hint">필수 항목을 입력하면 비공개 초안을 자동 생성합니다. 미완성 입력은 이 브라우저에 보관합니다. 상단의 ‘변경사항 반영하기’에서 저장된 변경을 사이트에 반영합니다.</p>
     {(error || autosave.error) && <p className="notice error" role="alert">{error || autosave.error}</p>}
     <p className="hint" role="status">{dirty && !valid ? '필수 항목을 입력하거나 취소해야 ‘변경사항 반영하기’를 사용할 수 있습니다.' : autosave.status === 'pending' ? '자동 저장 대기 중…' : ''}</p>
+    {conflict && <div className="notice" role="status"><p>기체 생성 또는 저장이 다른 변경과 충돌했습니다. 내 입력은 보존되어 있습니다.</p><button type="button" disabled={busy} onClick={() => void readLatest()}>내 수정본 유지하며 최신본 확인</button>{latestChecked && <><pre>{latestVehicle ? JSON.stringify(editable('rockets', latestVehicle), null, 2) : '같은 주소의 기체가 없습니다. 재적용하면 입력한 주소로 생성을 재시도합니다.'}</pre><button type="button" disabled={busy} onClick={reapply}>내 수정본 재적용</button><button type="button" disabled={busy} onClick={cancel}>수정본 폐기</button></>}</div>}
     <div className="fields">
       <label>기체 이름<input disabled={demo || busy || completed} required maxLength={120} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} /></label>
       <label>기체 주소<input disabled={demo || busy || completed || attempted} required maxLength={48} pattern="[a-z0-9][a-z0-9-]{1,47}" placeholder="raon-iii" value={draft.id} onChange={event => setDraft({ ...draft, id: event.target.value })} /><small>/vehicles/{draft.id || '기체-주소'}</small></label>

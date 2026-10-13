@@ -54,7 +54,7 @@ export default function PostImageGallery({ images, columns = 2, align = 'center'
         {row.map((image, offset) => {
           const index = firstIndex + offset
           const caption = captionFor(image.caption?.trim() || image.alt)
-          const measuredStyle: CSSProperties | undefined = width ? { width: rowHeight * rowRatios[offset]! + 2, flex: 'none' } : undefined
+          const measuredStyle: CSSProperties = width ? { width: rowHeight * rowRatios[offset]! + 2, flex: 'none' } : { flex: `${rowRatios[offset]!} 1 0%` }
           return <figure className={styles.item} style={measuredStyle} key={`${image.src}-${index}`}>
             <div className={styles.frame}>
               <img src={image.src} alt={image.alt} width={image.width} height={image.height} loading="lazy" decoding="async" style={width ? { height: rowHeight } : undefined}

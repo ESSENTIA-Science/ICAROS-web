@@ -42,8 +42,16 @@ export function hasWebGL2(): boolean {
 }
 
 /** CSS 의 모바일 브레이크포인트와 같은 값을 쓴다 (Hero.module.css 의 `max-width: 767px`). */
+const MOBILE_VIEWPORT = '(max-width: 767px)'
+
 export function isMobileViewport(): boolean {
-  return window.matchMedia('(max-width: 767px)').matches
+  return window.matchMedia(MOBILE_VIEWPORT).matches
+}
+
+export function subscribeMobileViewport(onChange: () => void): () => void {
+  const mq = window.matchMedia(MOBILE_VIEWPORT)
+  mq.addEventListener('change', onChange)
+  return () => mq.removeEventListener('change', onChange)
 }
 
 export function prefersReducedMotion(): boolean {

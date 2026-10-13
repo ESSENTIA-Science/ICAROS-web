@@ -15,7 +15,7 @@ vi.mock('react', async importOriginal => {
   } }
 })
 vi.mock('../lib/useAutosave', () => ({ useAutosave: vi.fn(() => ({ status: 'idle', error: '', flush: vi.fn(async () => {}) })) }))
-vi.mock('../lib/api/resources', () => ({ resourcesApi: { list: vi.fn(), update: vi.fn(), create: vi.fn() } }))
+vi.mock('../lib/api/resources', () => ({ resourcesApi: { list: vi.fn(), newId: () => 'client-id', update: vi.fn(), create: vi.fn() } }))
 beforeEach(() => { state.index = 0; state.overrides.clear(); state.draftSetter.mockClear(); vi.clearAllMocks() })
 
 
@@ -29,7 +29,6 @@ describe('ResourceEditor read-only mode', () => {
     if (id !== 'donation-rounds') expect(html).toContain('항목 생성</button>')
     const controls = [...html.matchAll(/<(input|select|button)\b[^>]*>/g)].map(match => match[0])
     expect(controls.filter(control => !control.includes('disabled'))).toEqual([
-      '<button type="button">',
       ...(['vehicles', 'panels', 'post-attachments'].includes(id) ? ['<input readOnly="" value=""/>'] : []),
     ])
   })
@@ -44,6 +43,14 @@ describe('ResourceEditor read-only mode', () => {
     const html = renderToStaticMarkup(<ResourceEditor kind="members" />)
     expect(html).toContain('aria-label="설명 (Markdown) 서식 도구"')
   })
+  it('renders independent department choices for a member', () => {
+    state.overrides.set(2, { name: '멤버', departmentIds: ['dept-1'] })
+    state.overrides.set(7, [{ id: 'dept-1', version: 'v1', name: '추진' }, { id: 'dept-2', version: 'v1', name: '전자' }])
+    const html = renderToStaticMarkup(<ResourceEditor kind="members" />)
+    expect(html).toContain('소속 부서')
+    expect(html).toMatch(/type="checkbox"[^>]*checked=""[^>]*\/>추진/)
+    expect(html).toMatch(/type="checkbox"[^>]*\/>전자/)
+  })
   it('shows panel CTA label and internal destination controls', () => {
     const html = renderToStaticMarkup(<ResourceEditor kind="panels" />)
     expect(html).toContain('이동 버튼 문구')
@@ -53,6 +60,12 @@ describe('ResourceEditor read-only mode', () => {
 })
 
 describe('ResourceEditor API-backed mode', () => {
+  it('offers an image poster upload and removal for video panels', () => {
+    state.overrides.set(2, { title: '영상 패널', mediaKind: 'video' })
+    const html = renderToStaticMarkup(<ResourceEditor kind="panels" />)
+    expect(html).toContain('aria-label="영상 대체 이미지 업로드"')
+    expect(html).toContain('영상 대체 이미지 제거')
+  })
   it('offers an image-only profile upload and removal for members', () => {
     vi.stubEnv('VITE_ICAROS_DEMO', '0')
     try {
@@ -76,8 +89,17 @@ describe('ResourceEditor API-backed mode', () => {
 
 
 describe('ResourceEditor autosave', () => {
-  beforeEach(() => vi.stubEnv('VITE_ICAROS_DEMO', '0'))
+  beforeEach(() => { vi.stubEnv('VITE_ICAROS_DEMO', '0'); state.overrides.set(3, false) })
   afterEach(() => vi.unstubAllEnvs())
+  it('autosaves panel poster removal with the original panel version', async () => {
+    const active = { id: 'panel', version: 'v1', title: '영상', mediaId: 'video', posterMediaId: 'poster', published: true }
+    state.overrides.set(0, [active]); state.overrides.set(1, active.id)
+    state.overrides.set(2, { ...active, posterMediaId: null })
+    vi.mocked(resourcesApi.update).mockResolvedValue({ ...active, version: 'v2', posterMediaId: null })
+    renderToStaticMarkup(<ResourceEditor kind="panels" />)
+    await vi.mocked(useAutosave).mock.calls.at(-1)![0].save()
+    expect(resourcesApi.update).toHaveBeenCalledWith('panels', 'panel', 'v1', { title: '영상', mediaId: 'video', posterMediaId: null, published: true })
+  })
   it('autosaves profile removal without losing other member fields', async () => {
     const active = { id: 'member', version: 'v1', name: '부원', imageMediaId: 'old-photo', published: true }
     state.overrides.set(0, [active])
@@ -99,7 +121,7 @@ describe('ResourceEditor autosave', () => {
   }
   it('registers incomplete new drafts without attempting creation', () => {
     const { autosave, html } = setup({ name: '', position: 1 })
-    expect(autosave).toMatchObject({ key: 'departments:new', dirty: true, enabled: false })
+    expect(autosave).toMatchObject({ key: expect.stringMatching(/^departments:/), dirty: true, enabled: false })
     expect(html).toContain('항목 생성')
     expect(html).not.toContain('초안 저장')
     expect(html).not.toContain('사이트 전체 게시</button>')
@@ -109,9 +131,9 @@ describe('ResourceEditor autosave', () => {
     const result = { ...draft, id: 'new-id', version: 'v1' }
     vi.mocked(resourcesApi.create).mockResolvedValue(result)
     const { autosave } = setup(draft)
-    expect(autosave).toMatchObject({ key: 'departments:new', enabled: true, fingerprint: JSON.stringify(draft) })
+    expect(autosave).toMatchObject({ key: expect.stringMatching(/^departments:/), enabled: true, fingerprint: JSON.stringify(draft) })
     await autosave.save()
-    expect(resourcesApi.create).toHaveBeenCalledWith('departments', draft)
+    expect(resourcesApi.create).toHaveBeenCalledWith('departments', draft, 'client-id')
     const apply = state.draftSetter.mock.calls[0]![0] as (previous: typeof draft) => unknown
     expect(apply(draft)).toEqual(result)
     const newer = { ...draft, name: '전자부' }

@@ -75,3 +75,47 @@ it('only clears changes included in a completed build, retaining newer edits', (
   completeCmsPublication('job-latest')
   expect(hasUnpublishedChanges()).toBe(false)
 })
+
+it('suspends stale conflict saves until the editor explicitly resets its baseline', async () => {
+  const queue = new AutosaveController('conflict-reset', () => {})
+  const conflict = Object.assign(new Error('version conflict'), { status: 409 })
+  const save = vi.fn().mockRejectedValueOnce(conflict).mockResolvedValue(undefined)
+  queue.configure({ dirty: true, enabled: true, save, fingerprint: 'first', delay: 60_000 })
+  await expect(queue.flush()).rejects.toThrow('version conflict')
+  queue.configure({ dirty: true, enabled: true, save, fingerprint: 'newer local edit', delay: 60_000 })
+  await expect(queue.flush()).rejects.toThrow('version conflict')
+  expect(save).toHaveBeenCalledTimes(1)
+  queue.reset()
+  queue.configure({ dirty: true, enabled: true, save, fingerprint: 'explicit reapply', delay: 60_000 })
+  await queue.flush()
+  expect(save).toHaveBeenCalledTimes(2)
+  queue.detach()
+})
+
+it('keeps a detached in-flight queue registered when another editor uses the same record key', async () => {
+  let release!: () => void
+  const saving = vi.fn(() => new Promise<void>(done => { release = done }))
+  const old = new AutosaveController('remount', () => {})
+  old.configure({ dirty: true, enabled: true, save: saving, fingerprint: 'edit', delay: 60_000 })
+  const request = old.flush(); await Promise.resolve(); old.detach()
+  const next = new AutosaveController('remount', () => {})
+  next.configure({ dirty: false, enabled: true, save: async () => {}, fingerprint: '', delay: 60_000 })
+  let flushed = false
+  const flush = flushCmsChanges().then(() => { flushed = true })
+  await Promise.resolve()
+  expect(flushed).toBe(false)
+  release(); await request; await flush
+  next.detach()
+})
+
+it('clears the conflict latch when the user discards all dirty input, without sending another write', async () => {
+  const queue = new AutosaveController('undo-conflict', () => {})
+  const save = vi.fn().mockRejectedValue(Object.assign(new Error('conflict'), { status: 409 }))
+  queue.configure({ dirty: true, enabled: true, save, fingerprint: 'local edit', delay: 60_000 })
+  await expect(queue.flush()).rejects.toThrow('conflict')
+  queue.configure({ dirty: false, enabled: true, save, fingerprint: 'original value', delay: 60_000 })
+  await queue.flush()
+  expect(save).toHaveBeenCalledTimes(1)
+  expect(getCmsChanges().errors).not.toContain('conflict')
+  queue.detach()
+})

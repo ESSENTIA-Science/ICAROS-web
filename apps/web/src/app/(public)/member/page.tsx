@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import MemberCard from '@/components/member/MemberCard'
 import InView from '@/components/rocket/InView'
 import RevealNoScript from '@/components/rocket/RevealNoScript'
-import { groupBySquad, listMembersSafe } from './_data'
+import { groupBySquad, listDepartmentsSafe, listMembersSafe } from './_data'
 import styles from './page.module.css'
 import { pageMetadata } from '@/lib/seo'
 
@@ -13,7 +13,8 @@ export const revalidate = 3600
 export const metadata: Metadata = pageMetadata({ title: 'Members', description: 'ICAROS를 구성하는 추진공학부·전자부·비행제어부 등 부서별 부원 명단.', path: '/member' })
 
 export default async function MemberPage() {
-  const squads = groupBySquad(await listMembersSafe())
+  const [members, departments] = await Promise.all([listMembersSafe(), listDepartmentsSafe()])
+  const squads = groupBySquad(members, departments)
 
   return (
     // 여기에 loading.tsx 를 다시 만들지 말 것. 로딩 경계가 생기면 Next 가 fallback 셸을 먼저
@@ -46,7 +47,7 @@ export default async function MemberPage() {
               <InView>
                 <ul className={styles.grid}>
                   {squad.members.map((m) => (
-                    <MemberCard key={m.id} member={m} />
+                    <MemberCard key={m.id} member={m} departmentLabel={squad.squad ?? UNASSIGNED_SQUAD_LABEL} />
                   ))}
                 </ul>
               </InView>

@@ -12,7 +12,11 @@ export class AutosaveController {
   private running: Promise<void> | null = null
   private failure = ''
   private attached = false
-  constructor(private key: string, private report: (status: AutosaveStatus, error: string) => void) {}
+  private conflicted = false
+  constructor(private key: string, private report: (status: AutosaveStatus, error: string) => void) {
+    // A remounted editor must not replace a detached queue still saving this record.
+    this.key = `${key}:${crypto.randomUUID()}`
+  }
   private emit(status: AutosaveStatus) {
     updateAutosaveTask(this.key, { dirty: this.config.dirty, saving: this.running !== null,
       error: this.failure, flush: () => this.flush() })
@@ -22,7 +26,8 @@ export class AutosaveController {
     this.attached = true
     const changed = next.fingerprint !== this.config.fingerprint
     this.config = next
-    if (changed) this.failure = ''
+    if (!next.dirty && !this.running) { this.conflicted = false; this.failure = '' }
+    if (changed && !this.conflicted) this.failure = ''
     if (this.timer) { clearTimeout(this.timer); this.timer = null }
     this.emit(this.failure ? 'error' : this.running ? 'saving' : next.dirty ? 'pending' : 'idle')
     if (next.dirty && next.enabled && !this.running && !this.failure) {
@@ -32,6 +37,7 @@ export class AutosaveController {
   async flush(): Promise<void> {
     if (this.timer) { clearTimeout(this.timer); this.timer = null }
     if (this.running) await this.running
+    if (this.conflicted) throw new Error(this.failure)
     if (!this.config.dirty) return
     if (!this.config.enabled) throw new Error('필수 입력값을 확인하거나 작성 중인 새 항목을 취소해 주세요.')
     const run = async () => {
@@ -48,6 +54,7 @@ export class AutosaveController {
           if (this.config.fingerprint === sent) this.config.dirty = false
         }
       } catch (cause) {
+        this.conflicted = typeof cause === 'object' && cause !== null && 'status' in cause && cause.status === 409
         this.failure = cause instanceof Error ? cause.message : '자동 저장에 실패했습니다.'
         throw cause
       } finally {
@@ -59,6 +66,12 @@ export class AutosaveController {
     this.running = Promise.resolve().then(run)
     this.emit('saving')
     await this.running
+  }
+  reset() {
+    if (this.running) throw new Error('저장이 끝난 뒤 복구해 주세요.')
+    if (this.timer) { clearTimeout(this.timer); this.timer = null }
+    this.conflicted = false; this.failure = ''; this.config.dirty = false
+    this.emit('idle')
   }
   detach() {
     this.attached = false
@@ -77,5 +90,5 @@ export function useAutosave({ key, dirty, enabled = true, save, delay = 700, fin
     controller.configure({ dirty, enabled, save, delay, fingerprint })
   }, [controller, dirty, enabled, save, delay, fingerprint])
   useLayoutEffect(() => () => controller.detach(), [controller])
-  return { ...state, flush: () => controller.flush() }
+  return { ...state, flush: () => controller.flush(), reset: () => controller.reset() }
 }

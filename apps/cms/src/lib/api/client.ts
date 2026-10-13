@@ -1,6 +1,7 @@
 import type { ContentKind, ContentMap, Editable, Post, PostAttachment, PublishJob, Rocket } from './types'
 import type { PublishKind } from './publish'
 import { validVehicleSpecs } from '../vehicleSpecs'
+import { bindCmsDraftsToUser, clearCmsDraftsOnLogout } from '../localDrafts'
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) { super(message); this.name = 'ApiError' }
@@ -98,12 +99,14 @@ export const api = {
   session: async () => {
     const value = await request<unknown>('/session')
     if (!value || typeof value !== 'object' || !('userId' in value) || typeof value.userId !== 'string' || !('email' in value) || typeof value.email !== 'string') throw new ApiError('세션 응답 형식이 올바르지 않습니다.', 200)
+    bindCmsDraftsToUser(value.userId)
     return { userId: value.userId, email: value.email, displayName: 'displayName' in value && typeof value.displayName === 'string' ? value.displayName : null }
   },
   logout: async (): Promise<{ logoutUrl: string }> => {
     const value = await request<unknown>('/logout', { method: 'POST' })
     if (!value || typeof value !== 'object' || !('logoutUrl' in value) || typeof value.logoutUrl !== 'string' ||
       !value.logoutUrl.startsWith('https://')) throw new ApiError('로그아웃 응답 형식이 올바르지 않습니다.', 200)
+    clearCmsDraftsOnLogout()
     return { logoutUrl: value.logoutUrl }
   },
   list: async <K extends ContentKind>(kind: K): Promise<ContentMap[K][]> => {
