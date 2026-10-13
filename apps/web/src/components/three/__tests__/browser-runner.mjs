@@ -92,7 +92,20 @@ try {
   await page.waitForSelector('[data-ready]', { state: 'attached' })
   assert.ok(await rendered(150) > 0)
   const observedDetailRequests = glbNetworkRequests
-  await page.evaluate(() => scrollTo(0, 1800)); await page.waitForTimeout(200)
+  await page.evaluate(() => {
+    window.graphicsHarness.offscreenIdle = { renders: window.graphicsHarness.stats.renders, at: performance.now() }
+    setTimeout(() => scrollTo(0, 1800), 300)
+  })
+  await page.waitForFunction(() => {
+    const stage = document.querySelector('[data-ready]')?.parentElement
+    if (!stage || stage.getBoundingClientRect().bottom >= 0) return false
+    const idle = window.graphicsHarness.offscreenIdle
+    if (window.graphicsHarness.stats.renders !== idle.renders) {
+      idle.renders = window.graphicsHarness.stats.renders
+      idle.at = performance.now()
+    }
+    return performance.now() - idle.at >= 150
+  })
   assert.equal(await rendered(350), 0, 'actual ModelStage observer must stop offscreen detail')
   await page.evaluate(() => scrollTo(0, 0)); await page.waitForTimeout(100)
   assert.ok(await rendered(150) > 0, 'actual ModelStage observer must resume detail')
