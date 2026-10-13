@@ -9,6 +9,7 @@ const root = fileURLToPath(new URL('../../../../', import.meta.url))
 const fixture = fileURLToPath(new URL('./', import.meta.url))
 const baseline = process.env.ICAROS_UI_BASELINE ? JSON.parse(readFileSync(process.env.ICAROS_UI_BASELINE, 'utf8')) : {}
 const vite = await createServer({ root, configFile: false, cacheDir: `/tmp/icaros-public-ui-vite-${process.pid}`, esbuild: { jsx: 'automatic' },
+  optimizeDeps: { entries: ['apps/web/tests/browser/page.tsx'], include: ['react/jsx-dev-runtime'] },
   plugins: [{ name: 'public-ui-regression-baseline', enforce: 'pre', transform(code, id) {
     const path = id.split('?')[0].replace(root, '')
     return baseline[path] ?? null
@@ -21,6 +22,8 @@ const vite = await createServer({ root, configFile: false, cacheDir: `/tmp/icaro
     [`${root}apps/web/src/assets/logo_text_white.svg`]: `${fixture}logo.ts`,
     'server-only': `${root}apps/web/tests/empty.mjs`,
   } }, server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom' })
+await vite.environments.client.warmupRequest('/apps/web/tests/browser/page.tsx')
+await vite.environments.client.waitForRequestsIdle()
 const server = createHttpServer(async (req, res) => {
   if (req.url?.startsWith('/assets/')) {
     const portrait = req.url.includes('portrait')

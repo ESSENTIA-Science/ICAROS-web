@@ -28,13 +28,13 @@ async function newPage(options) {
   return page
 }
 try {
-  for (let attempt = 0; attempt < 50; attempt++) {
+  for (let attempt = 0; attempt < 300; attempt++) {
     const ready = serverOutput.match(/Public UI fixture: (http:\/\/127\.0\.0\.1:\d+\/)/)
     if (ready) {
       base = ready[1]
       try { const response = await fetch(base); if (response.ok) break } catch { /* local fixture is starting */ }
     }
-    if (server.exitCode !== null || attempt === 49) throw new Error(`Fixture failed to start (exit=${server.exitCode}, signal=${server.signalCode}): ${serverOutput}`)
+    if (server.exitCode !== null || attempt === 299) throw new Error(`Fixture failed to start (exit=${server.exitCode}, signal=${server.signalCode}): ${serverOutput}`)
     await new Promise(resolve => setTimeout(resolve, 100))
   }
   const localChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
@@ -63,6 +63,7 @@ try {
       })).catch(inspectError => ({ inspectionError: String(inspectError) }))
       throw new Error(`${error.message}\nHydration diagnostics: ${JSON.stringify({ state, navigations, browserErrors: browserErrors.slice(0, 12), serverOutput: serverOutput.slice(-2000) })}`)
     }
+    assert(!browserErrors.some(message => message.startsWith('response: 504')), 'Vite served an outdated optimized dependency during hydration')
     await page.getByRole('button', { name: '메뉴 열기' }).click()
     assert.equal(await page.evaluate(() => document.body.style.overflow), 'hidden')
     await page.setViewportSize({ width: 844, height: 390 })
