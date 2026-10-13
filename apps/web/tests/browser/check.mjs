@@ -7,12 +7,12 @@ const workspacePlaywright = fileURLToPath(new URL('../../../../node_modules/play
 const modulePath = process.env.ICAROS_TEST_PLAYWRIGHT_MODULE ?? (existsSync(workspacePlaywright) ? workspacePlaywright : fileURLToPath(new URL('../../../../../test-tools/node_modules/playwright/index.mjs', import.meta.url)))
 const { chromium } = await import(modulePath)
 const server = spawn(process.execPath, [fileURLToPath(new URL('./server.mjs', import.meta.url))], {
-  cwd: fileURLToPath(new URL('../../../../', import.meta.url)), env: { ...process.env, ICAROS_UI_TEST_PORT: '5198' }, stdio: ['ignore', 'pipe', 'pipe'],
+  cwd: fileURLToPath(new URL('../../../../', import.meta.url)), env: { ...process.env, ICAROS_UI_TEST_PORT: '0' }, stdio: ['ignore', 'pipe', 'pipe'],
 })
 let serverOutput = ''
 server.stdout.on('data', chunk => { serverOutput += chunk })
 server.stderr.on('data', chunk => { serverOutput += chunk })
-const base = 'http://127.0.0.1:5198/'
+let base
 let browser
 const results = []
 async function check(name, run) {
@@ -29,8 +29,12 @@ async function newPage(options) {
 }
 try {
   for (let attempt = 0; attempt < 50; attempt++) {
-    try { const response = await fetch(base); if (response.ok) break } catch { /* local fixture is starting */ }
-    if (attempt === 49) throw new Error(`Fixture failed to start: ${serverOutput}`)
+    const ready = serverOutput.match(/Public UI fixture: (http:\/\/127\.0\.0\.1:\d+\/)/)
+    if (ready) {
+      base = ready[1]
+      try { const response = await fetch(base); if (response.ok) break } catch { /* local fixture is starting */ }
+    }
+    if (server.exitCode !== null || attempt === 49) throw new Error(`Fixture failed to start (exit=${server.exitCode}, signal=${server.signalCode}): ${serverOutput}`)
     await new Promise(resolve => setTimeout(resolve, 100))
   }
   const localChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'

@@ -20,7 +20,7 @@ const vite = await createServer({ root, configFile: false, cacheDir: `/tmp/icaro
     'next/image': `${fixture}image.ts`,
     [`${root}apps/web/src/assets/logo_text_white.svg`]: `${fixture}logo.ts`,
     'server-only': `${root}apps/web/tests/empty.mjs`,
-  } }, server: { middlewareMode: true, hmr: false }, appType: 'custom' })
+  } }, server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom' })
 const server = createHttpServer(async (req, res) => {
   if (req.url?.startsWith('/assets/')) {
     const portrait = req.url.includes('portrait')
@@ -42,4 +42,4 @@ const server = createHttpServer(async (req, res) => {
   }
   vite.middlewares(req, res, () => { res.writeHead(404); res.end() })
 })
-server.listen(Number(process.env.ICAROS_UI_TEST_PORT ?? 5197), '127.0.0.1', () => console.log('Public UI fixture: http://127.0.0.1:5197'))
+server.listen(Number(process.env.ICAROS_UI_TEST_PORT ?? 0), '127.0.0.1', () => console.log(`Public UI fixture: http://127.0.0.1:${server.address().port}/`))
