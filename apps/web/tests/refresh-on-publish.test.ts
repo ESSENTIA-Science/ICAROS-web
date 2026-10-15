@@ -3,7 +3,7 @@ import { expect, it, vi } from 'vitest'
 const fixture = vi.hoisted(() => ({ version: '12' }))
 vi.mock('@/lib/content/snapshot', () => ({ getSnapshot: () => ({ version: fixture.version }) }))
 
-import { GET } from '../src/app/icaros-internal/version/route'
+import { GET } from '../src/app/public-version/route'
 import { checkPublishedVersion } from '../src/components/RefreshOnPublish'
 
 it('serves the current published version without browser or CDN caching', async () => {

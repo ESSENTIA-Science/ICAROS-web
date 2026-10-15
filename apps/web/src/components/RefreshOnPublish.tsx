@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 
-const versionPath = '/icaros-internal/version/'
+const versionPath = '/public-version/'
 
 export async function checkPublishedVersion(
   currentVersion: string,

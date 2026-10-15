@@ -54,8 +54,8 @@ try {
   const context = {getRemainingTimeInMillis:()=>30000,callbackWaitsForEmptyEventLoop:false}
   const firstSha = select(1,false)
   const first = await handler(request, context)
-  const versionRequest = { ...request, rawPath: '/icaros-internal/version/',
-    requestContext: { ...request.requestContext, http: { ...request.requestContext.http, path: '/icaros-internal/version/' } } }
+  const versionRequest = { ...request, rawPath: '/public-version/',
+    requestContext: { ...request.requestContext, http: { ...request.requestContext.http, path: '/public-version/' } } }
   const firstVersion = await handler(versionRequest, context)
   const secondSha = select(2,true)
   const second = await handler(request, context)
