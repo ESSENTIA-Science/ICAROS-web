@@ -105,7 +105,33 @@ it('measures repeated feed work using the current synthetic count and a growth f
   console.log('Synthetic feed measurement (single process; not a full Next build):', JSON.stringify(samples))
 })
 
-import { groupBySquad, type MemberDto } from '../src/app/(public)/member/_data'
+import { groupBySquad, memberAffiliation, type MemberDto } from '../src/app/(public)/member/_data'
+import MemberCard from '../src/components/member/MemberCard'
+
+it('shows every assigned department on the member card in either department section', () => {
+  const member: MemberDto = { id: 'member', name: '테스트 부원', role: null, squad: null,
+    departmentIds: ['flight', 'propulsion'], school: null, bioMd: null, imageSrc: '/assets/img/member/profile.webp', hasPhoto: false }
+  const departments = [
+    { id: 'flight', name: '비행제어부', sortOrder: 0 },
+    { id: 'propulsion', name: '추진공학부', sortOrder: 1 },
+  ]
+  const groups = groupBySquad([member], departments)
+  expect(groups).toHaveLength(2)
+  for (const group of groups) {
+    const html = renderToStaticMarkup(<MemberCard member={group.members[0]!}
+      departmentLabel={memberAffiliation(member, departments, group.squad ?? '기타')} />)
+    expect(html).toContain('비행제어부 · 추진공학부')
+  }
+})
+
+it('hides member biographies while keeping the member identity visible', () => {
+  const member: MemberDto = { id: 'member', name: '테스트 부원', role: null, squad: '비행제어부',
+    school: null, bioMd: '비공개 카드 소개', imageSrc: '/assets/img/member/profile.webp', hasPhoto: false }
+  const html = renderToStaticMarkup(<MemberCard member={member} departmentLabel="비행제어부" />)
+  expect(html).toContain('테스트 부원')
+  expect(html).not.toContain('비공개 카드 소개')
+  expect(html).not.toContain('data-bio')
+})
 it('moves only each department leader first while preserving all remaining order and roles', () => {
   const a = '123e4567-e89b-42d3-a456-426614174010', b = '123e4567-e89b-42d3-a456-426614174011'
   const member = (id: string, departmentIds: string[]): MemberDto => ({ id, name: id, role: 'original', squad: null, departmentIds, school: null, bioMd: null, imageSrc: '', hasPhoto: false })

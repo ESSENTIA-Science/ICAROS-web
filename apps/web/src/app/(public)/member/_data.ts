@@ -6,6 +6,13 @@ export type Department = { id: string; name: string; sortOrder: number; leadMemb
 export const listDepartmentsSafe = async (): Promise<readonly Department[]> => getSnapshot().departments ?? []
 export type MemberSquad = { squad: string | null; key: string; members: MemberDto[] }
 export const listMembersSafe = async (): Promise<MemberDto[]> => getSnapshot().members
+export function memberAffiliation(member: MemberDto, departments: readonly Department[], fallback: string): string {
+  const names = new Map(departments.map(department => [department.id.toLowerCase(), department.name]))
+  const labels = member.departmentIds !== undefined
+    ? member.departmentIds.map(id => names.get(id.toLowerCase())).filter((name): name is string => Boolean(name))
+    : member.squads?.length ? member.squads : member.squad ? [member.squad] : []
+  return [...new Set(labels)].join(' · ') || fallback
+}
 export function groupBySquad(members: readonly MemberDto[], departments: readonly Department[] = []): MemberSquad[] {
   const catalog = [...departments].sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id))
   const names = new Map(catalog.map(department => [department.id.toLowerCase(), department.name]))

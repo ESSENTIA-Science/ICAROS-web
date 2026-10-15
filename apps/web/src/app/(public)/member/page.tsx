@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import MemberCard from '@/components/member/MemberCard'
 import InView from '@/components/rocket/InView'
 import RevealNoScript from '@/components/rocket/RevealNoScript'
-import { groupBySquad, listDepartmentsSafe, listMembersSafe } from './_data'
+import { groupBySquad, listDepartmentsSafe, listMembersSafe, memberAffiliation } from './_data'
 import styles from './page.module.css'
 import { pageMetadata } from '@/lib/seo'
 
@@ -47,7 +47,7 @@ export default async function MemberPage() {
               <InView>
                 <ul className={styles.grid}>
                   {squad.members.map((m) => (
-                    <MemberCard key={m.id} member={m} departmentLabel={squad.squad ?? UNASSIGNED_SQUAD_LABEL} />
+                    <MemberCard key={m.id} member={m} departmentLabel={memberAffiliation(m, departments, squad.squad ?? UNASSIGNED_SQUAD_LABEL)} />
                   ))}
                 </ul>
               </InView>
