@@ -54,10 +54,21 @@ try {
   const context = {getRemainingTimeInMillis:()=>30000,callbackWaitsForEmptyEventLoop:false}
   const firstSha = select(1,false)
   const first = await handler(request, context)
+  const versionRequest = { ...request, rawPath: '/icaros-internal/version/',
+    requestContext: { ...request.requestContext, http: { ...request.requestContext.http, path: '/icaros-internal/version/' } } }
+  const firstVersion = await handler(versionRequest, context)
   const secondSha = select(2,true)
   const second = await handler(request, context)
+  const secondVersion = await handler(versionRequest, context)
+  assert.equal(firstVersion.statusCode, 200)
+  assert.deepEqual(JSON.parse(firstVersion.body), { version: '1' })
+  assert.match(firstVersion.headers['cache-control'], /no-store/)
+  assert.equal(secondVersion.statusCode, 200)
+  assert.deepEqual(JSON.parse(secondVersion.body), { version: '2' })
   assert.equal(first.statusCode,200);assert.match(first.body,/Original Department/)
   assert.equal(second.statusCode,200);assert.match(second.body,/Updated Department/);assert.doesNotMatch(second.body,/Original Department/)
+  assert.match(first.body, /currentVersion\\?":\\?"1\\?"/)
+  assert.match(second.body, /currentVersion\\?":\\?"2\\?"/)
   assert.ok(first.body.indexOf('Other Department') < first.body.indexOf('Original Department'))
   assert.ok(second.body.indexOf('Updated Department') < second.body.indexOf('Other Department'))
   assert.equal(second.headers['x-icaros-snapshot-sha'], secondSha)

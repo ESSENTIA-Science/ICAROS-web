@@ -3,6 +3,7 @@ import { Archivo, IBM_Plex_Mono } from 'next/font/google'
 import { getSeo } from '@/lib/content'
 import { getSnapshot } from '@/lib/content/snapshot'
 import Loader from '@/components/landing/Loader'
+import RefreshOnPublish from '@/components/RefreshOnPublish'
 import './globals.css'
 
 export const revalidate = 3600
@@ -25,5 +26,5 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const seo = getSeo(getSnapshot().site)
   const website = JSON.stringify({ '@context': 'https://schema.org', '@type': 'WebSite', name: seo.title,
     url: 'https://icaros.kr/', description: seo.description, inLanguage: 'ko-KR' }).replace(/</g, '\\u003c')
-  return <html lang="ko" className={`${display.variable} ${mono.variable}`}><head><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: website }} /></head><body><Loader />{children}</body></html>
+  return <html lang="ko" className={`${display.variable} ${mono.variable}`}><head><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: website }} /></head><body><Loader /><RefreshOnPublish currentVersion={getSnapshot().version} />{children}</body></html>
 }

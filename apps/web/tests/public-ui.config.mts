@@ -8,5 +8,5 @@ export default defineConfig({
     'server-only': fileURLToPath(new URL('./empty.mjs', import.meta.url)),
   } },
   esbuild: { jsx: 'automatic' },
-  test: { include: ['apps/web/tests/public-ui.test.tsx', 'apps/web/tests/g-runtime.test.ts'] },
+  test: { include: ['apps/web/tests/public-ui.test.tsx', 'apps/web/tests/g-runtime.test.ts', 'apps/web/tests/refresh-on-publish.test.ts'] },
 })
