@@ -112,9 +112,7 @@ test('archive-only snapshot exports no placeholder community route', () => {
     const cards = [...members.matchAll(/<li\b[^>]*data-reveal-item=""[^>]*>[\s\S]*?<\/li>/g)].map(match => match[0])
     assert.match(members, /합성 부서 추가/)
     assert.equal(cards.length, 5)
-    for (const card of cards.slice(0, 4)) assert.doesNotMatch(card, /data-bio=/)
-    assert.match(cards[4], /data-bio=""/)
-    assert.match(cards[4], /소개글이 있는 카드입니다\./)
+    for (const card of cards) assert.doesNotMatch(card, /data-bio=|소개글이 있는 카드입니다\./)
     for (let index = 0; index < cards.length; index++) {
       assert.match(cards[index], new RegExp(`alt="합성 부원 ${[0, 0, 1, 2, 3][index]} 프로필 사진"`))
       assert.match(cards[index], /src="\/assets\/models\/icx-2-poster.png"/)
@@ -536,7 +534,7 @@ test('department catalogs and ID assignments validate while older snapshots rema
   assert.doesNotThrow(() => validateSnapshot(data, publicRoot))
 })
 
-test('member department ID groups render catalog order and current section labels', () => {
+test('member department ID groups render catalog order and all affiliations on each card', () => {
   const data = clone(); const leadId = '123e4567-e89b-42d3-a456-426614174020'
   data.departments = departments.map(department => ({ ...department, leadMemberId: leadId }))
   const bioId = '123e4567-e89b-42d3-a456-426614174012'; const sha = 'c'.repeat(64)
@@ -562,10 +560,12 @@ test('member department ID groups render catalog order and current section label
     assert.deepEqual(headings, ['전자부', '제작부', '기타'])
     const cards = [...html.matchAll(/<li\b[^>]*data-reveal-item=""[^>]*>[\s\S]*?<\/li>/g)].map(match => match[0])
     assert.equal(cards.length, 5)
-    assert.match(cards[0], /전자부/); assert.match(cards[0], /합성 복수 부원/); assert.match(cards[1], /기존 첫 부원/)
-    assert.match(cards[2], /제작부/); assert.match(cards[2], /합성 복수 부원/); assert.match(cards[3], /기존 첫 부원/); assert.match(cards[4], /기타/)
+    assert.match(cards[0], /제작부 · 전자부/); assert.match(cards[0], /합성 복수 부원/)
+    assert.match(cards[1], /전자부 · 제작부/); assert.match(cards[1], /기존 첫 부원/)
+    assert.match(cards[2], /제작부 · 전자부/); assert.match(cards[2], /합성 복수 부원/)
+    assert.match(cards[3], /전자부 · 제작부/); assert.match(cards[3], /기존 첫 부원/); assert.match(cards[4], /기타/)
     assert.doesNotMatch(html, /저장된 역할|이전 부서명|승인 사진|\/api\/media\//)
-    assert.match(html, /텍스트 소개/)
+    assert.doesNotMatch(html, /텍스트 소개/)
   } finally { rmSync(temp, { force: true }) }
 })
 
