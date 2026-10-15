@@ -93,6 +93,7 @@ export default function Donate({
 
   return (
     <Section id={id} label={label} index={index} theme={theme} reveal="group">
+      {id !== 'support' ? <span id="support" aria-hidden="true" style={{ display: 'block', scrollMarginTop: 'var(--nav-h)' }} /> : null}
       <div className={styles.layout}>
         {hasFigures ? (
           <div className={styles.band} data-reveal-item="" style={revealIndex(0)}>

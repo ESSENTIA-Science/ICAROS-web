@@ -39,7 +39,7 @@
   line-height: var(--lh-mono);
   letter-spacing: var(--tr-mono);
   text-transform: uppercase;
-  color: var(--fg-faint);
+  color: var(--fg-muted);
 }
 
 .value {

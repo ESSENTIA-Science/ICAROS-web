@@ -100,6 +100,16 @@ test('runtime isolates proxy from VPC and has separate delivery and execution DL
     r.CallbackAsyncConfig.Properties.DestinationConfig.OnFailure.Destination)
   assert.ok(r.BuildEvents.Properties.EventPattern.detail['build-status'].includes('TIMED_OUT'))
 })
+test('proxy authority wiring invokes exactly the current API function without DB secret access', () => {
+  const r = read('runtime.blocked.template.json').Resources
+  assert.deepEqual(r.MediaProxyFunction.Properties.Environment.Variables.MEMBER_AUTHORITY_FUNCTION,
+    { 'Fn::GetAtt': ['ApiFunction', 'Arn'] })
+  const invoke = r.MediaProxyRole.Properties.Policies.flatMap(policy => policy.PolicyDocument.Statement)
+    .filter(statement => [].concat(statement.Action).includes('lambda:InvokeFunction'))
+  assert.deepEqual(invoke, [{ Effect: 'Allow', Action: ['lambda:InvokeFunction'], Resource: { 'Fn::GetAtt': ['ApiFunction', 'Arn'] } }])
+  assert.ok(!JSON.stringify(r.MediaProxyRole).includes('secretsmanager:GetSecretValue'))
+  assert.equal(r.MediaProxyFunction.Properties.Environment.Variables.DATABASE_URL, undefined)
+})
 
 test('member is read only from private published copy after active membership validation', async () => {
   const memberIndex = structuredClone(index)

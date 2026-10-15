@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
@@ -14,9 +14,13 @@ import styles from './Header.module.css'
  * 값이든 타입이든 클라이언트 파일에서 참조하지 않는 편이 번들 경계를 명확히 한다.
  */
 export type HeaderNavItem = { readonly href: string; readonly label: string }
+const subscribeHydration = () => () => {}
+const hydrated = () => true
+const serverHydrated = () => false
 
 export default function HeaderNav({ items }: { items: readonly HeaderNavItem[] }) {
   const pathname = usePathname()
+  const enhanced = useSyncExternalStore(subscribeHydration, hydrated, serverHydrated)
   // 메뉴는 "열었던 그 경로"에서만 열려 있다. 라우트가 바뀌면 파생적으로 닫히므로
   // 이펙트에서 setState 를 호출할 필요가 없다 (react-hooks/set-state-in-effect).
   // 뒤로가기/앞으로가기에도 그대로 동작한다.
@@ -52,6 +56,9 @@ export default function HeaderNav({ items }: { items: readonly HeaderNavItem[] }
   // 열려 있는 동안: Esc 로 닫기, 배경 스크롤 잠금, 포커스를 패널 안에 가둔다
   useEffect(() => {
     if (!open) return
+    const mobile = window.matchMedia('(max-width: 767px)')
+    if (!mobile.matches) return
+    const onBreakpoint = () => { if (!mobile.matches) close() }
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -79,14 +86,16 @@ export default function HeaderNav({ items }: { items: readonly HeaderNavItem[] }
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     document.addEventListener('keydown', onKeyDown)
+    mobile.addEventListener('change', onBreakpoint)
     return () => {
       document.body.style.overflow = prevOverflow
       document.removeEventListener('keydown', onKeyDown)
+      mobile.removeEventListener('change', onBreakpoint)
     }
-  }, [open])
+  }, [open, close])
 
   return (
-    <header className={styles.nav} data-home={pathname === '/' ? '' : undefined} data-theme="dark" data-scrolled={scrolled ? '' : undefined}>
+    <header className={styles.nav} data-enhanced={enhanced ? '' : undefined} data-home={pathname === '/' ? '' : undefined} data-theme="dark" data-scrolled={scrolled ? '' : undefined}>
       <div className={styles.inner}>
         {/* 홈에 있을 때만 aria-current 를 붙인다 — 나머지 경로에서는 속성 자체가 없어야 한다.
             `false` 를 넘기면 `aria-current="false"` 가 실제로 렌더돼 의미가 뒤집힌다. */}

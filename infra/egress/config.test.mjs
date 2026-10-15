@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
@@ -139,9 +140,7 @@ test('valid private address families and real SDK endpoint shapes remain accepte
 
 
 test('CLI emits restricted files without leaking inputs and refuses overwrites', () => {
-  const root = fileURLToPath(new URL('./.generated/', import.meta.url))
-  mkdirSync(root, { recursive: true, mode: 0o700 })
-  const directory = mkdtempSync(join(root, 'cli-'))
+  const directory = mkdtempSync(join(tmpdir(), 'icaros-egress-cli-'))
   try {
     const inputPath = join(directory, 'input.local.json')
     const output = join(directory, 'out')

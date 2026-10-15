@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto'
 import { spawn, spawnSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import pg from 'pg'
 import { validateSnapshot } from '../apps/web/scripts/snapshot-contract.mjs'
+import { selectedMemberMediaIds } from '../infra/release/compat-media-index.mjs'
 import { memberPortraitMedia } from '../apps/web/scripts/public-member-media.mjs'
 
 const root = resolve(import.meta.dirname, '..')
@@ -75,6 +77,77 @@ function download(media, destination) {
   })
 }
 
+export function localDepartmentSnapshot(department, publishedMembers) {
+  const leader = department.lead_member_id
+  return { id: department.id, name: department.name, sortOrder: department.sort_order,
+    leadMemberId: leader && publishedMembers.some(member => member.id === leader && member.department_ids?.includes(department.id)) ? leader : null }
+}
+
+export function localMemberSnapshot(member, portrait, urlFor) {
+  return {
+    id: member.id, name: member.name, role: member.role, squad: member.public_squad,
+    squads: member.public_squads ?? (member.public_squad ? [member.public_squad] : []),
+    departmentIds: member.department_ids ?? [],
+    school: member.school, bioMd: member.bio_md ?? null,
+    imageSrc: portrait ? urlFor(portrait.id) : '/assets/img/member/profile.webp',
+    hasPhoto: portrait !== null, published: true,
+  }
+}
+
+/** Fingerprint selected biography images without exporting their bytes to public assets. */
+export function localMemberCompatibilityEntry(media, bytes) {
+  const id = String(media.id).toLowerCase()
+  const extension = mediaExtension.get(media.mime)
+  const ascii = (start, end) => bytes.subarray(start, end).toString('ascii')
+  let header = false
+  if (media.mime === 'image/jpeg') header = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+  if (media.mime === 'image/png') header = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+  if (media.mime === 'image/webp') header = ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP'
+  if (media.mime === 'image/gif') header = ['GIF87a', 'GIF89a'].includes(ascii(0, 6))
+  if (media.mime === 'image/avif' && bytes.length >= 16 && ascii(4, 8) === 'ftyp') {
+    const size = bytes.readUInt32BE(0)
+    if (size >= 16 && size <= bytes.length && size <= 4096 && size % 4 === 0) {
+      header = [ascii(8, 12), ...Array.from({ length: (size - 16) / 4 }, (_, i) => ascii(16 + i * 4, 20 + i * 4))]
+        .some(brand => ['avif', 'avis'].includes(brand))
+    }
+  }
+  const checksum = createHash('sha256').update(bytes).digest('base64')
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id) || !extension || !header ||
+    !Number.isSafeInteger(Number(media.size)) || Number(media.size) !== bytes.length || bytes.length < 1 || bytes.length > 3 * 1024 * 1024 ||
+    (media.declared_checksum_sha256 != null && media.declared_checksum_sha256 !== checksum)) {
+    throw new Error('Invalid selected private member media')
+  }
+  const sha256 = createHash('sha256').update(bytes).digest('hex')
+  return { key: `published/${id}/${sha256}.${extension}`, sha256, mime: media.mime, size: bytes.length,
+    entityType: 'member', storage: 'private' }
+}
+
+export async function collectLocalMemberBioMedia(bioIds, mediaById, privateRoot, downloadMedia = download) {
+  const compatMedia = {}
+  const privateUrls = {}
+  if (bioIds.size) {
+    mkdirSync(privateRoot, { recursive: true, mode: 0o700 })
+    const temporary = mkdtempSync(resolve(privateRoot, 'member-bio-'))
+    try {
+      for (const id of bioIds) {
+        const media = mediaById.get(id)
+        if (!media || !media.mime?.startsWith('image/') || !mediaExtension.has(media.mime) ||
+          !Number.isSafeInteger(Number(media.size)) || Number(media.size) < 1 || Number(media.size) > 3 * 1024 * 1024) {
+          throw new Error('Invalid selected private member media')
+        }
+        const destination = resolve(temporary, id)
+        await downloadMedia(media, destination)
+        chmodSync(destination, 0o600)
+        if (statSync(destination).size !== Number(media.size)) throw new Error('Invalid selected private member media size')
+        compatMedia[id] = localMemberCompatibilityEntry(media, readFileSync(destination))
+        privateUrls[id] = `/api/media/${id}`
+      }
+    } finally { rmSync(temporary, { recursive: true, force: true }) }
+  }
+
+  return { compatMedia, privateUrls }
+}
+
 async function main() {
   const servicePosts = await readServicePosts()
   await client.connect()
@@ -89,14 +162,26 @@ async function main() {
     const vehicles = await query('select * from icaros.rockets where published order by sort_order, id')
     const models = await query('select rocket_id, glb_media_id, poster_media_id from icaros.rocket_models where rocket_id is not null and glb_media_id is not null order by updated_at desc, id')
     const engines = await query('select * from icaros.rocket_engines order by sort_order, id')
-    const members = await query(`select m.*, coalesce(d.name, m.squad) as public_squad
+    const departments = await query(`select d.id, d.name, d.sort_order,
+      (select md.member_id from icaros.member_departments md join icaros.members m on m.id = md.member_id
+        where md.department_id = d.id and md.is_lead and m.published) as lead_member_id
+      from icaros.departments d order by d.sort_order, d.id`)
+    const memberPhotos = await query('select image_media_id from icaros.members where image_media_id is not null')
+    const members = await query(`select m.*, coalesce(d.name, m.squad) as public_squad,
+      coalesce((select array_agg(assigned.name order by md.position)
+        from icaros.member_departments md join icaros.departments assigned on assigned.id = md.department_id
+        where md.member_id = m.id),
+        case when coalesce(d.name, m.squad) is null then array[]::text[] else array[coalesce(d.name, m.squad)] end) as public_squads,
+      coalesce((select array_agg(md.department_id::text order by md.position)
+        from icaros.member_departments md where md.member_id = m.id),
+        array[]::text[]) as department_ids
       from icaros.members m left join icaros.departments d on d.id = m.department_id
       where m.published order by m.sort_order, m.id`)
     const posts = await query('select * from icaros.legacy_posts where published order by published_at desc, id desc')
     const missions = await query('select *, launch_date::text as launch_day from icaros.missions where published order by launch_date desc, id')
-    const media = await query("select id, bucket, key, mime, width, height, entity_type, entity_id, created_at, status, deleted_at from icaros.media where status = 'ready' and deleted_at is null")
+    const media = await query("select id, bucket, key, mime, size, declared_checksum_sha256, width, height, entity_type, entity_id, created_at, status, deleted_at from icaros.media where status = 'ready' and deleted_at is null")
     await client.query('commit')
-    rows = { site, sections, panels, types, series, vehicles, models, engines, members, posts, missions, media }
+    rows = { site, sections, panels, types, series, vehicles, models, engines, departments, memberPhotos, members, posts, missions, media }
   } catch (error) {
     await client.query('rollback')
     throw error
@@ -105,10 +190,17 @@ async function main() {
   }
 
   const mediaById = new Map(rows.media.map((item) => [item.id.toLowerCase(), item]))
+  const bioIds = selectedMemberMediaIds({ members: rows.members.map(member => ({ published: true, bioMd: member.bio_md })) })
+  const memberPhotoIds = new Set(rows.memberPhotos.map(member => member.image_media_id.toLowerCase()))
+  const privateIds = new Set([...memberPhotoIds, ...bioIds])
+  const portraitIds = new Set()
   const needed = new Set()
-  const requireMedia = (id) => {
+  const requireMedia = (id, memberContext = false) => {
     const key = String(id).toLowerCase()
     if (!mediaById.has(key)) throw new Error(`Published content references unavailable media ${key}`)
+    if (!memberContext && (privateIds.has(key) || mediaById.get(key).entity_type === 'member')) {
+      throw new Error('Member media cannot be reused in static public content')
+    }
     needed.add(key)
     return key
   }
@@ -116,7 +208,7 @@ async function main() {
   for (const vehicle of rows.vehicles) if (vehicle.cover_media_id) requireMedia(vehicle.cover_media_id)
   for (const member of rows.members) {
     const portrait = memberPortraitMedia(member, mediaById)
-    if (portrait) requireMedia(portrait.id)
+    if (portrait) { portraitIds.add(portrait.id.toLowerCase()); requireMedia(portrait.id, true) }
   }
   const galleryFor = (vehicle) => {
     const images = rows.media.filter((item) => item.entity_type === 'rocket' && item.entity_id === vehicle.id &&
@@ -169,15 +261,23 @@ async function main() {
     if (value) for (const match of value.matchAll(mediaIdPattern)) requireMedia(match[1])
   }
 
+  const { compatMedia, privateUrls } = await collectLocalMemberBioMedia(bioIds, mediaById, resolve(root, 'docs/.local'))
+
   rmSync(mediaRoot, { recursive: true, force: true })
   mkdirSync(mediaRoot, { recursive: true, mode: 0o700 })
-  const mediaUrls = {}
+  const mediaUrls = { ...privateUrls }
+  const portraitUrls = {}
   const selected = [...needed].map((id) => {
     const media = mediaById.get(id)
     const extension = mediaExtension.get(media.mime)
     if (!extension) throw new Error(`Unsupported public media type for ${id}`)
     const filename = `${id}.${extension}`
-    mediaUrls[id] = `/assets/local-media/${filename}`
+    const publicUrl = `/assets/local-media/${filename}`
+    if (privateUrls[id]) {
+      // Only an explicitly selected portrait may have a local static preview copy.
+      mediaUrls[`${id}:portrait`] = publicUrl
+    } else mediaUrls[id] = publicUrl
+    if (portraitIds.has(id)) portraitUrls[id] = publicUrl
     return { media, destination: resolve(mediaRoot, filename) }
   })
   let next = 0
@@ -195,8 +295,9 @@ async function main() {
     const height = Number(media?.height)
     return width > 0 && height > 0 ? { width, height } : {}
   }
+  const versionTime = Date.now()
   const snapshot = {
-    version: `local-db-${Date.now()}`,
+    version: `local-db-${versionTime}`,
     publishedAt: new Date().toISOString(),
     site: Object.fromEntries(rows.site.map(({ key, value }) => [key, value])),
     sections: rows.sections,
@@ -237,14 +338,10 @@ async function main() {
         published: true,
       }
     }),
+    departments: rows.departments.map(department => localDepartmentSnapshot(department, rows.members)),
     members: rows.members.map((member) => {
       const portrait = memberPortraitMedia(member, mediaById)
-      return {
-        id: member.id, name: member.name, role: member.role, squad: member.public_squad,
-        school: member.school, bioMd: member.bio_md ?? null,
-        imageSrc: portrait ? urlFor(portrait.id) : '/assets/img/member/profile.webp',
-        hasPhoto: portrait !== null, published: true,
-      }
+      return localMemberSnapshot(member, portrait, id => portraitUrls[id.toLowerCase()])
     }),
     posts: [...rows.posts.map((post) => ({
       id: post.id, slug: post.slug, source: 'legacy', title: post.title,
@@ -271,6 +368,7 @@ async function main() {
       published: true,
     })),
     media: mediaUrls,
+    compatMediaIndex: { version: `local-db-${versionTime}`, media: compatMedia },
   }
   validateSnapshot(snapshot, publicRoot)
   mkdirSync(resolve(root, 'docs/.local'), { recursive: true, mode: 0o700 })
@@ -287,7 +385,7 @@ async function main() {
   process.exitCode = build.status ?? 1
 }
 
-main().catch((error) => {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) main().catch((error) => {
   console.error(error instanceof Error ? error.message : String(error))
   process.exitCode = 1
 })

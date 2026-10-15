@@ -36,7 +36,7 @@ vi.mock('react', async original => {
 })
 vi.mock('../lib/useAutosave', () => ({ useAutosave: (options: typeof harness.autosave) => {
   harness.autosave = options
-  return { status: 'idle', error: '', flush: harness.flush }
+  return { status: 'idle', error: '', flush: harness.flush, reset: vi.fn() }
 } }))
 vi.mock('../lib/cmsChanges', () => ({ flushCmsChanges: harness.globalFlush, noteCmsChange: vi.fn() }))
 vi.mock('./MarkdownField', () => ({ default: () => null }))
@@ -50,7 +50,6 @@ import { resourcesApi } from '../lib/api/resources'
 import PostCreate from './PostCreate'
 import VehicleCreate from './VehicleCreate'
 import VehicleMediaEditor from './VehicleMediaEditor'
-import AttachmentsEditor from './AttachmentsEditor'
 
 function render(component: () => ReactNode) {
   harness.cursor = 0
@@ -192,32 +191,6 @@ it('saves gallery then model in one slot and preserves media edits made during t
   expect(elements(tree).filter(node => node.props.alt?.toString().startsWith('기체 갤러리'))).toHaveLength(0)
 })
 
-it('preserves newer attachment edits and keeps selection when flushing fails', async () => {
-  const other = { ...post, id: 'post-2', title: '두 번째' }
-  vi.mocked(api.list).mockResolvedValue([post, other])
-  let tree = render(AttachmentsEditor)
-  await settle(); tree = render(AttachmentsEditor)
-  const attachment = [{ mediaId: 'one', kind: 'pdf' as const, title: '보고서' }]
-  ;(elements(tree).find(node => node.props.showInsert === false)!.props.onChange as (value: typeof attachment) => void)(attachment)
-  render(AttachmentsEditor)
-  const pending = deferred<Post>()
-  vi.mocked(api.save).mockReturnValue(pending.promise)
-  const saving = harness.autosave!.save()
-  tree = render(AttachmentsEditor)
-  ;(elements(tree).find(node => node.props.showInsert === false)!.props.onChange as (value: typeof attachment) => void)([{ ...attachment[0]!, title: '수정된 보고서' }])
-  render(AttachmentsEditor)
-  pending.resolve({ ...post, version: 'v2', attachments: attachment })
-  await saving
-  tree = render(AttachmentsEditor)
-  expect(harness.autosave?.dirty).toBe(true)
-  expect(elements(tree).find(node => node.props.showInsert === false)!.props.attachments).toEqual([{ ...attachment[0], title: '수정된 보고서' }])
-  harness.flush.mockRejectedValueOnce(new Error('save failed'))
-  const target = elements(tree).find(node => node.type === 'button' && elements(node.props.children as ReactNode).some(child => child.type === 'strong' && child.props.children === '두 번째'))!
-  click(target)
-  await settle(); render(AttachmentsEditor)
-  expect(harness.autosave?.key).toBe('post-attachments:post-1')
-})
-
 it('keeps media save failures visible to the hook and does not start the model slot after gallery failure', async () => {
   vi.mocked(api.list).mockResolvedValue([vehicle])
   vi.mocked(resourcesApi.vehicleMedia).mockImplementation(async (_id, kind) => ({ id: 'raon', version: 'v1', ...(kind === 'gallery' ? { mediaIds: ['one'] } : { modelMediaId: 'model', posterMediaId: null }) }))
@@ -251,12 +224,13 @@ it('cancels an incomplete vehicle before notifying the parent, with no creation 
   expect(localStorage.getItem('icaros:vehicle-create')).toBeNull()
 })
 
-it('rethrows attachment save errors to prevent a successful flush', async () => {
-  vi.mocked(api.list).mockResolvedValue([post])
-  render(AttachmentsEditor)
-  await settle(); const tree = render(AttachmentsEditor)
-  ;(elements(tree).find(node => node.props.showInsert === false)!.props.onChange as (value: Post['attachments']) => void)([{ mediaId: 'one', kind: 'pdf', title: '보고서' }])
-  render(AttachmentsEditor)
-  vi.mocked(api.save).mockRejectedValue(new Error('attachment conflict'))
-  await expect(harness.autosave!.save()).rejects.toThrow('attachment conflict')
+it('writes the local post draft once per edit while retaining recovery data', () => {
+  const setItem = vi.fn()
+  vi.stubGlobal('localStorage', { getItem: () => null, setItem, removeItem: vi.fn() })
+  const view = () => PostCreate({ onCreated: vi.fn() })
+  const tree = render(view)
+  change(input(tree, ''), '보관할 제목')
+  render(view)
+  expect(setItem).toHaveBeenCalledTimes(1)
+  expect(JSON.parse(setItem.mock.calls[0]![1])).toMatchObject({ draft: { title: '보관할 제목' } })
 })

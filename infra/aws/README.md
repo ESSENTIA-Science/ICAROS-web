@@ -8,7 +8,7 @@
 - `certificate.template.json`: us-east-1 DNS validation. parent 요청 certificate 재사용 여부를 확인하며 중복 요청하지 않는다.
 - `config.schema.json`/`config.example.json`: 플레이스홀더만. approvals=true는 최신 승인 반영, codeFixes/gates=false는 합성 예시이며 부모 검증 상태를 취소하지 않는다.
 - `review.mjs`: 검증/private bundle 생성만. deploy 명령 없음, 값 출력 없음. 실제 값은 저장소 밖 private config와 0700/0600 bundle에 저장한다.
-- `media-proxy.mjs`, `package.json`, `package-lock.json`, `proxy.package.json`: 별도 Node22 artifact. public/private selected copies, active index/member allowlist, MIME/hash/size 검증, no-store. SigV4a pinned side-effect import 포함.
+- `media-proxy.mjs`, `package.json`, `package-lock.json`: 별도 Node22 artifact. 이 manifest/lock이 유일한 packaging 정본이다. selected copies와 current API/DB authority, MIME/hash/size 검증, no-store. SigV4a pinned side-effect import 포함.
 - `NETWORK.md`: 선택된 proxy 구성과 IPv6/NAT 대안·비용·운영 비교.
 - `preflight.sql`: 읽기 검증 쿼리. migration 아님.
 

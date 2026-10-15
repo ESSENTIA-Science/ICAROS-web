@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api, ApiError } from './client'
+import { getCmsChanges, noteCmsChange } from '../cmsChanges'
 import type { Post, Rocket } from './types'
 
 const rocket: Rocket = {
@@ -8,6 +9,18 @@ const rocket: Rocket = {
   descriptionMd: '기존 설명', maxAltitudeM: '', sizeM: '', payloadKg: '',
 }
 const post: Post = { id: 'post-1', version: 'v1', publishState: 'draft_saved', updatedAt: '2026-09-30T01:00:00Z', title: '첫 기록', bodyMd: '본문', authorLabel: '관리자', displayDate: '2026-09-30', attachments: [] }
+
+function storage(): Storage {
+  const values = new Map<string, string>()
+  return {
+    get length() { return values.size },
+    key: index => [...values.keys()][index] ?? null,
+    getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => { values.set(key, value) },
+    removeItem: key => { values.delete(key) },
+    clear: () => { values.clear() },
+  }
+}
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -48,6 +61,53 @@ describe('admin API client', () => {
     await expect(api.session()).resolves.toEqual({ userId: 'admin-1', email: 'admin@example.test', displayName: null })
     expect(fetcher.mock.calls[0]?.[0]).toBe('/api/admin/session')
     expect(fetcher.mock.calls[0]?.[1].credentials).toBe('same-origin')
+  })
+
+  it('removes another administrator’s local drafts before opening a new session', async () => {
+    const localStorage = storage()
+    const sessionStorage = storage()
+    localStorage.setItem('icaros:cms:draft-owner', 'admin-1')
+    localStorage.setItem('icaros:post-create', 'private draft')
+    localStorage.setItem('icaros:vehicle-create', 'private vehicle')
+    localStorage.setItem('icaros:cms:changes', 'old publication state')
+    sessionStorage.setItem('icaros:publish:["posts","post-1","v1"]', 'old-key')
+    vi.stubGlobal('window', { localStorage, sessionStorage })
+    noteCmsChange()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, data: { userId: 'admin-2', email: 'second@example.test' } }), { status: 200 })))
+
+    await api.session()
+
+    expect(localStorage.getItem('icaros:post-create')).toBeNull()
+    expect(localStorage.getItem('icaros:vehicle-create')).toBeNull()
+    expect(localStorage.getItem('icaros:cms:changes')).toBeNull()
+    expect(sessionStorage.length).toBe(0)
+    expect(localStorage.getItem('icaros:cms:draft-owner')).toBe('admin-2')
+    expect(getCmsChanges().revision).toBe(0)
+  })
+
+  it('keeps a draft when the same administrator resumes the session', async () => {
+    const localStorage = storage()
+    localStorage.setItem('icaros:cms:draft-owner', 'admin-1')
+    localStorage.setItem('icaros:post-create', 'my draft')
+    vi.stubGlobal('window', { localStorage, sessionStorage: storage() })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, data: { userId: 'admin-1', email: 'same@example.test' } }), { status: 200 })))
+
+    await api.session()
+
+    expect(localStorage.getItem('icaros:post-create')).toBe('my draft')
+  })
+
+  it('clears local drafts after confirmed logout', async () => {
+    const localStorage = storage()
+    localStorage.setItem('icaros:cms:draft-owner', 'admin-1')
+    localStorage.setItem('icaros:post-create', 'private draft')
+    vi.stubGlobal('window', { localStorage, sessionStorage: storage() })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, data: { logoutUrl: 'https://login.example.test/logout' } }), { status: 200 })))
+
+    await api.logout()
+
+    expect(localStorage.getItem('icaros:post-create')).toBeNull()
+    expect(localStorage.getItem('icaros:cms:draft-owner')).toBeNull()
   })
 
   it('never reports a failed write as saved', async () => {

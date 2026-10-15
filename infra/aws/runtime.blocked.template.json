@@ -813,7 +813,7 @@
         },
         "Policies": [
           {
-            "PolicyName": "public-index-read-only",
+            "PolicyName": "public-index-and-current-member-authority",
             "PolicyDocument": {
               "Version": "2012-10-17",
               "Statement": [
@@ -868,6 +868,18 @@
                   "Resource": {
                     "Fn::Sub": "arn:${AWS::Partition}:s3:::${ReleaseBucketName}/releases/*/published-member-media.json"
                   }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "ApiFunction",
+                      "Arn"
+                    ]
+                  }
                 }
               ]
             }
@@ -916,6 +928,12 @@
             },
             "PRIVATE_MEDIA_BUCKET": {
               "Ref": "PrivateMediaBucketName"
+            },
+            "MEMBER_AUTHORITY_FUNCTION": {
+              "Fn::GetAtt": [
+                "ApiFunction",
+                "Arn"
+              ]
             }
           }
         },

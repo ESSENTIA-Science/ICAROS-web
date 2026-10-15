@@ -1,21 +1,32 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { createRenderLoop } from '../three/lifecycle'
+import { disposeOwnedScenes } from '../three/ownedResources'
 import styles from './ModelStage.module.css'
 
-export default function ModelViewer({ src, label, onReady, onError }: {
+export default function ModelViewer({ src, label, active, onReady, onError }: {
   src: string
+  active: boolean
   label: string
   onReady: () => void
   onError: () => void
 }) {
   const host = useRef<HTMLDivElement>(null)
+  const activeRef = useRef(active)
+  const loopRef = useRef<ReturnType<typeof createRenderLoop> | null>(null)
+
+  useEffect(() => {
+    activeRef.current = active
+    loopRef.current?.setActive(active && !document.hidden)
+  }, [active])
 
   useEffect(() => {
     const element = host.current
     if (!element) return
     let disposed = false
-    let frame = 0
+    let ownedScenes: import('three').Object3D[] = []
+    let removeEvents: (() => void) | undefined
     let renderer: import('three').WebGLRenderer | undefined
     let model: import('three').Object3D | undefined
     let controls: import('three/examples/jsm/controls/OrbitControls.js').OrbitControls | undefined
@@ -42,7 +53,11 @@ export default function ModelViewer({ src, label, onReady, onError }: {
         scene.add(keyLight)
 
         const loaded = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(src)
-        if (disposed) return
+        if (disposed) {
+          disposeOwnedScenes(loaded.scenes)
+          return
+        }
+        ownedScenes = loaded.scenes
         model = loaded.scene
         scene.add(model)
         const box = new THREE.Box3().setFromObject(model)
@@ -63,7 +78,8 @@ export default function ModelViewer({ src, label, onReady, onError }: {
         controls.target.copy(center)
         controls.enableDamping = true
         controls.dampingFactor = 0.04
-        controls.autoRotate = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
+        controls.autoRotate = !motion.matches
         controls.autoRotateSpeed = 0.6
         controls.update()
 
@@ -75,23 +91,41 @@ export default function ModelViewer({ src, label, onReady, onError }: {
           renderer.setSize(width, height)
           camera.aspect = width / height
           camera.updateProjectionMatrix()
+          loopRef.current?.invalidate()
         }
         observer = new ResizeObserver(resize)
         observer.observe(element)
         resize()
 
         let firstFrame = true
-        const draw = () => {
-          if (disposed || !renderer) return
-          controls?.update()
+        const loop = createRenderLoop(() => {
+          if (!renderer) return false
+          const changed = controls?.update() ?? false
           renderer.render(scene, camera)
           if (firstFrame) {
             firstFrame = false
             onReady()
           }
-          frame = requestAnimationFrame(draw)
+          return changed
+        })
+        loopRef.current = loop
+        const syncVisibility = () => loop.setActive(activeRef.current && !document.hidden)
+        const syncMotion = () => {
+          if (controls) controls.autoRotate = !motion.matches
+          loop.setContinuous(!motion.matches)
+          loop.invalidate()
         }
-        draw()
+        const invalidate = () => loop.invalidate()
+        controls.addEventListener('change', invalidate)
+        document.addEventListener('visibilitychange', syncVisibility)
+        motion.addEventListener('change', syncMotion)
+        removeEvents = () => {
+          controls?.removeEventListener('change', invalidate)
+          document.removeEventListener('visibilitychange', syncVisibility)
+          motion.removeEventListener('change', syncMotion)
+        }
+        syncMotion()
+        syncVisibility()
       } catch {
         if (!disposed) onError()
       }
@@ -100,16 +134,12 @@ export default function ModelViewer({ src, label, onReady, onError }: {
     void start()
     return () => {
       disposed = true
-      cancelAnimationFrame(frame)
+      loopRef.current?.dispose()
+      loopRef.current = null
+      removeEvents?.()
       observer?.disconnect()
       controls?.dispose()
-      model?.traverse((node) => {
-        const mesh = node as import('three').Mesh
-        if (!mesh.isMesh) return
-        mesh.geometry.dispose()
-        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
-        materials.forEach((material) => material.dispose())
-      })
+      disposeOwnedScenes(ownedScenes)
       renderer?.dispose()
       renderer?.domElement.remove()
     }

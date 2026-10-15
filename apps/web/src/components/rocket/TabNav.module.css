@@ -32,7 +32,7 @@
   font-size: var(--fs-mono);
   letter-spacing: var(--tr-mono);
   text-transform: uppercase;
-  color: var(--fg-faint);
+  color: var(--fg-muted);
   /* 활성 표시선을 여기에 겹쳐 두면 탭 사이 간격이 흔들리지 않는다 */
   border-bottom: 1px solid transparent;
   margin-bottom: -1px;

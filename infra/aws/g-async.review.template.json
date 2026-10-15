@@ -1,0 +1,460 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Review-only opt-in G API async failure configuration and minute bounded reconciliation schedule. One EventInvokeConfig owner per function/qualifier.",
+  "Parameters": {
+    "EnableGAsyncFailure": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "false",
+        "true"
+      ]
+    },
+    "ReviewedGApiRevision": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|[a-f0-9]{40}"
+    },
+    "GApiFunctionName": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|[A-Za-z0-9_-]{1,64}$"
+    },
+    "GApiRoleName": {
+      "Type": "String",
+      "Default": ""
+    },
+    "InvocationQualifier": {
+      "Type": "String",
+      "Default": "$LATEST",
+      "AllowedPattern": "\\$LATEST|[A-Za-z0-9_-]+"
+    },
+    "MaximumEventAgeInSeconds": {
+      "Type": "Number",
+      "Default": 3600,
+      "MinValue": 60,
+      "MaxValue": 21600
+    },
+    "MaximumRetryAttempts": {
+      "Type": "Number",
+      "Default": 2,
+      "AllowedValues": [
+        0,
+        1,
+        2
+      ]
+    },
+    "EnableGReconcile": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "false",
+        "true"
+      ],
+      "Description": "Enable only after trusted G-only bounded reconciliation, exact source/alias and existing failure destination are verified."
+    },
+    "ExistingGFailureQueueArn": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^(?:|arn:[^:]+:sqs:[a-z0-9-]+:[0-9]{12}:[A-Za-z0-9_-]{1,80})$",
+      "Description": "Existing same-account/region standard SQS queue, encrypted and retained; FIFO queues are not valid Lambda async destinations."
+    },
+    "AliasCompletionQualifierVerified": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "false",
+        "true"
+      ],
+      "Description": "Keep false unless scheduled worker and completion self-invocation are proven to target the exact same alias/version and async configuration. LATEST needs no alias change."
+    }
+  },
+  "Conditions": {
+    "GAsyncFailureEnabled": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableGAsyncFailure"
+        },
+        "true"
+      ]
+    },
+    "GReconcileEnabled": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableGReconcile"
+        },
+        "true"
+      ]
+    },
+    "UseExistingFailureQueue": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "ExistingGFailureQueueArn"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "CreateGAsyncFailureQueue": {
+      "Fn::And": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "EnableGAsyncFailure"
+            },
+            "true"
+          ]
+        },
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "ExistingGFailureQueueArn"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "InvokeLatest": {
+      "Fn::Equals": [
+        {
+          "Ref": "InvocationQualifier"
+        },
+        "$LATEST"
+      ]
+    }
+  },
+  "Rules": {
+    "RequireReviewedGSource": {
+      "RuleCondition": {
+        "Fn::Equals": [
+          {
+            "Ref": "EnableGAsyncFailure"
+          },
+          "true"
+        ]
+      },
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "ReviewedGApiRevision"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "ReviewedGApiRevision must be reviewed against the active G API source and invocation target."
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "GApiFunctionName"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "GApiFunctionName must be reviewed against the active G API source and invocation target."
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "GApiRoleName"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "GApiRoleName must be reviewed against the active G API source and invocation target."
+        }
+      ]
+    },
+    "RequireReconcilerFailureDestination": {
+      "RuleCondition": {
+        "Fn::Equals": [
+          {
+            "Ref": "EnableGReconcile"
+          },
+          "true"
+        ]
+      },
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Equals": [
+              {
+                "Ref": "EnableGAsyncFailure"
+              },
+              "true"
+            ]
+          },
+          "AssertDescription": "Reconciliation requires async failure configuration on the same function and invocation qualifier."
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "ExistingGFailureQueueArn"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Reconciliation requires an existing verified standard failure queue; do not enable against an absent destination."
+        }
+      ]
+    },
+    "RequireReconcilerQualifierMatch": {
+      "RuleCondition": {
+        "Fn::Equals": [
+          {
+            "Ref": "EnableGReconcile"
+          },
+          "true"
+        ]
+      },
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Or": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "InvocationQualifier"
+                  },
+                  "$LATEST"
+                ]
+              },
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "AliasCompletionQualifierVerified"
+                  },
+                  "true"
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Use the verified base LATEST target; alias/version scheduling is blocked until completion self-invocation qualifier consistency is verified."
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "GAsyncFailureQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Condition": "CreateGAsyncFailureQueue",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "MessageRetentionPeriod": 1209600,
+        "SqsManagedSseEnabled": true
+      }
+    },
+    "GAsyncDestinationPermission": {
+      "Type": "AWS::IAM::Policy",
+      "Condition": "GAsyncFailureEnabled",
+      "Properties": {
+        "PolicyName": "icaros-g-async-failure",
+        "Roles": [
+          {
+            "Ref": "GApiRoleName"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sqs:SendMessage",
+              "Resource": {
+                "Fn::If": [
+                  "UseExistingFailureQueue",
+                  {
+                    "Ref": "ExistingGFailureQueueArn"
+                  },
+                  {
+                    "Fn::GetAtt": [
+                      "GAsyncFailureQueue",
+                      "Arn"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "GAsyncInvokeConfig": {
+      "Type": "AWS::Lambda::EventInvokeConfig",
+      "Condition": "GAsyncFailureEnabled",
+      "DependsOn": "GAsyncDestinationPermission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "GApiFunctionName"
+        },
+        "Qualifier": {
+          "Ref": "InvocationQualifier"
+        },
+        "MaximumEventAgeInSeconds": {
+          "Ref": "MaximumEventAgeInSeconds"
+        },
+        "MaximumRetryAttempts": {
+          "Ref": "MaximumRetryAttempts"
+        },
+        "DestinationConfig": {
+          "OnFailure": {
+            "Destination": {
+              "Fn::If": [
+                "UseExistingFailureQueue",
+                {
+                  "Ref": "ExistingGFailureQueueArn"
+                },
+                {
+                  "Fn::GetAtt": [
+                    "GAsyncFailureQueue",
+                    "Arn"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "GReconcileRule": {
+      "Type": "AWS::Events::Rule",
+      "Condition": "GReconcileEnabled",
+      "DependsOn": "GAsyncInvokeConfig",
+      "Properties": {
+        "Description": "G-only trusted reconciler; at most one durable-leased job per tick. No HTTP or CodeBuild/static reconciliation.",
+        "ScheduleExpression": "rate(1 minute)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Id": "g-reconcile",
+            "Arn": {
+              "Fn::If": [
+                "InvokeLatest",
+                {
+                  "Fn::Sub": "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${GApiFunctionName}"
+                },
+                {
+                  "Fn::Sub": "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${GApiFunctionName}:${InvocationQualifier}"
+                }
+              ]
+            },
+            "Input": "{\"kind\":\"icaros.g.reconcile\"}",
+            "RetryPolicy": {
+              "MaximumEventAgeInSeconds": 60,
+              "MaximumRetryAttempts": 2
+            }
+          }
+        ]
+      }
+    },
+    "GReconcilePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Condition": "GReconcileEnabled",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::If": [
+            "InvokeLatest",
+            {
+              "Fn::Sub": "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${GApiFunctionName}"
+            },
+            {
+              "Fn::Sub": "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${GApiFunctionName}:${InvocationQualifier}"
+            }
+          ]
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "GReconcileRule",
+            "Arn"
+          ]
+        },
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "GFailureQueueName": {
+      "Condition": "GAsyncFailureEnabled",
+      "Value": {
+        "Fn::If": [
+          "UseExistingFailureQueue",
+          {
+            "Fn::Select": [
+              5,
+              {
+                "Fn::Split": [
+                  ":",
+                  {
+                    "Ref": "ExistingGFailureQueueArn"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Fn::GetAtt": [
+              "GAsyncFailureQueue",
+              "QueueName"
+            ]
+          }
+        ]
+      }
+    },
+    "GFailureQueueArn": {
+      "Condition": "GAsyncFailureEnabled",
+      "Value": {
+        "Fn::If": [
+          "UseExistingFailureQueue",
+          {
+            "Ref": "ExistingGFailureQueueArn"
+          },
+          {
+            "Fn::GetAtt": [
+              "GAsyncFailureQueue",
+              "Arn"
+            ]
+          }
+        ]
+      }
+    },
+    "GReconcileRuleArn": {
+      "Condition": "GReconcileEnabled",
+      "Value": {
+        "Fn::GetAtt": [
+          "GReconcileRule",
+          "Arn"
+        ]
+      }
+    }
+  }
+}

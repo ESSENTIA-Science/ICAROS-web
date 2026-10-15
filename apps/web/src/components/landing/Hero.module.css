@@ -127,7 +127,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sp-3);
-  color: var(--fg-faint);
+  color: var(--fg-muted);
   transition: var(--t-color);
 }
 .scroll:hover { color: var(--fg); }

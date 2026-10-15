@@ -139,4 +139,12 @@
   }
   .list li + li { border-top: 1px solid var(--rule); }
   .link { display: block; padding-block: var(--sp-5); font-size: var(--fs-body); }
+
+  /* Static links stay usable when scripts are disabled or hydration fails. */
+  .nav:not([data-enhanced]) { position: relative; background: var(--n-950); }
+  .nav:not([data-enhanced]) .inner { height: auto; flex-wrap: wrap; gap: 0; }
+  .nav:not([data-enhanced]) .brand { min-height: var(--nav-h); }
+  .nav:not([data-enhanced]) .toggle { display: none; }
+  .nav:not([data-enhanced]) .menu { position: static; width: 100%; visibility: visible; opacity: 1; transform: none; pointer-events: auto; transition: none; }
+  .nav:not([data-enhanced]) .list { padding-inline: 0; }
 }
