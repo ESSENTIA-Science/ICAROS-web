@@ -124,13 +124,23 @@ it('shows every assigned department on the member card in either department sect
   }
 })
 
-it('hides member biographies while keeping the member identity visible', () => {
+it('renders member biography Markdown while blocking embedded images and raw HTML', () => {
   const member: MemberDto = { id: 'member', name: '테스트 부원', role: null, squad: '비행제어부',
-    school: null, bioMd: '비공개 카드 소개', imageSrc: '/assets/img/member/profile.webp', hasPhoto: false }
+    school: null, bioMd: '**비행 제어**를 담당합니다.\n\n![개인 사진](https://example.com/private.webp)\n\n<img src="https://example.com/raw.webp">',
+    imageSrc: '/assets/img/member/profile.webp', hasPhoto: false }
   const html = renderToStaticMarkup(<MemberCard member={member} departmentLabel="비행제어부" />)
   expect(html).toContain('테스트 부원')
-  expect(html).not.toContain('비공개 카드 소개')
+  expect(html).toContain('<strong>비행 제어</strong>를 담당합니다.')
+  expect(html).toContain('data-bio=""')
+  expect(html).not.toContain('https://example.com/')
+})
+
+it.each([null, '', '   \n'])('omits the biography area for empty member introductions: %s', bioMd => {
+  const member: MemberDto = { id: 'member', name: '테스트 부원', role: null, squad: null,
+    school: null, bioMd, imageSrc: '/assets/img/member/profile.webp', hasPhoto: false }
+  const html = renderToStaticMarkup(<MemberCard member={member} departmentLabel="제작부" />)
   expect(html).not.toContain('data-bio')
+  expect(html).toContain('테스트 부원')
 })
 it('moves only each department leader first while preserving all remaining order and roles', () => {
   const a = '123e4567-e89b-42d3-a456-426614174010', b = '123e4567-e89b-42d3-a456-426614174011'
