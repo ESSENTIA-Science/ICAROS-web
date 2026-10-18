@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { resourcesApi } from '../lib/api/resources'
 import { useAutosave } from '../lib/useAutosave'
-import { noteCmsChange } from '../lib/cmsChanges'
+import { noteCmsChange, trackCmsOperation } from '../lib/cmsChanges'
 import { fields, resourceLabels, type ResourceKind, type ResourceRecord } from '../lib/resources'
 import MarkdownField from './MarkdownField'
 import ImagePreview from './ImagePreview'
@@ -169,14 +169,18 @@ export default function ResourceEditor({ kind, onChanged, optionsRevision = 0 }:
     const allowed = key === 'imageMediaId' || key === 'posterMediaId' ? ['image/jpeg', 'image/png', 'image/webp'] : key === 'modelMediaId' ? ['model/gltf-binary'] : kind === 'post-attachments' ? ['application/pdf', 'video/mp4'] : ['image/jpeg', 'image/png', 'image/webp', 'video/mp4']
     if (!allowed.includes(file.type)) { setError('지원하지 않는 파일 형식입니다.'); return }
     setBusy(true); setError(''); setMessage('')
+    // 게시 요청은 파일 전송뿐 아니라 새 미디어 ID의 폼 연결까지 기다려야 한다.
     try {
-      const media = await resourcesApi.upload(file, key === 'imageMediaId' ? 'member' : undefined)
-      if (key === 'galleryMediaIds') set(key, [...(draft.galleryMediaIds ?? []), media.id])
-      else set(key, media.id)
-      if (key === 'mediaId') set('mediaKind', file.type === 'application/pdf' ? 'pdf' : file.type.startsWith('video/') ? 'video' : 'image')
-      setMessage('파일 업로드가 확인되었습니다. 필수 값이 입력되면 자동으로 연결됩니다.')
+      await trackCmsOperation(async () => {
+        try {
+          const media = await resourcesApi.upload(file, key === 'imageMediaId' ? 'member' : undefined)
+          if (key === 'galleryMediaIds') set(key, [...(draft.galleryMediaIds ?? []), media.id])
+          else set(key, media.id)
+          if (key === 'mediaId') set('mediaKind', file.type === 'application/pdf' ? 'pdf' : file.type.startsWith('video/') ? 'video' : 'image')
+          setMessage('파일 업로드가 확인되었습니다. 필수 값이 입력되면 자동으로 연결됩니다.')
+        } finally { setBusy(false) }
+      })
     } catch (cause) { setError(cause instanceof Error ? cause.message : '업로드에 실패했습니다.') }
-    finally { setBusy(false) }
   }
   async function move(offset: number) {
     if (!active || readOnly || loading || busy) return

@@ -23,7 +23,7 @@ const browser = await chromium.launch({ ...(executablePath ? { executablePath } 
 let passed = 0
 const first = '11111111-1111-4111-8111-111111111111', second = '22222222-2222-4222-8222-222222222222', memberId = '44444444-4444-4444-8444-444444444444'
 const waitUntil = async check => { for (let attempt = 0; attempt < 100; attempt++) { if (await check()) return; await new Promise(resolve => setTimeout(resolve, 50)) } throw new Error('Condition timeout') }
-async function scenario(name, work) { console.log(`RUN ${name}`); await work(); passed++; console.log(`PASS ${name}`) }
+async function scenario(name, work) { if (process.env.ICAROS_BROWSER_SCENARIO && !name.includes(process.env.ICAROS_BROWSER_SCENARIO)) return; console.log(`RUN ${name}`); await work(); passed++; console.log(`PASS ${name}`) }
 function fixture() {
   return { records: { departments: [{ id: first, version: 'v1', name: '제작부', sortOrder: 0 }, { id: second, version: 'v1', name: '전자부', sortOrder: 0 }], members: [{ id: memberId, version: 'v1', name: 'old', departmentIds: [first], bioMd: '', imageMediaId: null, published: true }], missions: [{ id: memberId, version: 'v1', title: 'old mission', launchDate: '2026-10-13', outcome: 'planned', location: 'fixture launch site', summary: '', bodyMd: '', published: false }], rockets: [{ id: 'fixture-vehicle', version: 'v1', publishState: 'draft_saved', updatedAt: '2026-10-13T00:00:00Z', name: 'fixture vehicle', series: 'series-fixture', descriptionMd: '', maxAltitudeM: '', sizeM: '', payloadKg: '', specs: [], published: false }], 'vehicle-types': [{ id: 'type-fixture', version: 'v1', label: 'fixture type' }], 'rocket-series': [{ id: 'series-fixture', version: 'v1', label: 'fixture series', typeId: 'type-fixture' }], posts: [{ id: 'existing-post', version: 'v1', publishState: 'draft_saved', updatedAt: '2026-10-13T00:00:00Z', title: 'existing post', bodyMd: 'old body', authorLabel: 'fixture', displayDate: '2026-10-13', attachments: [] }], site: [{ id: 'donation.current', version: 'v1', updatedAt: '2026-10-13T00:00:00Z', publishState: 'draft_saved', value: '0' }] }, media: { gallery: { id: 'fixture-vehicle', version: 'v1', mediaIds: [first, second] }, model: { id: 'fixture-vehicle', version: 'v1', modelMediaId: null, posterMediaId: null } }, readGate: null, failPut: null, calls: [], createGate: null, loseCreate: false, conflict: false, jobState: 'publishing', publishGate: null }
 }
@@ -35,10 +35,10 @@ async function setup(state, tab = 'members') {
     state.calls.push({ method, pathname, body, version: request.headers()['if-match'] })
     const send = (data, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(status === 200 ? { ok: true, data } : { ok: false, message: 'CONFLICT' }) })
     if (pathname.endsWith('/media/presign')) return send({ mediaId: second, uploadUrl: `${origin}/__fixture-upload`, contentType: body.contentType })
-    if (pathname.endsWith('/media/confirm')) return send({ id: second })
+    if (pathname.endsWith('/media/confirm')) { if (state.confirmGate) await state.confirmGate; return state.confirmFailure ? send(null, 503) : send({ id: second }) }
     if (pathname.endsWith('/preview')) return send({ mime: 'image/png', base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5p0AAAAASUVORK5CYII=' })
     if (pathname.endsWith('/session')) return send({ userId: 'fixture-admin', email: 'fixture@example.invalid' })
-    if (pathname === '/api/admin/publish' && method === 'POST') { if (state.publishGate) await state.publishGate; return send({ id: 'fixture-job', state: state.jobState }) }
+    if (pathname === '/api/admin/publish' && method === 'POST') { if (state.publishGate) await state.publishGate; state.publishedMembers = structuredClone(state.records.members); return send({ id: 'fixture-job', state: state.jobState }) }
     if (pathname === '/api/admin/publish/fixture-job') return send({ id: 'fixture-job', state: state.jobState })
     const pieces = pathname.split('/'), kind = pieces[4], id = pieces[5]
     const records = state.records[kind] ?? []
@@ -326,6 +326,47 @@ try {
     const presign = state.calls.find(call => call.pathname.endsWith('/media/presign')); assert.equal(presign.body.size, uploaded.bytes.length); assert.equal(presign.body.kind, 'member')
     assert.ok(state.calls.findIndex(call => call.pathname.endsWith('/media/confirm')) < state.calls.findIndex(call => call.method === 'PUT'))
     assert.equal(updates(state).at(-1).body.imageMediaId, second); await context.close()
+  })
+  await scenario('profile upload followed immediately by publication saves the new photo before taking the snapshot', async () => {
+    const state = fixture(); state.records.members[0].imageMediaId = first; state.jobState = 'published'
+    let release; state.confirmGate = new Promise(resolve => { release = resolve })
+    const { page, context, errors } = await setup(state)
+    await context.route(`${origin}/__fixture-upload`, route => route.fulfill({ status: 200, body: '' }))
+    await page.locator('.listItems button').first().click()
+    const png = await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 2; canvas.height = 2; canvas.getContext('2d').fillRect(0, 0, 2, 2); return canvas.toDataURL('image/png').split(',')[1] })
+    await page.getByLabel('프로필 사진 업로드').setInputFiles({ name: 'replacement.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') })
+    await waitUntil(() => state.calls.some(call => call.pathname.endsWith('/media/confirm')))
+    await page.getByRole('button', { name: '변경사항 반영하기', exact: true }).click()
+    await page.getByRole('button', { name: '전체 사이트 반영', exact: true }).click()
+    assert.equal(state.publishedMembers, undefined, 'publication must wait for the upload')
+    release()
+    await waitUntil(() => state.publishedMembers !== undefined)
+    assert.equal(state.publishedMembers[0].imageMediaId, second)
+    assert.equal(state.records.members[0].imageMediaId, second)
+    const photoSave = state.calls.findIndex(call => call.method === 'PUT' && call.body?.imageMediaId === second)
+    assert.ok(photoSave > state.calls.findIndex(call => call.pathname.endsWith('/media/confirm')))
+    assert.ok(photoSave < state.calls.findIndex(call => call.pathname === '/api/admin/publish'))
+    await page.getByText('모든 변경사항 반영됨', { exact: true }).waitFor()
+    await page.reload(); await page.locator('.listItems button').first().click()
+    assert.equal(state.records.members[0].imageMediaId, second)
+    assert.deepEqual(errors, []); await context.close()
+  })
+  await scenario('profile upload failure blocks a waiting publication and preserves the old photo', async () => {
+    const state = fixture(); state.records.members[0].imageMediaId = first; state.confirmFailure = true
+    let release; state.confirmGate = new Promise(resolve => { release = resolve })
+    const { page, context, errors } = await setup(state)
+    await context.route(`${origin}/__fixture-upload`, route => route.fulfill({ status: 200, body: '' }))
+    await page.locator('.listItems button').first().click()
+    const png = await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 2; canvas.height = 2; canvas.getContext('2d').fillRect(0, 0, 2, 2); return canvas.toDataURL('image/png').split(',')[1] })
+    await page.getByLabel('프로필 사진 업로드').setInputFiles({ name: 'failed.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') })
+    await waitUntil(() => state.calls.some(call => call.pathname.endsWith('/media/confirm')))
+    await page.getByRole('button', { name: '변경사항 반영하기', exact: true }).click()
+    await page.getByRole('button', { name: '전체 사이트 반영', exact: true }).click()
+    release()
+    await page.locator('.publicationDialog [role="alert"]').waitFor()
+    assert.equal(state.calls.some(call => call.pathname === '/api/admin/publish'), false)
+    assert.equal(state.records.members[0].imageMediaId, first)
+    assert.deepEqual(errors, []); await context.close()
   })
   await scenario('two real browser tabs synchronize durable changes and publication terminal polling', async () => {
     const state = fixture(); const { page, context } = await setup(state)
