@@ -234,7 +234,9 @@
                 "PUT"
               ],
               "AllowedHeaders": [
-                "content-type"
+                "content-type",
+                "if-none-match",
+                "x-amz-checksum-sha256"
               ],
               "ExposedHeaders": [
                 "ETag"
