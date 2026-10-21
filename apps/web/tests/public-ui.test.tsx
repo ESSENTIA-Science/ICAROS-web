@@ -158,3 +158,11 @@ it('moves only each department leader first while preserving all remaining order
   }
   expect(groupBySquad(people.filter(person => person.id !== 'third'), departments)[0]!.members.map(person => person.id)).toEqual(['first', 'second'])
 })
+
+it('keeps colon text that remark-directive would parse as directives', () => {
+  const html = renderToStaticMarkup(<PostMarkdown content={'시험 결과:성공, 비율 3:2, 14:30 발사\n\n::leaf\n\n:::gallery{columns=2}\n![a](/media/a.webp)\n![b](/media/b.webp)\n:::'} />)
+  expect(html).toContain('시험 결과:성공, 비율 3:2, 14:30 발사')
+  expect(html).toContain('::leaf')
+  expect(html).not.toMatch(/<p>[^<]*<div/)
+  expect(html).toContain('data-gallery') // 기존 갤러리 마크업 식별자에 맞춰 조정
+})

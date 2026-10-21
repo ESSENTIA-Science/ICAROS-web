@@ -82,3 +82,12 @@ it('does not show camera filenames as captions in the CMS preview', () => {
   expect(html).toContain('data-gallery-columns="1"')
   expect(html).not.toContain('<figcaption>IMG_0001.jpeg</figcaption>')
 })
+
+it('keeps colon text that remark-directive would parse as directives in the CMS preview', () => {
+  const value = '시험 결과:성공, 비율 3:2, 14:30 발사\n\n::leaf\n\n:::gallery{columns=2}\n![a](/assets/a.webp)\n![b](/assets/b.webp)\n:::'
+  const html = renderToStaticMarkup(<MarkdownField label="본문" value={value} onChange={() => {}} />)
+  expect(html).toContain('시험 결과:성공, 비율 3:2, 14:30 발사')
+  expect(html).toContain('::leaf')
+  expect(html).not.toMatch(/<p>[^<]*<div/)
+  expect(html).toContain('data-gallery-columns="2"')
+})

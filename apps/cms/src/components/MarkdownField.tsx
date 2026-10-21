@@ -10,6 +10,7 @@ import ImagePreview from './ImagePreview'
 import { resourcesApi } from '../lib/api/resources'
 import { insertGalleryMarkdown, insertTableMarkdown, parseSpreadsheetCells, readGalleryAt, readSelectedImages, readTableAt, type GalleryAlign, type GalleryColumns, type GalleryImage } from './markdownBlocks'
 import { remarkGallery } from './remarkGallery'
+import { remarkRestoreTextDirectives } from '../lib/markdown/restoreTextDirectives'
 import MarkdownBodyMedia from './MarkdownBodyMedia'
 import { bodyMediaFileKind, insertBodyMediaMarkdown, rememberBodyMediaPreview } from './bodyMedia'
 
@@ -343,6 +344,6 @@ export default function MarkdownField({ label, value, onChange, rows = 6, disabl
     {panel && editConflict && <p className="notice error" role="alert">편집 중인 본문이 변경되거나 삭제되었습니다. 표 또는 이미지 배치를 다시 선택해 편집하세요.</p>}
     <div ref={mountRef} className="markdownEditor" role="textbox" aria-labelledby={id} aria-multiline="true" style={{ minHeight: `${Math.max(rows, 3) * 2.4}rem` }} />
     {uploadError && <p className="notice error" role="alert">{uploadError}</p>}
-    <div className="markdownRendered" aria-label={`${label} 미리보기`}><ReactMarkdown remarkPlugins={[remarkGfm, remarkDirective, remarkGallery]} skipHtml components={{ img: PreviewImage, div: GalleryPreview, a: MarkdownBodyMedia }}>{value}</ReactMarkdown></div>
+    <div className="markdownRendered" aria-label={`${label} 미리보기`}><ReactMarkdown remarkPlugins={[remarkGfm, remarkDirective, remarkRestoreTextDirectives, remarkGallery]} skipHtml components={{ img: PreviewImage, div: GalleryPreview, a: MarkdownBodyMedia }}>{value}</ReactMarkdown></div>
   </div>
 }

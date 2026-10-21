@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm'
 import remarkDirective from 'remark-directive'
 import PostImageGallery, { type GalleryImage } from './PostImageGallery'
 import { remarkGallery } from '../../lib/markdown/gallery'
+import { remarkRestoreTextDirectives } from '../../lib/markdown/restoreTextDirectives'
 import BodyMedia, { bodyMediaKind, publicBodyMediaUrl } from './BodyMedia'
 import { remarkPostAttachments, type BodyAttachment } from './remarkPostAttachments'
 
@@ -59,5 +60,5 @@ function MarkdownLink({ href, title, children, ...props }: ComponentProps<'a'> &
 }
 
 export default function PostMarkdown({ content, allowedElements, attachments }: { content: string; allowedElements?: string[]; attachments?: readonly BodyAttachment[] }) {
-  return <ReactMarkdown remarkPlugins={[remarkGfm, remarkDirective, [remarkPostAttachments, attachments], remarkGallery]} skipHtml allowedElements={allowedElements} components={{ p: Paragraph, div: GalleryBlock, img: MarkdownImage, a: MarkdownLink }}>{content}</ReactMarkdown>
+  return <ReactMarkdown remarkPlugins={[remarkGfm, remarkDirective, remarkRestoreTextDirectives, [remarkPostAttachments, attachments], remarkGallery]} skipHtml allowedElements={allowedElements} components={{ p: Paragraph, div: GalleryBlock, img: MarkdownImage, a: MarkdownLink }}>{content}</ReactMarkdown>
 }
