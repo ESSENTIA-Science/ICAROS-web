@@ -166,3 +166,11 @@ it('keeps colon text that remark-directive would parse as directives', () => {
   expect(html).not.toMatch(/<p>[^<]*<div/)
   expect(html).toContain('data-gallery') // 기존 갤러리 마크업 식별자에 맞춰 조정
 })
+
+it('unwraps disallowed mission elements instead of dropping their text', () => {
+  const html = renderToStaticMarkup(<PostMarkdown content={'a ~~b~~ c\n\n# Big\n\n#### small'} allowedElements={['p', 'h2', 'h3', 'del']} />)
+  expect(html).toContain('<del>b</del>')
+  expect(html).toContain('Big')
+  expect(html).toContain('small')
+  expect(html).not.toContain('<h1>')
+})

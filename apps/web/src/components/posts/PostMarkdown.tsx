@@ -60,5 +60,5 @@ function MarkdownLink({ href, title, children, ...props }: ComponentProps<'a'> &
 }
 
 export default function PostMarkdown({ content, allowedElements, attachments }: { content: string; allowedElements?: string[]; attachments?: readonly BodyAttachment[] }) {
-  return <ReactMarkdown remarkPlugins={[remarkGfm, remarkDirective, remarkRestoreTextDirectives, [remarkPostAttachments, attachments], remarkGallery]} skipHtml allowedElements={allowedElements} components={{ p: Paragraph, div: GalleryBlock, img: MarkdownImage, a: MarkdownLink }}>{content}</ReactMarkdown>
+  return <ReactMarkdown remarkPlugins={[remarkGfm, remarkDirective, remarkRestoreTextDirectives, [remarkPostAttachments, attachments], remarkGallery]} skipHtml allowedElements={allowedElements} unwrapDisallowed={allowedElements !== undefined}components={{ p: Paragraph, div: GalleryBlock, img: MarkdownImage, a: MarkdownLink }}>{content}</ReactMarkdown>
 }
