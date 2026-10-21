@@ -5,6 +5,7 @@ import { noteCmsChange, trackCmsOperation } from '../lib/cmsChanges'
 import { fields, resourceLabels, type ResourceKind, type ResourceRecord } from '../lib/resources'
 import MarkdownField from './MarkdownField'
 import ImagePreview from './ImagePreview'
+import { preserveOnSessionExpiry, restoredMessage, takeExpiredDraft } from '../lib/sessionRecovery'
 
 const supportedWrites = new Set<ResourceKind>(['departments', 'members', 'vehicle-types', 'vehicle-series', 'panels', 'donation-rounds'])
 const mediaKinds = ['image', 'video', 'pdf', 'model'] as const
@@ -64,6 +65,11 @@ export default function ResourceEditor({ kind, onChanged, optionsRevision = 0 }:
         if (!next) session.current.attempt = null
         session.current.id = next?.id ?? null
         setSelected(next?.id ?? null); setDraft(next ? { ...next } : initial(kind))
+        const restored = takeExpiredDraft<Partial<ResourceRecord>>(`${kind}:${next?.id ?? 'new'}`)
+        if (restored) {
+          setDraft(restored.draft); setMessage(restoredMessage)
+          if (next && restored.baseVersion !== next.version) { setConflict(true); setLatestChecked(false) }
+        }
       } else setLatestChecked(true)
       if (kind === 'departments') { const related = await resourcesApi.list('members'); if (currentRead === readId.current) setMembers(related) }
       if (kind === 'members') { const related = await resourcesApi.list('departments'); if (currentRead === readId.current) setDepartments(related) }
@@ -113,6 +119,7 @@ export default function ResourceEditor({ kind, onChanged, optionsRevision = 0 }:
       setDraft(previous => JSON.stringify(previous) === sent ? { ...result } : previous)
       onChanged?.()
     } catch (cause) {
+      preserveOnSessionExpiry(cause, `${kind}:${current?.id ?? 'new'}`, current?.version ?? '', draft)
       if (typeof cause === 'object' && cause !== null && 'status' in cause && cause.status === 409) { setConflict(true); setLatestChecked(false) }
       setError(cause instanceof Error ? cause.message : '저장에 실패했습니다.'); throw cause
     }

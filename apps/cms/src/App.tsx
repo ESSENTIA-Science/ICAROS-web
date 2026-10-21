@@ -12,6 +12,7 @@ import { resourceTabs, type ResourceKind } from './lib/resources'
 import { api, ApiError } from './lib/api/client'
 import type { ContentKind, ContentMap, Post, Session } from './lib/api/types'
 import { publicationLabel } from './lib/editor'
+import { onSessionExpired } from './lib/sessionRecovery'
 
 const tabs: { id: ContentKind; label: string; description: string }[] = [
   { id: 'rockets', label: '로켓', description: '로켓 기체 정보와 제원을 편집합니다.' },
@@ -82,6 +83,7 @@ export default function App() {
     } finally { if (currentLoad === loadId.current) setLoading(false) }
   }, [])
 
+  useEffect(() => { if (session) return onSessionExpired(() => setSession(null)) }, [session])
   useEffect(() => {
     api.session().then(setSession).catch(cause => {
       if (cause instanceof ApiError && (cause.status === 401 || cause.status === 403)) setSession(null)

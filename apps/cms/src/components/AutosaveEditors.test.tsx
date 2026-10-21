@@ -50,6 +50,8 @@ import { resourcesApi } from '../lib/api/resources'
 import PostCreate from './PostCreate'
 import VehicleCreate from './VehicleCreate'
 import VehicleMediaEditor from './VehicleMediaEditor'
+import { onSessionExpired } from '../lib/sessionRecovery'
+import type { SiteContent } from '../lib/api/types'
 
 function render(component: () => ReactNode) {
   harness.cursor = 0
@@ -233,4 +235,70 @@ it('writes the local post draft once per edit while retaining recovery data', ()
   render(view)
   expect(setItem).toHaveBeenCalledTimes(1)
   expect(JSON.parse(setItem.mock.calls[0]![1])).toMatchObject({ draft: { title: '보관할 제목' } })
+})
+
+function sessionStore() {
+  const map = new Map<string, string>()
+  return { getItem: (key: string) => map.get(key) ?? null, setItem: (key: string, value: string) => { map.set(key, value) }, removeItem: (key: string) => { map.delete(key) } }
+}
+const setting: SiteContent = { ...base, id: 'donation.current', value: '0' }
+const expired = Object.assign(new Error('expired'), { status: 401 })
+
+it('stashes the dirty draft and signals expiry once when saving gets 401', async () => {
+  vi.stubGlobal('window', { sessionStorage: sessionStore() })
+  const expiry = vi.fn(); const off = onSessionExpired(expiry)
+  const { default: RealEditor } = await vi.importActual<typeof import('./Editor')>('./Editor')
+  const view = () => RealEditor({ kind: 'site', record: setting, onSaved: vi.fn() })
+  const tree = render(view)
+  ;(elements(tree).find(node => node.type === 'textarea')!.props.onChange as (event: { target: { value: string } }) => void)({ target: { value: '12' } })
+  render(view)
+  vi.mocked(api.save).mockRejectedValue(expired)
+  await expect(harness.autosave!.save()).rejects.toThrow('expired')
+  expect(JSON.parse(window.sessionStorage.getItem('icaros:cms:recovery:site:donation.current')!)).toEqual({ baseVersion: 'v1', draft: { value: '12' } })
+  expect(expiry).toHaveBeenCalledTimes(1)
+  off()
+})
+
+it('keeps one recovery draft per editor and redirects once when several editors expire together', async () => {
+  vi.stubGlobal('window', { sessionStorage: sessionStore() })
+  const expiry = vi.fn(); const off = onSessionExpired(expiry)
+  const { default: RealEditor } = await vi.importActual<typeof import('./Editor')>('./Editor')
+  vi.mocked(api.save).mockRejectedValue(expired)
+  for (const record of [setting, { ...setting, id: 'donation.goal' }]) {
+    harness.cells = []; harness.cursor = 0; harness.effects = []
+    const view = () => RealEditor({ kind: 'site', record, onSaved: vi.fn() })
+    const tree = render(view)
+    ;(elements(tree).find(node => node.type === 'textarea')!.props.onChange as (event: { target: { value: string } }) => void)({ target: { value: `edited ${record.id}` } })
+    render(view)
+    await expect(harness.autosave!.save()).rejects.toThrow('expired')
+  }
+  expect(window.sessionStorage.getItem('icaros:cms:recovery:site:donation.current')).not.toBeNull()
+  expect(window.sessionStorage.getItem('icaros:cms:recovery:site:donation.goal')).not.toBeNull()
+  expect(expiry).toHaveBeenCalledTimes(1)
+  off()
+})
+
+it('restores the stashed draft on remount with a notice', async () => {
+  const store = sessionStore()
+  store.setItem('icaros:cms:recovery:site:donation.current', JSON.stringify({ baseVersion: 'v1', draft: { value: 'kept' } }))
+  vi.stubGlobal('window', { sessionStorage: store })
+  const { default: RealEditor } = await vi.importActual<typeof import('./Editor')>('./Editor')
+  const view = () => RealEditor({ kind: 'site', record: setting, onSaved: vi.fn() })
+  render(view); await settle()
+  const tree = render(view)
+  expect(elements(tree).find(node => node.type === 'textarea')!.props.value).toBe('kept')
+  expect(elements(tree).some(node => node.props.children === '세션 만료 전 편집 내용을 복원했습니다.')).toBe(true)
+  expect(store.getItem('icaros:cms:recovery:site:donation.current')).toBeNull()
+})
+
+it('enters the conflict flow when the restored draft is based on an older version', async () => {
+  const store = sessionStore()
+  store.setItem('icaros:cms:recovery:site:donation.current', JSON.stringify({ baseVersion: 'v0', draft: { value: 'old base' } }))
+  vi.stubGlobal('window', { sessionStorage: store })
+  const { default: RealEditor } = await vi.importActual<typeof import('./Editor')>('./Editor')
+  const view = () => RealEditor({ kind: 'site', record: setting, onSaved: vi.fn() })
+  render(view); await settle()
+  const tree = render(view)
+  expect(elements(tree).some(node => node.type === 'button' && node.props.children === '내 수정본 유지하며 최신본 확인')).toBe(true)
+  expect(harness.autosave?.enabled).toBe(false)
 })
