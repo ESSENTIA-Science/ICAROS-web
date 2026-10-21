@@ -1,6 +1,6 @@
-# 배포·게시 리뷰 — 2026-10-03 최신 상태
+# 배포·게시 사전 리뷰 — 2026-10-03
 
-**Runtime/운영 게시: blocked. Foundation: 검토 가능한 사전 구성 artifact. 실제 배포 검증 완료 아님.** 사용자는 신규 인프라·IAM·DB schema·TLS/restart와 필요성 재확인된 EC2 proxy 등 남은 작업을 모두 승인했다. 도메인 staged 조건·테스트된 cutover 후 Vercel 제거 조건은 유지한다. 이 작업은 AWS mutation·서버·commit을 수행하지 않았다.
+**이하 내용은 배포 전 발견 사항과 검토 기록이다. 현재 적용 상태는 [배포 상태](../../docs/2026-10-03-release-readiness.md)를 기준으로 확인한다.** 이후 Foundation·Network·Runtime 스택을 적용하고 Cloudflare DNS를 전환했다. 두 차례 게시와 운영 CMS 로그인·공개 경로를 확인했다. 아래의 `blocked`·`아직 없음`·`미검증` 표현은 당시 상태를 설명한다.
 
 ## Critical / missing infra
 

@@ -1,0 +1,49 @@
+name: Deploy CMS to AWS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-cms.yml'
+      - 'apps/cms/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: icaros-cms-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      AWS_REGION: ap-northeast-2
+      ICAROS_CMS_BUCKET: ${{ vars.ICAROS_CMS_BUCKET }}
+      ICAROS_CMS_DISTRIBUTION_ID: ${{ vars.ICAROS_CMS_DISTRIBUTION_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w @icaros/cms
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.ICAROS_WEB_DEPLOY_ROLE_ARN }}
+          aws-region: ap-northeast-2
+      - name: Upload CMS assets and entry point
+        run: |
+          aws s3 sync apps/cms/dist/assets "s3://${ICAROS_CMS_BUCKET}/admin/assets/" --only-show-errors --no-progress
+          aws s3 cp apps/cms/dist/index.html "s3://${ICAROS_CMS_BUCKET}/admin/index.html" --cache-control 'no-cache' --content-type 'text/html' --only-show-errors
+          aws cloudfront create-invalidation --distribution-id "$ICAROS_CMS_DISTRIBUTION_ID" --paths '/admin/*' --query 'Invalidation.Id' --output text > "$RUNNER_TEMP/cms-invalidation-id"
+          aws cloudfront wait invalidation-completed --distribution-id "$ICAROS_CMS_DISTRIBUTION_ID" --id "$(cat "$RUNNER_TEMP/cms-invalidation-id")"
+          curl --fail --silent --show-error --location 'https://cms.icaros.kr/admin/' --output "$RUNNER_TEMP/cms.html"
+          grep -q 'id="root"' "$RUNNER_TEMP/cms.html"

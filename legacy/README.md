@@ -4,4 +4,4 @@ This directory preserves the ICAROS web application at baseline commit `91cbf0d`
 
 From this directory, run `npm ci`, `npm run typecheck`, `npm run lint`, and `npm run build`. The original root `.env.local` and other local secrets were deliberately left outside this directory. Provide local environment values separately when running the legacy app; do not copy secrets into Git.
 
-The application routes, DB migrations, scripts, and static assets remain here for comparison and rollback planning. Production still runs the existing `main` deployment until a separately approved cutover.
+The application routes, DB migrations, scripts, and static assets remain here for historical comparison. Production uses the AWS OpenNext application in `apps/web`; this archive is not a deployment target.
