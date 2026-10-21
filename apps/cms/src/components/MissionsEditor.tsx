@@ -6,6 +6,7 @@ import { noteCmsChange } from '../lib/cmsChanges'
 import type { ResourceRecord } from '../lib/resources'
 import MarkdownField from './MarkdownField'
 import ImagePreview from './ImagePreview'
+import { preserveOnSessionExpiry, restoredMessage, takeExpiredDraft } from '../lib/sessionRecovery'
 
 const outcomes = { planned: '예정', success: '성공', partial: '부분 성공', failure: '실패' } as const
 const empty = (): Partial<ResourceRecord> => ({ title: '', launchDate: '', vehicleId: '', location: '', outcome: 'planned', summary: '', bodyMd: '', coverMediaId: null, published: false })
@@ -39,6 +40,11 @@ export default function MissionsEditor() {
         if (!next) session.current.attempt = null
         session.current.id = next?.id ?? null
         setSelected(next?.id ?? null); setDraft(next ? { ...next } : empty())
+        const restored = takeExpiredDraft<Partial<ResourceRecord>>(`missions:${next?.id ?? 'new'}`)
+        if (restored) {
+          setDraft(restored.draft); setMessage(restoredMessage)
+          if (next && restored.baseVersion !== next.version) { setConflict(true); setLatestChecked(false) }
+        }
       } else setLatestChecked(true)
     } catch (cause) { if (currentRead === readId.current) setError(cause instanceof Error ? cause.message : '목록을 불러오지 못했습니다.') }
     finally { if (currentRead === readId.current) setBusy(false) }
@@ -75,6 +81,7 @@ export default function MissionsEditor() {
       setSelected(result.id)
       setDraft(previous => JSON.stringify(previous) === sent ? { ...result } : previous)
     } catch (cause) {
+      preserveOnSessionExpiry(cause, `missions:${current?.id ?? 'new'}`, current?.version ?? '', draft)
       if (typeof cause === 'object' && cause !== null && 'status' in cause && cause.status === 409) { setConflict(true); setLatestChecked(false) }
       setError(cause instanceof Error ? cause.message : '저장에 실패했습니다.'); throw cause
     }

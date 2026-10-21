@@ -2,7 +2,7 @@ import { resetCmsChanges } from './cmsChanges'
 
 const ownerKey = 'icaros:cms:draft-owner'
 const localKeys = ['icaros:post-create', 'icaros:vehicle-create'] as const
-const sessionPrefixes = ['icaros:publish:', 'icaros:cms:reflect:'] as const
+const sessionPrefixes = ['icaros:publish:', 'icaros:cms:reflect:', 'icaros:cms:recovery:'] as const
 
 function clearDrafts() {
   for (const key of localKeys) window.localStorage.removeItem(key)

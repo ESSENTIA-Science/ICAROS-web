@@ -11,6 +11,7 @@ import MarkdownField from './MarkdownField'
 import ImagePreview from './ImagePreview'
 import type { ResourceRecord } from '../lib/resources'
 import VehicleClassification from './VehicleClassification'
+import { preserveOnSessionExpiry, restoredMessage, takeExpiredDraft } from '../lib/sessionRecovery'
 
 const fields = {
   rockets: [
@@ -47,6 +48,15 @@ export default function Editor<K extends ContentKind>({ kind, record, onSaved, d
 
   const savedRecord = useRef(record)
   useEffect(() => { savedRecord.current = record }, [record])
+  useEffect(() => {
+    const restored = takeExpiredDraft<Editable<K>>(`${kind}:${record.id}`)
+    if (!restored) return
+    queueMicrotask(() => {
+      setDraft(restored.draft); setMessage(restoredMessage)
+      if (restored.baseVersion !== record.version) { setConflict(true); setLatestChecked(false) }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- restore once per mounted record
+  }, [kind, record.id])
   async function save() {
     setError(''); setMessage('')
     const sent = JSON.stringify(draft)
@@ -57,6 +67,7 @@ export default function Editor<K extends ContentKind>({ kind, record, onSaved, d
       onSaved(saved)
       setDraft(previous => JSON.stringify(previous) === sent ? editable(kind, saved) : previous)
     } catch (cause) {
+      preserveOnSessionExpiry(cause, `${kind}:${savedRecord.current.id}`, savedRecord.current.version, draft)
       if (typeof cause === 'object' && cause !== null && 'status' in cause && cause.status === 409) { setConflict(true); setLatestChecked(false) }
       setError(cause instanceof Error ? cause.message : '저장에 실패했습니다.')
       throw cause

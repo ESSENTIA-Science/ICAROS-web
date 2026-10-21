@@ -12,6 +12,7 @@ import { resourceTabs, type ResourceKind } from './lib/resources'
 import { api, ApiError } from './lib/api/client'
 import type { ContentKind, ContentMap, Post, Session } from './lib/api/types'
 import { publicationLabel } from './lib/editor'
+import { onSessionExpired } from './lib/sessionRecovery'
 
 const tabs: { id: ContentKind; label: string; description: string }[] = [
   { id: 'rockets', label: '로켓', description: '로켓 기체 정보와 제원을 편집합니다.' },
@@ -82,6 +83,7 @@ export default function App() {
     } finally { if (currentLoad === loadId.current) setLoading(false) }
   }, [])
 
+  useEffect(() => { if (session) return onSessionExpired(() => setSession(null)) }, [session])
   useEffect(() => {
     api.session().then(setSession).catch(cause => {
       if (cause instanceof ApiError && (cause.status === 401 || cause.status === 403)) setSession(null)
@@ -133,7 +135,7 @@ export default function App() {
   if (session === null) return <Login error={sessionError} />
   const current = [...tabs, ...resourceTabs].find(item => item.id === tab)!
   return <div className="shell"><a className="skip" href="#admin-main">본문으로 건너뛰기</a>
-    <header className="topbar"><div className="topbarInner"><div className="brand"><strong>ICAROS</strong><span>ADMIN</span></div><div className="who"><PublicationControls /><span>{session.displayName || session.email}</span><button onClick={logout}>로그아웃</button></div></div></header>
+    <header className="topbar"><div className="topbarInner"><div className="brand"><strong>ICAROS</strong><span>ADMIN</span></div><div className="who"><PublicationControls onSessionExpired={() => setSession(null)} /><span>{session.displayName || session.email}</span><button onClick={logout}>로그아웃</button></div></div></header>
     <nav className="tabs" aria-label="관리 영역"><div className="tabList">{groups.map(group => <div className="tabGroup" key={group.label}><span className="tabGroupLabel">{group.label}</span><div>{group.ids.map(id => { const item = [...tabs, ...resourceTabs].find(candidate => candidate.id === id)!; return <button key={id} aria-current={tab === id ? 'page' : undefined} onClick={() => void switchTab(id)}>{item.label}</button> })}</div></div>)}</div></nav>
     <main id="admin-main">{import.meta.env.VITE_ICAROS_DEMO === '1' && <p className="notice" role="status">로컬 DB 읽기 전용 미리보기입니다. 저장과 게시 기능은 연결되지 않았습니다.</p>}<div className="panelHead"><div><p className="eyebrow">CONTENT MANAGEMENT</p><h1>{current.label}</h1><p>{current.description}</p></div>{tab === 'posts' && <button onClick={() => void flushCmsChanges().then(() => setCreatingPost(true)).catch(cause => setError(cause instanceof Error ? cause.message : '자동 저장에 실패했습니다.'))} disabled={import.meta.env.VITE_ICAROS_DEMO === '1' || loading || !!error}>새 게시글</button>}{tab === 'site' && !loading && !items.some(item => item.id === 'donate.cta_href') && <button type="button" onClick={() => void addDonateCtaLink()} disabled={import.meta.env.VITE_ICAROS_DEMO === '1' || !!error}>후원 버튼 링크 설정 추가</button>}{tabs.some(item => item.id === tab) && <button onClick={() => void flushCmsChanges().then(() => load(tab as ContentKind)).catch(cause => setError(cause instanceof Error ? cause.message : '자동 저장에 실패했습니다.'))} disabled={loading}>새로고침</button>}</div>
       {error && <p className="notice error" role="alert">{error}</p>}
