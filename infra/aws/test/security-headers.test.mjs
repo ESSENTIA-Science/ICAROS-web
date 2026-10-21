@@ -46,3 +46,34 @@ test('CMS cannot be framed by any origin', () => {
   assert.equal(headers.FrameOptions.FrameOption, 'DENY')
   assert.equal(headers.ContentSecurityPolicy.ContentSecurityPolicy, "frame-ancestors 'none'")
 })
+
+test('every non-media cache behavior references the matching security headers policy', () => {
+  const policyFor = (distribution, pattern) => {
+    if (distribution === 'CmsDistribution') return 'CmsSecurityHeadersPolicy'
+    // Web serves the CMS under /admin, so those paths need the CMS (DENY) policy.
+    return pattern === '/admin' || pattern === '/admin/*' ? 'CmsSecurityHeadersPolicy' : 'WebSecurityHeadersPolicy'
+  }
+  let checked = 0
+  for (const distribution of ['WebDistribution', 'CmsDistribution']) {
+    const behaviors = resources[distribution].Properties.DistributionConfig.CacheBehaviors ?? []
+    for (const behavior of behaviors) {
+      if (JSON.stringify(behavior.ResponseHeadersPolicyId) === JSON.stringify({ Ref: 'PublicMediaCors' })) continue
+      assert.deepEqual(
+        behavior.ResponseHeadersPolicyId,
+        { Ref: policyFor(distribution, behavior.PathPattern) },
+        `${distribution} ${behavior.PathPattern}`
+      )
+      checked += 1
+    }
+  }
+  assert.equal(checked, 6)
+})
+
+test('Web /admin paths use the CMS DENY policy', () => {
+  const behaviors = resources.WebDistribution.Properties.DistributionConfig.CacheBehaviors
+  for (const pattern of ['/admin', '/admin/*']) {
+    const behavior = behaviors.find(item => item.PathPattern === pattern)
+    assert.ok(behavior, `${pattern} behavior must exist`)
+    assert.deepEqual(behavior.ResponseHeadersPolicyId, { Ref: 'CmsSecurityHeadersPolicy' })
+  }
+})

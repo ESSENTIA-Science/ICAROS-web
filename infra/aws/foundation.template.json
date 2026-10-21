@@ -923,7 +923,10 @@
                     ]
                   }
                 }
-              ]
+              ],
+              "ResponseHeadersPolicyId": {
+                "Ref": "CmsSecurityHeadersPolicy"
+              }
             },
             {
               "PathPattern": "/admin/*",
@@ -951,7 +954,10 @@
                     ]
                   }
                 }
-              ]
+              ],
+              "ResponseHeadersPolicyId": {
+                "Ref": "CmsSecurityHeadersPolicy"
+              }
             },
             {
               "PathPattern": "/api",
@@ -982,7 +988,10 @@
                     ]
                   }
                 }
-              ]
+              ],
+              "ResponseHeadersPolicyId": {
+                "Ref": "WebSecurityHeadersPolicy"
+              }
             },
             {
               "PathPattern": "/api/*",
@@ -1013,7 +1022,10 @@
                     ]
                   }
                 }
-              ]
+              ],
+              "ResponseHeadersPolicyId": {
+                "Ref": "WebSecurityHeadersPolicy"
+              }
             }
           ],
           "HttpVersion": "http2and3",
@@ -1461,6 +1473,9 @@
               "Compress": true,
               "OriginRequestPolicyId": {
                 "Ref": "ApiOriginPolicy"
+              },
+              "ResponseHeadersPolicyId": {
+                "Ref": "CmsSecurityHeadersPolicy"
               }
             },
             {
@@ -1486,6 +1501,9 @@
               "Compress": true,
               "OriginRequestPolicyId": {
                 "Ref": "ApiOriginPolicy"
+              },
+              "ResponseHeadersPolicyId": {
+                "Ref": "CmsSecurityHeadersPolicy"
               }
             }
           ],
