@@ -234,7 +234,9 @@
                 "PUT"
               ],
               "AllowedHeaders": [
-                "content-type"
+                "content-type",
+                "if-none-match",
+                "x-amz-checksum-sha256"
               ],
               "ExposedHeaders": [
                 "ETag"
@@ -889,7 +891,10 @@
                   ]
                 }
               }
-            ]
+            ],
+            "ResponseHeadersPolicyId": {
+              "Ref": "WebSecurityHeadersPolicy"
+            }
           },
           "CacheBehaviors": [
             {
@@ -918,7 +923,10 @@
                     ]
                   }
                 }
-              ]
+              ],
+              "ResponseHeadersPolicyId": {
+                "Ref": "CmsSecurityHeadersPolicy"
+              }
             },
             {
               "PathPattern": "/admin/*",
@@ -946,7 +954,10 @@
                     ]
                   }
                 }
-              ]
+              ],
+              "ResponseHeadersPolicyId": {
+                "Ref": "CmsSecurityHeadersPolicy"
+              }
             },
             {
               "PathPattern": "/api",
@@ -977,7 +988,10 @@
                     ]
                   }
                 }
-              ]
+              ],
+              "ResponseHeadersPolicyId": {
+                "Ref": "WebSecurityHeadersPolicy"
+              }
             },
             {
               "PathPattern": "/api/*",
@@ -1008,7 +1022,10 @@
                     ]
                   }
                 }
-              ]
+              ],
+              "ResponseHeadersPolicyId": {
+                "Ref": "WebSecurityHeadersPolicy"
+              }
             }
           ],
           "HttpVersion": "http2and3",
@@ -1427,7 +1444,10 @@
                   ]
                 }
               }
-            ]
+            ],
+            "ResponseHeadersPolicyId": {
+              "Ref": "CmsSecurityHeadersPolicy"
+            }
           },
           "CacheBehaviors": [
             {
@@ -1453,6 +1473,9 @@
               "Compress": true,
               "OriginRequestPolicyId": {
                 "Ref": "ApiOriginPolicy"
+              },
+              "ResponseHeadersPolicyId": {
+                "Ref": "CmsSecurityHeadersPolicy"
               }
             },
             {
@@ -1478,6 +1501,9 @@
               "Compress": true,
               "OriginRequestPolicyId": {
                 "Ref": "ApiOriginPolicy"
+              },
+              "ResponseHeadersPolicyId": {
+                "Ref": "CmsSecurityHeadersPolicy"
               }
             }
           ],
@@ -1542,6 +1568,74 @@
               ]
             },
             "OriginOverride": true
+          }
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "WebSecurityHeadersPolicy": {
+      "Type": "AWS::CloudFront::ResponseHeadersPolicy",
+      "Properties": {
+        "ResponseHeadersPolicyConfig": {
+          "Name": {
+            "Fn::Sub": "${AWS::StackName}-web-security-headers"
+          },
+          "SecurityHeadersConfig": {
+            "StrictTransportSecurity": {
+              "AccessControlMaxAgeSec": 31536000,
+              "IncludeSubdomains": true,
+              "Override": true
+            },
+            "ContentTypeOptions": {
+              "Override": true
+            },
+            "FrameOptions": {
+              "FrameOption": "SAMEORIGIN",
+              "Override": true
+            },
+            "ReferrerPolicy": {
+              "ReferrerPolicy": "strict-origin-when-cross-origin",
+              "Override": true
+            },
+            "ContentSecurityPolicy": {
+              "ContentSecurityPolicy": "frame-ancestors 'self'",
+              "Override": true
+            }
+          }
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "CmsSecurityHeadersPolicy": {
+      "Type": "AWS::CloudFront::ResponseHeadersPolicy",
+      "Properties": {
+        "ResponseHeadersPolicyConfig": {
+          "Name": {
+            "Fn::Sub": "${AWS::StackName}-cms-security-headers"
+          },
+          "SecurityHeadersConfig": {
+            "StrictTransportSecurity": {
+              "AccessControlMaxAgeSec": 31536000,
+              "IncludeSubdomains": true,
+              "Override": true
+            },
+            "ContentTypeOptions": {
+              "Override": true
+            },
+            "FrameOptions": {
+              "FrameOption": "DENY",
+              "Override": true
+            },
+            "ReferrerPolicy": {
+              "ReferrerPolicy": "same-origin",
+              "Override": true
+            },
+            "ContentSecurityPolicy": {
+              "ContentSecurityPolicy": "frame-ancestors 'none'",
+              "Override": true
+            }
           }
         }
       },

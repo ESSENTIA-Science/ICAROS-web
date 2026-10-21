@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { koreaToday } from './PostAttachments'
 import { api } from '../lib/api/client'
 import { editable } from '../lib/editor'
@@ -27,6 +27,9 @@ export default function PostCreate({ onCreated }: { onCreated: (post: Post) => v
   const [busy, setBusy] = useState(false)
   const [completed, setCompleted] = useState(false)
   const [error, setError] = useState('')
+  const [conflict, setConflict] = useState(false)
+  const [latestChecked, setLatestChecked] = useState(false)
+  const [latestPost, setLatestPost] = useState<Post | null>(null)
   const demo = import.meta.env.VITE_ICAROS_DEMO === '1'
   const { title, bodyMd, displayDate, attachments } = local.draft
   const dirty = !completed && (!!title || !!bodyMd || attachments.length > 0 || displayDate !== koreaToday() || !!local.attempt)
@@ -35,11 +38,6 @@ export default function PostCreate({ onCreated }: { onCreated: (post: Post) => v
     try { localStorage.setItem(storageKey, JSON.stringify(value)) }
     catch { setError('브라우저에 입력 내용을 보관하지 못했습니다. 이 화면을 유지해 주세요.') }
   }
-  useEffect(() => {
-    if (dirty && !demo) {
-      try { localStorage.setItem(storageKey, JSON.stringify(local)) } catch { /* Report on the next edit. */ }
-    }
-  }, [local, dirty, demo])
   function change(patch: Partial<Draft>) {
     const next = { ...latest.current, draft: { ...latest.current.draft, ...patch } }
     latest.current = next; setLocal(next); persist(next)
@@ -74,6 +72,7 @@ export default function PostCreate({ onCreated }: { onCreated: (post: Post) => v
         try { localStorage.removeItem(storageKey) } catch { /* The server draft is saved. */ }
         onCreated(saved)
       } catch (cause) {
+        if (typeof cause === 'object' && cause !== null && 'status' in cause && cause.status === 409) { setConflict(true); setLatestChecked(false) }
         setError(cause instanceof Error ? cause.message : '초안 생성에 실패했습니다.')
         throw cause
       } finally { setBusy(false) }
@@ -81,9 +80,28 @@ export default function PostCreate({ onCreated }: { onCreated: (post: Post) => v
     request.current = task()
     try { await request.current } finally { request.current = null }
   }
-  const autosave = useAutosave({ key: `post-create:${local.key}`, dirty, enabled: !demo && valid && !completed, fingerprint: JSON.stringify(local.draft), save: saveDraft })
+  const autosave = useAutosave({ key: `post-create:${local.key}`, dirty, enabled: !demo && valid && !completed && !conflict, fingerprint: JSON.stringify(local.draft), save: saveDraft })
+  async function readLatest() {
+    if (busy) return
+    setBusy(true); setError('')
+    try {
+      if (record.current) setLatestPost((await api.list('posts')).find(item => item.id === record.current?.id) ?? null)
+      else setLatestPost(null)
+      setLatestChecked(true)
+    } catch (cause) { setError(cause instanceof Error ? cause.message : '최신본을 불러오지 못했습니다.') }
+    finally { setBusy(false) }
+  }
+  function resolveConflict(reapply: boolean) {
+    autosave.reset()
+    if (latestPost) record.current = latestPost
+    if (reapply) { setConflict(false); setLatestChecked(false); setError(''); return }
+    if (!latestPost) record.current = null
+    cancel()
+    setConflict(false); setLatestChecked(false)
+  }
   function cancel() {
     if (busy) return
+    autosave.reset()
     if (record.current) {
       // A failed follow-up save can leave a successfully created private draft.
       setCompleted(true)
@@ -101,9 +119,10 @@ export default function PostCreate({ onCreated }: { onCreated: (post: Post) => v
     <p className="hint">제목·날짜·본문을 입력하면 초안을 자동 생성합니다. 미완성 입력은 이 브라우저에 보관합니다. 작성자 표시는 서버에서 지정합니다.</p>
     {(error || autosave.error) && <p className="notice error" role="alert">{error || autosave.error}</p>}
     <p className="hint" role="status">{busy ? '초안 저장 중…' : dirty && !valid ? '필수 항목을 입력하거나 입력을 취소해야 ‘변경사항 반영하기’를 사용할 수 있습니다.' : autosave.status === 'pending' ? '자동 저장 대기 중…' : ''}</p>
-    <div className="fields"><label>제목<input value={title} disabled={demo || completed} onChange={event => change({ title: event.target.value })} /></label>
-      <label>표시 날짜<input type="date" value={displayDate} disabled={demo || completed} onChange={event => change({ displayDate: event.target.value })} required /></label>
-      <MarkdownField label="본문 (Markdown)" rows={12} value={bodyMd} onChange={value => change({ bodyMd: value })} disabled={demo || completed} /></div>
+    {conflict && <div className="notice" role="status"><p>다른 변경과 충돌했습니다. 내 입력은 보존되어 있습니다.</p><button type="button" disabled={busy} onClick={() => void readLatest()}>내 수정본 유지하며 최신본 확인</button>{latestChecked && <><pre>{latestPost ? JSON.stringify(latestPost, null, 2) : record.current ? '서버에서 삭제된 게시글입니다.' : '생성 확인 응답을 받지 못했습니다. 재적용하면 같은 생성 키와 처음 전송한 내용으로 다시 확인합니다.'}</pre><button type="button" disabled={busy || (!latestPost && Boolean(record.current))} onClick={() => resolveConflict(true)}>내 수정본 재적용</button><button type="button" disabled={busy} onClick={() => resolveConflict(false)}>수정본 폐기</button></>}</div>}
+    <div className="fields"><label>제목<input value={title} disabled={demo || completed || (conflict && busy)} onChange={event => change({ title: event.target.value })} /></label>
+      <label>표시 날짜<input type="date" value={displayDate} disabled={demo || completed || (conflict && busy)} onChange={event => change({ displayDate: event.target.value })} required /></label>
+      <MarkdownField label="본문 (Markdown)" rows={12} value={bodyMd} onChange={value => change({ bodyMd: value })} disabled={demo || completed || (conflict && busy)} /></div>
     <div className="actions"><button className="primary" type="button" onClick={() => void autosave.flush().catch(() => {})} disabled={demo || busy || !valid || completed}>{busy ? '생성 중…' : '초안 생성'}</button><button type="button" disabled={busy || completed} onClick={cancel}>입력 취소</button></div>
   </section>
 }

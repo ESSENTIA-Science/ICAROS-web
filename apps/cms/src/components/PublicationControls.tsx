@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { api } from '../lib/api/client'
+import { useEffect, useRef, useState } from 'react'
+import { api, ApiError } from '../lib/api/client'
 import {
   completeCmsPublication, failCmsPublication, flushCmsChanges, getCmsChanges,
   hasUnpublishedChanges, startCmsPublication, useCmsChanges,
@@ -11,12 +11,47 @@ export function warnBeforeLeaving(event: BeforeUnloadEvent, posting = false) {
   event.returnValue = ''
 }
 
-export default function PublicationControls() {
+type PollIo = {
+  isCancelled: () => boolean
+  setMessage: (message: string) => void
+  setError: (error: string) => void
+  onSessionExpired?: () => void
+}
+
+export async function checkPublicationJob(jobId: string, io: PollIo) {
+  try {
+    const job = await api.publishStatus(jobId)
+    if (io.isCancelled()) return
+    if (job.state === 'published') {
+      completeCmsPublication(jobId)
+      io.setMessage('변경사항이 사이트에 반영되었습니다.')
+      io.setError('')
+    } else if (job.state === 'failed') {
+      failCmsPublication(jobId)
+      io.setError(job.failureMessage || '반영에 실패했습니다. 변경사항은 저장되어 있습니다. 다시 시도해 주세요.')
+    }
+  } catch (cause) {
+    if (io.isCancelled()) return
+    if (cause instanceof ApiError && cause.status === 404) {
+      // The job no longer exists; keep the page from reporting "반영 중" forever.
+      failCmsPublication(jobId)
+      io.setError('반영 작업을 찾을 수 없습니다. 다시 반영해 주세요.')
+    } else if (cause instanceof ApiError && (cause.status === 401 || cause.status === 403)) {
+      // Keep jobId so polling resumes after the user signs in again.
+      io.onSessionExpired?.()
+    } else io.setError(cause instanceof Error ? cause.message : '반영 상태를 확인하지 못했습니다. 페이지를 유지하고 기다려 주세요.')
+  }
+}
+
+export default function PublicationControls({ onSessionExpired }: { onSessionExpired?: () => void } = {}) {
   const changes = useCmsChanges()
   const [open, setOpen] = useState(false)
   const [posting, setPosting] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  // Latest callback via ref so an inline prop does not restart polling on every render.
+  const sessionExpired = useRef(onSessionExpired)
+  useEffect(() => { sessionExpired.current = onSessionExpired })
   const demo = import.meta.env.VITE_ICAROS_DEMO === '1'
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => warnBeforeLeaving(event, posting)
@@ -31,20 +66,8 @@ export default function PublicationControls() {
     const check = async () => {
       if (checking) return
       checking = true
-      try {
-        const job = await api.publishStatus(jobId)
-        if (cancelled) return
-        if (job.state === 'published') {
-          completeCmsPublication(jobId)
-          setMessage('변경사항이 사이트에 반영되었습니다.')
-          setError('')
-        } else if (job.state === 'failed') {
-          failCmsPublication(jobId)
-          setError(job.failureMessage || '반영에 실패했습니다. 변경사항은 저장되어 있습니다. 다시 시도해 주세요.')
-        }
-      } catch (cause) {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : '반영 상태를 확인하지 못했습니다. 페이지를 유지하고 기다려 주세요.')
-      } finally { checking = false }
+      try { await checkPublicationJob(jobId, { isCancelled: () => cancelled, setMessage, setError, onSessionExpired: () => sessionExpired.current?.() }) }
+      finally { checking = false }
     }
     void check()
     const timer = window.setInterval(() => void check(), 4000)
@@ -56,7 +79,8 @@ export default function PublicationControls() {
     setPosting(true); setError(''); setMessage('자동 저장을 완료하고 반영을 요청하는 중입니다.')
     try {
       await flushCmsChanges()
-      const revision = getCmsChanges().revision
+      const captured = getCmsChanges()
+      const revision = captured.revision
       const settings = await api.list('site')
       const trigger = settings.find(setting => setting.id === 'donation.current') ?? settings[0]
       if (!trigger) throw new Error('사이트 설정이 없어 반영을 요청할 수 없습니다.')
@@ -65,7 +89,7 @@ export default function PublicationControls() {
       const idempotencyKey = sessionStorage.getItem(key) ?? crypto.randomUUID()
       sessionStorage.setItem(key, idempotencyKey)
       const job = await api.publish('site', trigger.id, trigger.version, idempotencyKey, 'all')
-      startCmsPublication(job.id, revision, key)
+      startCmsPublication(job.id, revision, key, captured.counters)
       if (job.state === 'published') {
         completeCmsPublication(job.id)
         sessionStorage.removeItem(key)
@@ -86,7 +110,7 @@ export default function PublicationControls() {
     {open && <div className="publicationBackdrop"><section className="card publicationDialog" role="dialog" aria-modal="true" aria-labelledby="publication-title">
       <h2 id="publication-title">변경사항 반영하기</h2>
       <p>자동 저장된 변경사항을 모아 전체 사이트에 반영합니다.</p>
-      <p>반영에는 약 1~2분이 걸리며 빌드 상황에 따라 더 걸릴 수 있습니다. 완료될 때까지 이 페이지를 닫지 마세요.</p>
+      <p>반영에는 보통 5~8분이 걸리며 빌드 상황에 따라 더 걸릴 수 있습니다. 상태는 이 브라우저에서 다시 확인할 수 있습니다.</p>
       <p>게시글은 ESSENTIA 커뮤니티에 먼저 공개됩니다. ICAROS 웹은 빌드가 완료된 뒤 갱신됩니다.</p>
       <p className="hint">반영 중 추가로 수정한 내용은 다음 반영에 포함됩니다.</p>
       {message && <p className="notice" role="status">{message}</p>}

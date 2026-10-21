@@ -40,7 +40,7 @@
   font-family: var(--ff-mono);
   font-size: var(--fs-mono);
   letter-spacing: var(--tr-mono);
-  color: var(--fg-faint);
+  color: var(--fg-muted);
   font-variant-numeric: tabular-nums lining-nums;
 }
 

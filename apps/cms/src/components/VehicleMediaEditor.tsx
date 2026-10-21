@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api/client'
 import { resourcesApi, type VehicleMedia } from '../lib/api/resources'
 import type { Rocket } from '../lib/api/types'
@@ -22,11 +22,13 @@ export default function VehicleMediaEditor() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [conflict, setConflict] = useState(false)
+  const [latestChecked, setLatestChecked] = useState(false)
   const active = vehicles.find(vehicle => vehicle.id === selected)
   const galleryDirty = !!gallery && JSON.stringify(mediaIds) !== JSON.stringify(gallery.mediaIds ?? [])
   const modelDirty = !!model && (modelMediaId !== (model.modelMediaId ?? null) || posterMediaId !== (model.posterMediaId ?? null))
   const autosave = useAutosave({
-    key: `vehicle-media:${selected}`, dirty: galleryDirty || modelDirty, enabled: !demo && !!gallery && !!model, fingerprint: JSON.stringify({ mediaIds, modelMediaId, posterMediaId }),
+    key: `vehicle-media:${selected}`, dirty: galleryDirty || modelDirty, enabled: !demo && !busy && !conflict && !!gallery && !!model, fingerprint: JSON.stringify({ mediaIds, modelMediaId, posterMediaId }),
     save: async () => {
       if (galleryDirty) await save('gallery')
       if (modelDirty) await save('model')
@@ -38,24 +40,27 @@ export default function VehicleMediaEditor() {
     catch (cause) { setError(cause instanceof Error ? cause.message : '변경 사항을 저장하지 못했습니다.') }
   }
 
+  const readId = useRef(0)
   const loadVehicles = useCallback(async () => {
+    const currentRead = ++readId.current
     setBusy(true); setError('')
     try {
       const records = await api.list('rockets')
-      setVehicles(records)
+      if (currentRead !== readId.current) return
+      setVehicles(records); setConflict(false); setLatestChecked(false)
       setGallery(null); setModel(null); setMediaIds([]); setModelMediaId(null); setPosterMediaId(null)
       setSelected(records[0]?.id ?? ''); setReload(previous => previous + 1)
-    } catch (cause) { setError(cause instanceof Error ? cause.message : '기체 목록을 불러오지 못했습니다.') }
-    finally { setBusy(false) }
+    } catch (cause) { if (currentRead === readId.current) setError(cause instanceof Error ? cause.message : '기체 목록을 불러오지 못했습니다.') }
+    finally { if (currentRead === readId.current) setBusy(false) }
   }, [])
   function selectVehicle(id: string) {
-    setCreating(false)
+    setCreating(false); setConflict(false); setLatestChecked(false)
     if (id === selected) return
     setGallery(null); setModel(null); setMediaIds([]); setModelMediaId(null); setPosterMediaId(null)
     setMessage(''); setSelected(id)
   }
   function createdVehicle(vehicle: Rocket) {
-    setVehicles(previous => [...previous, vehicle])
+    setVehicles(previous => previous.some(item => item.id === vehicle.id) ? previous.map(item => item.id === vehicle.id ? vehicle : item) : [...previous, vehicle])
     selectVehicle(vehicle.id)
   }
   useEffect(() => { queueMicrotask(() => void loadVehicles()) }, [loadVehicles])
@@ -78,6 +83,20 @@ export default function VehicleMediaEditor() {
     })
     return () => { cancelled = true }
   }, [selected, reload])
+  async function readLatest() {
+    if (busy || !selected) return
+    setBusy(true); setError('')
+    try {
+      const [nextGallery, nextModel] = await Promise.all([resourcesApi.vehicleMedia(selected, 'gallery'), resourcesApi.vehicleMedia(selected, 'model')])
+      setGallery(nextGallery); setModel(nextModel); setLatestChecked(true)
+    } catch (cause) { setError(cause instanceof Error ? cause.message : '최신본을 불러오지 못했습니다.') }
+    finally { setBusy(false) }
+  }
+  function resolveConflict(reapply: boolean) {
+    autosave.reset()
+    if (!reapply) { setMediaIds([...(gallery?.mediaIds ?? [])]); setModelMediaId(model?.modelMediaId ?? null); setPosterMediaId(model?.posterMediaId ?? null) }
+    setConflict(false); setLatestChecked(false); setError('')
+  }
   async function upload(file: File, target: 'gallery' | 'model' | 'poster') {
     if (demo || busy) return
     const allowed = target === 'model' ? file.type === 'model/gltf-binary' || file.name.toLowerCase().endsWith('.glb') : ['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
@@ -101,7 +120,10 @@ export default function VehicleMediaEditor() {
       if (kind === 'gallery') setGallery(saved)
       else setModel(saved)
       setMessage('기체 미디어 초안이 저장되었습니다. 상단의 ‘변경사항 반영하기’로 사이트에 반영할 수 있습니다.')
-    } catch (cause) { setError(cause instanceof Error ? cause.message : '저장에 실패했습니다.'); throw cause }
+    } catch (cause) {
+      if (typeof cause === 'object' && cause !== null && 'status' in cause && cause.status === 409) { setConflict(true); setLatestChecked(false) }
+      setError(cause instanceof Error ? cause.message : '저장에 실패했습니다.'); throw cause
+    }
   }
-  return <div className="workspace"><aside className="card list"><h2>기체 <span className="count">{vehicles.length}</span></h2><button disabled={demo || busy || creating} onClick={() => void leave(() => { setCreating(true); setSelected(''); setMessage(''); setError('') })}>새 기체 추가</button><button disabled={busy || creating} onClick={() => void leave(loadVehicles)}>새로고침</button><div className="listItems">{vehicles.map(vehicle => <button key={vehicle.id} className="listItem" aria-current={selected === vehicle.id ? 'true' : undefined} disabled={busy || creating} onClick={() => void leave(() => selectVehicle(vehicle.id))}><strong>{vehicle.name}</strong><small>{vehicle.series}</small></button>)}</div></aside><div className="workArea vehicleSections">{creating ? <VehicleCreate onCreated={createdVehicle} onCancel={() => { setCreating(false); selectVehicle(vehicles[0]?.id ?? '') }} /> : <>{active && <section aria-label="기체 기본 정보"><Editor key={active.id} kind="rockets" record={active} onSaved={saved => setVehicles(previous => previous.map(vehicle => vehicle.id === saved.id ? saved : vehicle))} /></section>}<section className="card editor"><h3>사진·3D 모델</h3><p className="hint">갤러리와 3D 모델 변경 사항은 자동 저장합니다. 상단의 ‘변경사항 반영하기’에서 저장된 변경을 함께 반영합니다.</p>{demo && <p className="notice">로컬 DB 미리보기는 읽기 전용입니다.</p>}{autosave.error && <p className="notice error" role="alert">{autosave.error}</p>}<p className="hint" role="status">{autosave.status === 'saving' ? '자동 저장 중…' : autosave.status === 'pending' ? '자동 저장 대기 중…' : autosave.status === 'saved' ? '자동 저장됨' : ''}</p>{error && <p className="notice error" role="alert">{error}</p>}{message && <p className="notice" role="status">{message}</p>}{active && <><div className="fields"><section><h4>갤러리</h4><div className="mediaList">{mediaIds.map((id, index) => <div key={`${id}-${index}`}><ImagePreview mediaId={id} alt={`기체 갤러리 이미지 ${index + 1}`} /><span>{id}</span><button type="button" disabled={demo || busy || index === 0} onClick={() => setMediaIds(previous => { const next = [...previous]; [next[index - 1], next[index]] = [next[index]!, next[index - 1]!]; return next })}>↑</button><button type="button" disabled={demo || busy || index === mediaIds.length - 1} onClick={() => setMediaIds(previous => { const next = [...previous]; [next[index], next[index + 1]] = [next[index + 1]!, next[index]!]; return next })}>↓</button><button type="button" disabled={demo || busy} onClick={() => setMediaIds(previous => previous.filter((_, at) => at !== index))}>제거</button></div>)}</div><label>사진 추가<input type="file" accept="image/jpeg,image/png,image/webp" disabled={demo || busy || !gallery} onChange={event => { const file = event.target.files?.[0]; if (file) void upload(file, 'gallery'); event.target.value = '' }} /></label></section><section><h4>3D 모델</h4><label>GLB 미디어 ID<input readOnly value={modelMediaId ?? ''} /><input type="file" accept=".glb,model/gltf-binary" disabled={demo || busy || !model} onChange={event => { const file = event.target.files?.[0]; if (file) void upload(file, 'model'); event.target.value = '' }} /></label><p className="hint">대체 이미지는 기체 대표 이미지가 없을 때 3D 모델 로딩 중이거나 오류가 나면 표시됩니다.</p><label>3D 모델 대체 이미지 ID<input readOnly value={posterMediaId ?? ''} /><input type="file" accept="image/jpeg,image/png,image/webp" disabled={demo || busy || !model} onChange={event => { const file = event.target.files?.[0]; if (file) void upload(file, 'poster'); event.target.value = '' }} /></label><ImagePreview key={posterMediaId ?? 'none'} mediaId={posterMediaId} alt="3D 모델 대체 이미지 미리보기" /><div className="actions"><button type="button" disabled={demo || busy || !modelMediaId} onClick={() => setModelMediaId(null)}>모델 연결 해제</button><button type="button" disabled={demo || busy || !posterMediaId} onClick={() => setPosterMediaId(null)}>대체 이미지 연결 해제</button></div></section></div></>}</section></>}</div></div>
+  return <div className="workspace"><aside className="card list"><h2>기체 <span className="count">{vehicles.length}</span></h2><button disabled={demo || busy || creating} onClick={() => void leave(() => { setCreating(true); setSelected(''); setMessage(''); setError('') })}>새 기체 추가</button><button disabled={busy || creating} onClick={() => void leave(loadVehicles)}>새로고침</button><div className="listItems">{vehicles.map(vehicle => <button key={vehicle.id} className="listItem" aria-current={selected === vehicle.id ? 'true' : undefined} disabled={busy || creating} onClick={() => void leave(() => selectVehicle(vehicle.id))}><strong>{vehicle.name}</strong><small>{vehicle.series}</small></button>)}</div></aside><div className="workArea vehicleSections">{creating ? <VehicleCreate onCreated={createdVehicle} onCancel={() => { setCreating(false); selectVehicle(vehicles[0]?.id ?? '') }} /> : <>{active && <section aria-label="기체 기본 정보"><Editor key={`${active.id}:${reload}`} disabled={busy} kind="rockets" record={active} onSaved={saved => setVehicles(previous => previous.map(vehicle => vehicle.id === saved.id ? saved : vehicle))} /></section>}<section className="card editor"><h3>사진·3D 모델</h3><p className="hint">갤러리와 3D 모델 변경 사항은 자동 저장합니다. 상단의 ‘변경사항 반영하기’에서 저장된 변경을 함께 반영합니다.</p>{demo && <p className="notice">로컬 DB 미리보기는 읽기 전용입니다.</p>}{conflict && <div className="notice" role="status"><p>다른 관리자의 변경과 충돌했습니다. 내 입력을 보존하고 자동 저장을 중지했습니다.</p><button type="button" disabled={busy} onClick={() => void readLatest()}>내 수정본 유지하며 최신본 확인</button>{latestChecked && <><pre>{JSON.stringify({ gallery, model }, null, 2)}</pre><button type="button" disabled={busy} onClick={() => resolveConflict(true)}>내 수정본 재적용</button><button type="button" disabled={busy} onClick={() => resolveConflict(false)}>수정본 폐기</button></>}</div>}{autosave.error && <p className="notice error" role="alert">{autosave.error}</p>}<p className="hint" role="status">{autosave.status === 'saving' ? '자동 저장 중…' : autosave.status === 'pending' ? '자동 저장 대기 중…' : autosave.status === 'saved' ? '자동 저장됨' : ''}</p>{error && <p className="notice error" role="alert">{error}</p>}{message && <p className="notice" role="status">{message}</p>}{active && <><div className="fields"><section><h4>갤러리</h4><div className="mediaList">{mediaIds.map((id, index) => <div key={`${id}-${index}`}><ImagePreview mediaId={id} alt={`기체 갤러리 이미지 ${index + 1}`} /><span>{id}</span><button type="button" disabled={demo || busy || index === 0} onClick={() => setMediaIds(previous => { const next = [...previous]; [next[index - 1], next[index]] = [next[index]!, next[index - 1]!]; return next })}>↑</button><button type="button" disabled={demo || busy || index === mediaIds.length - 1} onClick={() => setMediaIds(previous => { const next = [...previous]; [next[index], next[index + 1]] = [next[index + 1]!, next[index]!]; return next })}>↓</button><button type="button" disabled={demo || busy} onClick={() => setMediaIds(previous => previous.filter((_, at) => at !== index))}>제거</button></div>)}</div><label>사진 추가<input type="file" accept="image/jpeg,image/png,image/webp" disabled={demo || busy || !gallery} onChange={event => { const file = event.target.files?.[0]; if (file) void upload(file, 'gallery'); event.target.value = '' }} /></label></section><section><h4>3D 모델</h4><label>GLB 미디어 ID<input readOnly value={modelMediaId ?? ''} /><input type="file" accept=".glb,model/gltf-binary" disabled={demo || busy || !model} onChange={event => { const file = event.target.files?.[0]; if (file) void upload(file, 'model'); event.target.value = '' }} /></label><p className="hint">대체 이미지는 기체 대표 이미지가 없을 때 3D 모델 로딩 중이거나 오류가 나면 표시됩니다.</p><label>3D 모델 대체 이미지 ID<input readOnly value={posterMediaId ?? ''} /><input type="file" accept="image/jpeg,image/png,image/webp" disabled={demo || busy || !model} onChange={event => { const file = event.target.files?.[0]; if (file) void upload(file, 'poster'); event.target.value = '' }} /></label><ImagePreview key={posterMediaId ?? 'none'} mediaId={posterMediaId} alt="3D 모델 대체 이미지 미리보기" /><div className="actions"><button type="button" disabled={demo || busy || !modelMediaId} onClick={() => setModelMediaId(null)}>모델 연결 해제</button><button type="button" disabled={demo || busy || !posterMediaId} onClick={() => setPosterMediaId(null)}>대체 이미지 연결 해제</button></div></section></div></>}</section></>}</div></div>
 }

@@ -123,7 +123,7 @@
   font-family: var(--ff-mono);
   font-size: var(--fs-mono);
   letter-spacing: var(--tr-mono);
-  color: var(--fg-faint);
+  color: var(--fg-muted);
 }
 .meta:lang(ko) { font-family: var(--ff-body); letter-spacing: 0; }
 

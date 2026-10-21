@@ -3,13 +3,19 @@ import { Children, isValidElement, type ComponentProps, type ImgHTMLAttributes, 
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkDirective from 'remark-directive'
-import PostImageGallery from './PostImageGallery'
+import PostImageGallery, { type GalleryImage } from './PostImageGallery'
 import { remarkGallery } from '../../lib/markdown/gallery'
+import { remarkRestoreTextDirectives } from '../../lib/markdown/restoreTextDirectives'
 import BodyMedia, { bodyMediaKind, publicBodyMediaUrl } from './BodyMedia'
 import { remarkPostAttachments, type BodyAttachment } from './remarkPostAttachments'
 
-function MarkdownImage({ src, alt, title }: ComponentProps<'img'>) {
-  return src ? <img src={src} alt={alt ?? ''} title={title} loading="lazy" decoding="async" /> : null
+function MarkdownImage({ src, alt, title, width, height }: ComponentProps<'img'>) {
+  return src ? <img src={src} alt={alt ?? ''} title={title} width={width} height={height} loading="lazy" decoding="async" /> : null
+}
+
+function imageDimension(value: string | number | undefined): number | undefined {
+  const dimension = Number(value)
+  return Number.isSafeInteger(dimension) && dimension > 0 ? dimension : undefined
 }
 
 function isImage(node: ReactNode): node is ReactElement<ImgHTMLAttributes<HTMLImageElement>> {
@@ -19,16 +25,18 @@ function isImage(node: ReactNode): node is ReactElement<ImgHTMLAttributes<HTMLIm
 function Paragraph({ children }: ComponentProps<'p'>) {
   const nodes = Children.toArray(children).filter(child => typeof child !== 'string' || child.trim())
   const images = nodes.filter(isImage)
-  const galleryImages = images.map(image => ({ src: typeof image.props.src === 'string' ? image.props.src : '', alt: image.props.alt ?? '', caption: image.props.title }))
+  const galleryImages = images.map(image => ({ src: typeof image.props.src === 'string' ? image.props.src : '', alt: image.props.alt ?? '', caption: image.props.title,
+    width: imageDimension(image.props.width), height: imageDimension(image.props.height) }))
   if (galleryImages.length > 1 && galleryImages.length === nodes.length && galleryImages.every(image => image.src)) {
     return <PostImageGallery images={galleryImages} />
   }
   return <p>{children}</p>
 }
 
-function collectImages(node: ReactNode): { src: string; alt: string; caption: string }[] {
-  if (!isValidElement<{ src?: string; alt?: string; title?: string; children?: ReactNode }>(node)) return []
-  if (node.type === 'img' || node.type === MarkdownImage) return typeof node.props.src === 'string' ? [{ src: node.props.src, alt: node.props.alt ?? '', caption: node.props.title ?? '' }] : []
+function collectImages(node: ReactNode): GalleryImage[] {
+  if (!isValidElement<ImgHTMLAttributes<HTMLImageElement>>(node)) return []
+  if (node.type === 'img' || node.type === MarkdownImage) return typeof node.props.src === 'string' ? [{ src: node.props.src, alt: node.props.alt ?? '', caption: node.props.title ?? '',
+    width: imageDimension(node.props.width), height: imageDimension(node.props.height) }] : []
   return Children.toArray(node.props.children).flatMap(collectImages)
 }
 
@@ -52,5 +60,5 @@ function MarkdownLink({ href, title, children, ...props }: ComponentProps<'a'> &
 }
 
 export default function PostMarkdown({ content, allowedElements, attachments }: { content: string; allowedElements?: string[]; attachments?: readonly BodyAttachment[] }) {
-  return <ReactMarkdown remarkPlugins={[remarkGfm, remarkDirective, [remarkPostAttachments, attachments], remarkGallery]} skipHtml allowedElements={allowedElements} components={{ p: Paragraph, div: GalleryBlock, img: MarkdownImage, a: MarkdownLink }}>{content}</ReactMarkdown>
+  return <ReactMarkdown remarkPlugins={[remarkGfm, remarkDirective, remarkRestoreTextDirectives, [remarkPostAttachments, attachments], remarkGallery]} skipHtml allowedElements={allowedElements} unwrapDisallowed={allowedElements !== undefined}components={{ p: Paragraph, div: GalleryBlock, img: MarkdownImage, a: MarkdownLink }}>{content}</ReactMarkdown>
 }

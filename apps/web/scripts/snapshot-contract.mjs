@@ -100,6 +100,13 @@ export function validateSnapshot(data, publicRoot = resolve(process.cwd(), 'publ
   if (data.site['donate.cta_href'] !== undefined && data.site['donate.cta_href'] !== '' &&
       !safeCtaHref(data.site['donate.cta_href'])) throw new Error('Invalid donation CTA link')
 
+  if (data.departments !== undefined && (!Array.isArray(data.departments) ||
+    data.departments.some(department => !department || !UUID.test(department.id) ||
+      typeof department.name !== 'string' || !department.name.trim() || department.name.length > 120 ||
+      !Number.isSafeInteger(department.sortOrder)))) throw new Error('Invalid department catalog')
+  const departmentIds = new Set((data.departments ?? []).map(department => department.id.toLowerCase()))
+  unique((data.departments ?? []).map(department => department.id.toLowerCase()), 'department ID')
+
   unique(data.missions.map((mission) => mission.id), 'mission ID')
   unique(data.vehicles.map((vehicle) => vehicle.slug), 'vehicle slug')
   unique(data.posts.map((post) => `${post.source}:${post.source === 'legacy' ? post.slug : post.id}`), 'post ID')
@@ -133,12 +140,20 @@ export function validateSnapshot(data, publicRoot = resolve(process.cwd(), 'publ
     }
   }
   for (const panel of data.panels) {
-    if (panel.published !== true || !isPublicUrl(panel.mediaSrc, publicRoot) || panel.width <= 0 || panel.height <= 0 ||
+    if (!panel || panel.published !== true || !isPublicUrl(panel.mediaSrc, publicRoot) ||
+      !['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/gif', 'video/mp4'].includes(panel.mime) ||
+      (panel.mime === 'video/mp4'
+        ? [panel.width, panel.height].some(size => size != null && (!Number.isSafeInteger(size) || size <= 0))
+        : !Number.isSafeInteger(panel.width) || panel.width <= 0 || !Number.isSafeInteger(panel.height) || panel.height <= 0) ||
+      typeof panel.headline !== 'string' || typeof panel.alt !== 'string' ||
+      !Number.isFinite(panel.focalX) || panel.focalX < 0 || panel.focalX > 100 ||
+      !Number.isFinite(panel.focalY) || panel.focalY < 0 || panel.focalY > 100 ||
+      (panel.posterSrc != null && !isPublicUrl(panel.posterSrc, publicRoot)) ||
       !['none', 'bottom', 'full', 'top'].includes(panel.scrim) ||
       !['bottom-left', 'bottom-center', 'center', 'top-left'].includes(panel.anchor) ||
       !['full', 'tall', 'half'].includes(panel.heightMode) ||
       (panel.ctaHref !== null && !safeCtaHref(panel.ctaHref)) ||
-      Boolean(panel.ctaLabel) !== Boolean(panel.ctaHref)) throw new Error(`Invalid public panel ${panel.id}`)
+      Boolean(panel.ctaLabel) !== Boolean(panel.ctaHref)) throw new Error(`Invalid public panel ${panel?.id}`)
   }
   for (const post of data.posts) {
     if (post.source === 'community' && post.forumPostId != null &&
@@ -180,6 +195,12 @@ export function validateSnapshot(data, publicRoot = resolve(process.cwd(), 'publ
   }
   for (const member of data.members) {
     if (member.published !== true || !member.id || !member.name) throw new Error('Invalid published member')
+    if (member.squads !== undefined && (!Array.isArray(member.squads) || member.squads.length > 20 ||
+      member.squads.some(name => typeof name !== 'string' || !name.trim() || name.length > 120) ||
+      new Set(member.squads).size !== member.squads.length)) throw new Error(`Invalid member departments: ${member.id}`)
+    if (member.departmentIds !== undefined && (!Array.isArray(member.departmentIds) || member.departmentIds.length > 20 ||
+      member.departmentIds.some(id => typeof id !== 'string' || !UUID.test(id) || !departmentIds.has(id.toLowerCase())) ||
+      new Set(member.departmentIds.map(id => typeof id === 'string' ? id.toLowerCase() : id)).size !== member.departmentIds.length)) throw new Error(`Invalid member department IDs: ${member.id}`)
     const placeholder = '/assets/img/member/profile.webp'
     const approvedPhoto = member.hasPhoto === true && member.imageSrc !== placeholder &&
       /^\/assets\/[a-zA-Z0-9_./-]+\.(?:jpg|jpeg|png|webp|avif|gif)$/i.test(member.imageSrc) &&
@@ -188,6 +209,14 @@ export function validateSnapshot(data, publicRoot = resolve(process.cwd(), 'publ
     if (!(approvedPhoto || privatePhoto || (member.hasPhoto === false && member.imageSrc === placeholder)) ||
       hasMemberBioMedia(member.bioMd, isPrivateMemberUrl)) {
       throw new Error(`Member ${member.id} has non-public media`)
+    }
+  }
+  for (const department of data.departments ?? []) {
+    const leader = department.leadMemberId
+    if (leader === undefined || leader === null) continue
+    if (typeof leader !== 'string' || !UUID.test(leader) || !data.members.some(member =>
+      member.id.toLowerCase() === leader.toLowerCase() && member.departmentIds?.some(id => id.toLowerCase() === department.id.toLowerCase()))) {
+      throw new Error(`Invalid department leader: ${department.id}`)
     }
   }
   for (const url of Object.values(data.media)) if (!isPublicUrl(url, publicRoot) && !isPrivateMemberUrl(url)) throw new Error('Non-public media URL')

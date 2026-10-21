@@ -33,6 +33,8 @@
    영상에서 통하지 않고, 그러면 `focal_x/y` 는 사진 전용 필드로 퇴화한다. */
 .media img,
 .media video {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;

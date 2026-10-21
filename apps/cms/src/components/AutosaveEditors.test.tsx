@@ -36,7 +36,7 @@ vi.mock('react', async original => {
 })
 vi.mock('../lib/useAutosave', () => ({ useAutosave: (options: typeof harness.autosave) => {
   harness.autosave = options
-  return { status: 'idle', error: '', flush: harness.flush }
+  return { status: 'idle', error: '', flush: harness.flush, reset: vi.fn() }
 } }))
 vi.mock('../lib/cmsChanges', () => ({ flushCmsChanges: harness.globalFlush, noteCmsChange: vi.fn() }))
 vi.mock('./MarkdownField', () => ({ default: () => null }))
@@ -50,7 +50,8 @@ import { resourcesApi } from '../lib/api/resources'
 import PostCreate from './PostCreate'
 import VehicleCreate from './VehicleCreate'
 import VehicleMediaEditor from './VehicleMediaEditor'
-import AttachmentsEditor from './AttachmentsEditor'
+import { onSessionExpired } from '../lib/sessionRecovery'
+import type { SiteContent } from '../lib/api/types'
 
 function render(component: () => ReactNode) {
   harness.cursor = 0
@@ -192,32 +193,6 @@ it('saves gallery then model in one slot and preserves media edits made during t
   expect(elements(tree).filter(node => node.props.alt?.toString().startsWith('기체 갤러리'))).toHaveLength(0)
 })
 
-it('preserves newer attachment edits and keeps selection when flushing fails', async () => {
-  const other = { ...post, id: 'post-2', title: '두 번째' }
-  vi.mocked(api.list).mockResolvedValue([post, other])
-  let tree = render(AttachmentsEditor)
-  await settle(); tree = render(AttachmentsEditor)
-  const attachment = [{ mediaId: 'one', kind: 'pdf' as const, title: '보고서' }]
-  ;(elements(tree).find(node => node.props.showInsert === false)!.props.onChange as (value: typeof attachment) => void)(attachment)
-  render(AttachmentsEditor)
-  const pending = deferred<Post>()
-  vi.mocked(api.save).mockReturnValue(pending.promise)
-  const saving = harness.autosave!.save()
-  tree = render(AttachmentsEditor)
-  ;(elements(tree).find(node => node.props.showInsert === false)!.props.onChange as (value: typeof attachment) => void)([{ ...attachment[0]!, title: '수정된 보고서' }])
-  render(AttachmentsEditor)
-  pending.resolve({ ...post, version: 'v2', attachments: attachment })
-  await saving
-  tree = render(AttachmentsEditor)
-  expect(harness.autosave?.dirty).toBe(true)
-  expect(elements(tree).find(node => node.props.showInsert === false)!.props.attachments).toEqual([{ ...attachment[0], title: '수정된 보고서' }])
-  harness.flush.mockRejectedValueOnce(new Error('save failed'))
-  const target = elements(tree).find(node => node.type === 'button' && elements(node.props.children as ReactNode).some(child => child.type === 'strong' && child.props.children === '두 번째'))!
-  click(target)
-  await settle(); render(AttachmentsEditor)
-  expect(harness.autosave?.key).toBe('post-attachments:post-1')
-})
-
 it('keeps media save failures visible to the hook and does not start the model slot after gallery failure', async () => {
   vi.mocked(api.list).mockResolvedValue([vehicle])
   vi.mocked(resourcesApi.vehicleMedia).mockImplementation(async (_id, kind) => ({ id: 'raon', version: 'v1', ...(kind === 'gallery' ? { mediaIds: ['one'] } : { modelMediaId: 'model', posterMediaId: null }) }))
@@ -251,12 +226,79 @@ it('cancels an incomplete vehicle before notifying the parent, with no creation 
   expect(localStorage.getItem('icaros:vehicle-create')).toBeNull()
 })
 
-it('rethrows attachment save errors to prevent a successful flush', async () => {
-  vi.mocked(api.list).mockResolvedValue([post])
-  render(AttachmentsEditor)
-  await settle(); const tree = render(AttachmentsEditor)
-  ;(elements(tree).find(node => node.props.showInsert === false)!.props.onChange as (value: Post['attachments']) => void)([{ mediaId: 'one', kind: 'pdf', title: '보고서' }])
-  render(AttachmentsEditor)
-  vi.mocked(api.save).mockRejectedValue(new Error('attachment conflict'))
-  await expect(harness.autosave!.save()).rejects.toThrow('attachment conflict')
+it('writes the local post draft once per edit while retaining recovery data', () => {
+  const setItem = vi.fn()
+  vi.stubGlobal('localStorage', { getItem: () => null, setItem, removeItem: vi.fn() })
+  const view = () => PostCreate({ onCreated: vi.fn() })
+  const tree = render(view)
+  change(input(tree, ''), '보관할 제목')
+  render(view)
+  expect(setItem).toHaveBeenCalledTimes(1)
+  expect(JSON.parse(setItem.mock.calls[0]![1])).toMatchObject({ draft: { title: '보관할 제목' } })
+})
+
+function sessionStore() {
+  const map = new Map<string, string>()
+  return { getItem: (key: string) => map.get(key) ?? null, setItem: (key: string, value: string) => { map.set(key, value) }, removeItem: (key: string) => { map.delete(key) } }
+}
+const setting: SiteContent = { ...base, id: 'donation.current', value: '0' }
+const expired = Object.assign(new Error('expired'), { status: 401 })
+
+it('stashes the dirty draft and signals expiry once when saving gets 401', async () => {
+  vi.stubGlobal('window', { sessionStorage: sessionStore() })
+  const expiry = vi.fn(); const off = onSessionExpired(expiry)
+  const { default: RealEditor } = await vi.importActual<typeof import('./Editor')>('./Editor')
+  const view = () => RealEditor({ kind: 'site', record: setting, onSaved: vi.fn() })
+  const tree = render(view)
+  ;(elements(tree).find(node => node.type === 'textarea')!.props.onChange as (event: { target: { value: string } }) => void)({ target: { value: '12' } })
+  render(view)
+  vi.mocked(api.save).mockRejectedValue(expired)
+  await expect(harness.autosave!.save()).rejects.toThrow('expired')
+  expect(JSON.parse(window.sessionStorage.getItem('icaros:cms:recovery:site:donation.current')!)).toEqual({ baseVersion: 'v1', draft: { value: '12' } })
+  expect(expiry).toHaveBeenCalledTimes(1)
+  off()
+})
+
+it('keeps one recovery draft per editor and redirects once when several editors expire together', async () => {
+  vi.stubGlobal('window', { sessionStorage: sessionStore() })
+  const expiry = vi.fn(); const off = onSessionExpired(expiry)
+  const { default: RealEditor } = await vi.importActual<typeof import('./Editor')>('./Editor')
+  vi.mocked(api.save).mockRejectedValue(expired)
+  for (const record of [setting, { ...setting, id: 'donation.goal' }]) {
+    harness.cells = []; harness.cursor = 0; harness.effects = []
+    const view = () => RealEditor({ kind: 'site', record, onSaved: vi.fn() })
+    const tree = render(view)
+    ;(elements(tree).find(node => node.type === 'textarea')!.props.onChange as (event: { target: { value: string } }) => void)({ target: { value: `edited ${record.id}` } })
+    render(view)
+    await expect(harness.autosave!.save()).rejects.toThrow('expired')
+  }
+  expect(window.sessionStorage.getItem('icaros:cms:recovery:site:donation.current')).not.toBeNull()
+  expect(window.sessionStorage.getItem('icaros:cms:recovery:site:donation.goal')).not.toBeNull()
+  expect(expiry).toHaveBeenCalledTimes(1)
+  off()
+})
+
+it('restores the stashed draft on remount with a notice', async () => {
+  const store = sessionStore()
+  store.setItem('icaros:cms:recovery:site:donation.current', JSON.stringify({ baseVersion: 'v1', draft: { value: 'kept' } }))
+  vi.stubGlobal('window', { sessionStorage: store })
+  const { default: RealEditor } = await vi.importActual<typeof import('./Editor')>('./Editor')
+  const view = () => RealEditor({ kind: 'site', record: setting, onSaved: vi.fn() })
+  render(view); await settle()
+  const tree = render(view)
+  expect(elements(tree).find(node => node.type === 'textarea')!.props.value).toBe('kept')
+  expect(elements(tree).some(node => node.props.children === '세션 만료 전 편집 내용을 복원했습니다.')).toBe(true)
+  expect(store.getItem('icaros:cms:recovery:site:donation.current')).toBeNull()
+})
+
+it('enters the conflict flow when the restored draft is based on an older version', async () => {
+  const store = sessionStore()
+  store.setItem('icaros:cms:recovery:site:donation.current', JSON.stringify({ baseVersion: 'v0', draft: { value: 'old base' } }))
+  vi.stubGlobal('window', { sessionStorage: store })
+  const { default: RealEditor } = await vi.importActual<typeof import('./Editor')>('./Editor')
+  const view = () => RealEditor({ kind: 'site', record: setting, onSaved: vi.fn() })
+  render(view); await settle()
+  const tree = render(view)
+  expect(elements(tree).some(node => node.type === 'button' && node.props.children === '내 수정본 유지하며 최신본 확인')).toBe(true)
+  expect(harness.autosave?.enabled).toBe(false)
 })

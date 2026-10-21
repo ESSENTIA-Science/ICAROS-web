@@ -1,5 +1,7 @@
 # ICAROS static release: predeploy review
 
+멤버 페이지·사진 업로드·로그인 관련 운영 장애와 검증 경계는 [2026-10-18~19 운영 이슈 기록](operations-issues-2026-10-18-19.md)에 정리되어 있다. 이 문서의 정적 배포 절차와 별도로 공개 G 배포에는 [G release packaging](g-release-packaging.md)을 적용한다.
+
 ## Inputs to approve
 
 1. Review the exact Git commit SHA (40 hex) for public FE source. Set the CodeBuild project Git source and allowed source version to that commit. The publication API must pass that same revision through `StartBuild.sourceVersion`.

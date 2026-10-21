@@ -13,5 +13,5 @@
   line-height: 1;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: rgb(255 255 255 / 0.34);
+  color: var(--fg-muted);
 }

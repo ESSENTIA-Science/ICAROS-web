@@ -24,7 +24,7 @@ import styles from './Panel.module.css'
  * `media.placeholder` 는 **화면에 그리지 않는다.** 교체할 사진을 표시하는 것은 우리 쪽 메모이지
  * 방문자에게 할 말이 아니다. 값은 `_panels.ts` 에 남아 있고 그게 교체 목록 역할을 한다.
  */
-export default function Panel({ panel, first }: { panel: LandingPanel; first: boolean }) {
+export default function Panel({ panel, first, supportAvailable = true }: { panel: LandingPanel; first: boolean; supportAvailable?: boolean }) {
   const isVideo = panel.mime.startsWith('video/')
 
   return (
@@ -44,12 +44,12 @@ export default function Panel({ panel, first }: { panel: LandingPanel; first: bo
       <div className={styles.media}>
         {/* 게시 스냅샷의 공개 미디어 URL을 직접 사용한다. 자산은 CDN에 먼저 게시된다. */}
         {isVideo ? (
-          <PanelVideo src={panel.mediaSrc} width={panel.width} height={panel.height} first={first} />
+          <PanelVideo src={panel.mediaSrc} poster={panel.posterSrc} width={panel.width} height={panel.height} first={first} />
         ) : (
           <Image
             src={panel.mediaSrc}
-            width={panel.width}
-            height={panel.height}
+            width={panel.width ?? undefined}
+            height={panel.height ?? undefined}
             alt={panel.alt}
             sizes="100vw"
             priority={first}
@@ -79,7 +79,7 @@ export default function Panel({ panel, first }: { panel: LandingPanel; first: bo
             </p>
           ) : null}
 
-          {panel.ctaLabel && panel.ctaHref ? (
+          {panel.ctaLabel && panel.ctaHref && (panel.ctaHref !== '#support' || supportAvailable) ? (
             <Link href={panel.ctaHref} className={styles.cta} lang="ko">
               <span className={styles.ctaCopy}>
                 <span className={styles.ctaLabel}>{panel.ctaLabel}</span>

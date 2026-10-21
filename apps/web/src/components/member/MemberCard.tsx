@@ -34,7 +34,7 @@ const BIO_DISALLOWED: readonly string[] = ['img']
  * 그쪽은 `measure` + `--fs-body-l` 로 **본문 페이지 폭**에 고정돼 있고, 여기 글은 카드 옆
  * 좁은 칸에 선다. 스타일만 카드 크기로 낮췄고 파이프라인은 손대지 않았다.
  */
-export default function MemberCard({ member }: { member: MemberDto }) {
+export default function MemberCard({ member, departmentLabel }: { member: MemberDto; departmentLabel: string }) {
   const bio = member.bioMd?.trim() || null
 
   return (
@@ -54,7 +54,7 @@ export default function MemberCard({ member }: { member: MemberDto }) {
         </div>
         <div className={styles.body}>
           <p className={styles.name}>{member.name}</p>
-          {member.role ? <p className={styles.role}>{member.role}</p> : null}
+          <p className={styles.role}>{departmentLabel}</p>
           {member.school ? <p className={styles.school}>{member.school}</p> : null}
         </div>
       </div>

@@ -86,11 +86,11 @@ async function request(path: string, init: RequestInit = {}): Promise<unknown> {
 }
 
 const outbound: Record<string, Partial<Record<keyof ResourceRecord, string>>> = {
-  departments: { name: 'name', position: 'sortOrder' },
-  members: { name: 'name', description: 'bioMd', departmentId: 'departmentId', position: 'sortOrder', imageMediaId: 'imageMediaId', published: 'published' },
+  departments: { name: 'name', position: 'sortOrder', leadMemberId: 'leadMemberId' },
+  members: { name: 'name', description: 'bioMd', departmentIds: 'departmentIds', position: 'sortOrder', imageMediaId: 'imageMediaId', published: 'published' },
   'vehicle-types': { name: 'label', position: 'sortOrder' },
   'vehicle-series': { name: 'label', description: 'descriptionMd', typeId: 'typeId', position: 'sortOrder' },
-  panels: { title: 'headline', description: 'body', mediaId: 'mediaId', position: 'sortOrder', ctaLabel: 'ctaLabel', ctaHref: 'ctaHref', published: 'published' },
+  panels: { title: 'headline', description: 'body', mediaId: 'mediaId', posterMediaId: 'posterMediaId', position: 'sortOrder', ctaLabel: 'ctaLabel', ctaHref: 'ctaHref', published: 'published' },
   missions: { title: 'title', launchDate: 'launchDate', vehicleId: 'vehicleId', location: 'location', outcome: 'outcome', summary: 'summary', bodyMd: 'bodyMd', coverMediaId: 'coverMediaId', published: 'published' },
   vehicles: { name: 'name', typeId: 'typeId', seriesId: 'seriesId', description: 'description', galleryMediaIds: 'galleryMediaIds', modelMediaId: 'modelMediaId', position: 'position', published: 'published' },
   'donation-rounds': { roundLabel: 'roundLabel', goal: 'goal', amount: 'amount' },
@@ -98,6 +98,7 @@ const outbound: Record<string, Partial<Record<keyof ResourceRecord, string>>> = 
 
 function invalid(message: string): never { throw new ApiError(message, 400) }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 function record(kind: ResourceKind, value: unknown): ResourceRecord {
   if (!value || typeof value !== 'object' || !('id' in value) || typeof value.id !== 'string' ||
       !('version' in value) || typeof value.version !== 'string') {
@@ -106,6 +107,16 @@ function record(kind: ResourceKind, value: unknown): ResourceRecord {
   const result = { ...value } as Record<string, unknown>
   if (kind === 'vehicles' && (!Array.isArray(result.galleryMediaIds) || result.galleryMediaIds.some(id => typeof id !== 'string'))) {
     throw new ApiError('기체 갤러리 응답 형식이 올바르지 않습니다.', 200)
+  }
+  if (kind === 'departments') {
+    if (result.leadMemberId === undefined) result.leadMemberId = null
+    if (result.leadMemberId !== null && (typeof result.leadMemberId !== 'string' || !UUID.test(result.leadMemberId)))
+      throw new ApiError('부서 우선 표시 멤버 응답 형식이 올바르지 않습니다.', 200)
+  }
+  if (kind === 'members') {
+    if (result.departmentIds === undefined) result.departmentIds = result.departmentId ? [result.departmentId] : []
+    if (!Array.isArray(result.departmentIds) || result.departmentIds.some(id => typeof id !== 'string'))
+      throw new ApiError('멤버 부서 응답 형식이 올바르지 않습니다.', 200)
   }
   for (const [local, remote] of Object.entries(outbound[kind] ?? {})) {
     if (remote !== local && Object.hasOwn(result, remote)) {
@@ -125,9 +136,18 @@ function fields(kind: ResourceKind, draft: Partial<ResourceRecord>): Record<stri
     if (kind === 'panels' && key === 'mediaKind') continue
     const target = mapping[key as keyof ResourceRecord]
     if (!target) return invalid(`지원하지 않는 입력 필드: ${key}`)
+    if (kind === 'departments' && key === 'leadMemberId' && value !== null && (typeof value !== 'string' || !UUID.test(value))) return invalid('부서 우선 표시 멤버 형식이 올바르지 않습니다.')
     if (kind === 'vehicles' && key === 'galleryMediaIds') {
       if (!Array.isArray(value) || value.some(id => typeof id !== 'string')) return invalid('갤러리 형식이 올바르지 않습니다.')
       result[target] = value
+      continue
+    }
+    if (kind === 'members' && key === 'departmentIds') {
+      const ids = value
+      if (!Array.isArray(ids) || ids.length > 20 || ids.some(id => typeof id !== 'string' ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) ||
+        new Set(ids.map(id => id.toLowerCase())).size !== ids.length) return invalid('소속 부서 형식이 올바르지 않습니다.')
+      result[target] = ids
       continue
     }
     if (value !== null && !['string', 'number', 'boolean'].includes(typeof value)) return invalid(`입력 형식이 올바르지 않습니다: ${key}`)
@@ -153,10 +173,12 @@ function createFields(kind: ResourceKind, draft: Partial<ResourceRecord>) {
 
 export const resourcesApi: {
   list: (kind: ResourceKind) => Promise<ResourceRecord[]>
-  create: (kind: ResourceKind, draft: Partial<ResourceRecord>) => Promise<ResourceRecord>
+  create: (kind: ResourceKind, draft: Partial<ResourceRecord>, clientId?: string) => Promise<ResourceRecord>
+  newId: (kind: ResourceKind) => string
+  reorder: (kind: 'departments' | 'panels', ordered: { id: string; version: string }[]) => Promise<ResourceRecord[]>
   update: (kind: ResourceKind, id: string, version: string, draft: Partial<ResourceRecord>) => Promise<ResourceRecord>
   remove: (kind: ResourceKind, id: string, version: string) => Promise<void>
-  upload: (file: File) => Promise<{ id: string }>
+  upload: (file: File, intent?: 'member') => Promise<{ id: string }>
   vehicleMedia: (id: string, kind: 'gallery' | 'model') => Promise<VehicleMedia>
   saveVehicleMedia: (id: string, kind: 'gallery' | 'model', version: string, draft: { mediaIds?: string[]; modelMediaId?: string | null; posterMediaId?: string | null }) => Promise<VehicleMedia>
 } = {
@@ -175,12 +197,34 @@ export const resourcesApi: {
     if (!Array.isArray(data)) throw new ApiError('목록 응답 형식이 올바르지 않습니다.', 200)
     return data.map(item => record(kind, item))
   },
-  create: async (kind, draft) => {
+  newId: createId,
+  create: async (kind, draft, clientId) => {
     if (import.meta.env.VITE_ICAROS_DEMO === '1') return readOnly()
     if (kind === 'donation-rounds') return invalid('후원 현황은 한 건만 수정할 수 있습니다.')
     const route = routeFor(kind)
     const payload = createFields(kind, draft)
-    return record(kind, await request(route, { method: 'POST', body: JSON.stringify({ id: createId(kind), ...payload }) }))
+    const id = clientId ?? createId(kind)
+    try {
+      const saved = record(kind, await request(route, { method: 'POST', body: JSON.stringify({ id, ...payload }) }))
+      if (clientId && saved.id !== id) throw new ApiError('생성 확인 응답의 ID가 일치하지 않습니다.', 200)
+      return saved
+    } catch (cause) {
+      if (!(cause instanceof ApiError) || cause.status !== 409 || !clientId) throw cause
+      const existing = (await resourcesApi.list(kind)).find(item => item.id === id)
+      if (!existing) throw cause
+      const saved = Object.fromEntries(Object.entries(outbound[kind] ?? {}).map(([local, remote]) => [remote, existing[local as keyof ResourceRecord]]))
+      if (Object.entries(payload).some(([key, value]) => JSON.stringify(saved[key]) !== JSON.stringify(value))) throw cause
+      return existing
+    }
+  },
+  reorder: async (kind, ordered) => {
+    if (import.meta.env.VITE_ICAROS_DEMO === '1') return readOnly()
+    const data = await request(`${routeFor(kind)}/order`, { method: 'PUT', body: JSON.stringify({ ordered }) })
+    if (!Array.isArray(data)) throw new ApiError('순서 저장 응답 형식이 올바르지 않습니다.', 200)
+    const saved = data.map(item => record(kind, item))
+    if (saved.length !== ordered.length || saved.some((item, index) => item.id !== ordered[index]?.id || item.position !== index))
+      throw new ApiError('전체 순서 저장을 확인하지 못했습니다.', 200)
+    return saved
   },
   update: async (kind, id, version, draft) => {
     if (import.meta.env.VITE_ICAROS_DEMO === '1') return readOnly()
@@ -199,19 +243,20 @@ export const resourcesApi: {
     const data = await request(`${route}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'If-Match': version } })
     if (!data || typeof data !== 'object' || !('id' in data) || data.id !== id) throw new ApiError('삭제 확인 응답 형식이 올바르지 않습니다.', 200)
   },
-  upload: async file => trackCmsOperation(async () => {
+  upload: async (file, intent) => trackCmsOperation(async () => {
     if (import.meta.env.VITE_ICAROS_DEMO === '1') return readOnly()
     if (!file.name || [...file.name].some(char => char === '/' || char === '\\' || char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127) || /\.(svgz?|xml|html?)$/i.test(file.name)) return invalid('지원하지 않는 파일 이름입니다.')
     const typed = /\.glb$/i.test(file.name) && (!file.type || file.type === 'application/octet-stream') ? new File([file], file.name, { type: 'model/gltf-binary' }) : file
     if (!['image/jpeg', 'image/png', ...Object.keys(uploadPolicies)].includes(typed.type)) throw new ApiError('지원하지 않는 파일 형식입니다.', 415)
     const prepared = typed.type === 'image/jpeg' || typed.type === 'image/png' ? await asWebp(typed) : typed
+    if (intent === 'member' && prepared.type !== 'image/webp') throw new ApiError('프로필 사진은 WebP 이미지만 사용할 수 있습니다.', 415)
     const policy = uploadPolicies[prepared.type]
     if (!policy || !prepared.name.toLowerCase().endsWith(`.${policy.extension}`)) throw new ApiError('파일 확장자와 형식이 일치하지 않습니다.', 415)
     if (prepared.size <= 0) return invalid('빈 파일은 업로드할 수 없습니다.')
     if (prepared.size > policy.max) throw new ApiError('파일 크기 제한을 초과했습니다.', 413)
     const digest = await crypto.subtle.digest('SHA-256', await prepared.arrayBuffer())
     const checksumSha256 = btoa(String.fromCharCode(...new Uint8Array(digest)))
-    const signed = await mediaRequest('presign', { kind: policy.kind, contentType: prepared.type, size: prepared.size, originalFilename: prepared.name, checksumSha256 })
+    const signed = await mediaRequest('presign', { kind: intent ?? policy.kind, contentType: prepared.type, size: prepared.size, originalFilename: prepared.name, checksumSha256 })
     if (typeof signed.mediaId !== 'string' || !signed.mediaId || typeof signed.uploadUrl !== 'string' || !signed.uploadUrl || signed.contentType !== prepared.type) throw new ApiError('업로드 서명 응답 형식이 올바르지 않습니다.', 200)
     let put: Response
     // Fetch computes Content-Length from this exact File; browsers forbid setting it.

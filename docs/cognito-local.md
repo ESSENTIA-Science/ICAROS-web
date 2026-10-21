@@ -1,5 +1,7 @@
 # CMS Cognito 로그인 준비
 
+2026-10-19 운영 CMS는 아이디·비밀번호를 한 화면에서 입력하도록 Classic Hosted UI(`ManagedLoginVersion: 1`)로 전환했다. 변경·검증·복구 범위는 [운영 이슈 기록](operations-issues-2026-10-18-19.md#3-cognito-classic-hosted-ui-전환)을 참고한다.
+
 기존 Cognito App Client에 로컬·운영 callback과 sign-out URL을 등록했고, 공개 가입을 끄고 관리자 그룹을 준비했다. 실제 식별자는 Git에서 제외되는 `docs/.local/cognito.env`에만 둔다. 관리자 사용자를 그룹에 배정하고 같은 이메일의 로컬 DB 권한을 연결해야 로그인할 수 있다. API 저장소는 형제 경로 `../ICAROS-api`에 두고 각 저장소에서 `npm ci`를 실행한다.
 
 1. `essentia` AWS profile의 사용할 region에 CMS 전용 Cognito User Pool을 준비한다. 공개 가입은 끄고 관리자만 등록한다.

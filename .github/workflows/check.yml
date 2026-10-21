@@ -7,6 +7,9 @@ on:
       - main
       - refactor/**
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -17,10 +20,31 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - run: npm ci --prefix infra/aws --ignore-scripts --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run test
-      - run: npm ci --prefix infra/aws
-      - run: node --test infra/cloudfront/release-router.test.mjs infra/aws/*.test.mjs
+      - run: npm audit --omit=dev --audit-level=moderate
+      - run: npm run test:infra
       - run: npm run build:web:fixture
       - run: npm run build -w @icaros/cms
+      - run: npm run test:browser
+      - run: npm run build:g:fixture
+      - run: npm run test:g:runtime
+      - name: Record verified source
+        run: |
+          node --input-type=module -e '
+            import { execFileSync } from "node:child_process";
+            import { writeFileSync } from "node:fs";
+            const sourceRevision = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+            if (sourceRevision !== process.env.GITHUB_SHA) throw new Error("Verification SHA mismatch");
+            execFileSync("git", ["diff", "--quiet", "HEAD", "--"]);
+            if (execFileSync("git", ["ls-files", "--others", "--exclude-standard"], { encoding: "utf8" }).trim()) throw new Error("Untracked source after verification");
+            writeFileSync(`${process.env.RUNNER_TEMP}/icaros-web-verification.json`, JSON.stringify({ sourceRevision, workflow: "Check workspace", result: "passed" }));
+          '
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-verification-${{ github.sha }}
+          path: ${{ runner.temp }}/icaros-web-verification.json
+          if-no-files-found: error

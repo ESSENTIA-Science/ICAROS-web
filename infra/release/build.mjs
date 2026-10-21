@@ -7,6 +7,7 @@ import { S3Client } from '@aws-sdk/client-s3'
 
 import { prepareReleaseExport, exportContentType } from './export.mjs'
 import { uploadSharedAssets } from './upload-assets.mjs'
+import { assertSource, sourceRoot, verifySource } from './verify-source.mjs'
 import { publishStagedRelease, stageFiles } from './stage-files.mjs'
 
 const required = (key) => {
@@ -18,7 +19,7 @@ const hash = (bytes) => createHash('sha256').update(bytes).digest('hex')
 const safePath = (value) => value.length > 0 && !value.startsWith('/') &&
   !value.split('/').some((part) => !part || part === '.' || part === '..') &&
   /^[a-zA-Z0-9/_.,-]+$/.test(value)
-const run = (file, args, options = {}) => execFileSync(file, args, { stdio: 'inherit', ...options })
+const run = (file, args, options = {}) => execFileSync(file, args, { stdio: 'inherit', ...options, cwd: sourceRoot })
 const snapshot = required('ICAROS_SNAPSHOT')
 const snapshotHash = required('ICAROS_SNAPSHOT_SHA256')
 const stagingPrefix = required('ICAROS_STAGING_PREFIX')
@@ -38,8 +39,8 @@ if (!/^s3:\/\/[^/]+\/.+\/[a-f0-9]{64}\.json$/.test(snapshot) ||
   !Number.isInteger(concurrency) || concurrency < 4 || concurrency > 24) {
   throw new Error('Invalid immutable build inputs')
 }
-const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim().toLowerCase()
-if (head !== revision) throw new Error('Checked-out source differs from approved revision')
+// Required checks run on this clean approved checkout before any AWS operation.
+verifySource(revision)
 const temp = mkdtempSync(join(tmpdir(), 'icaros-release-'))
 const snapshotFile = join(temp, 'snapshot.json')
 const started = Date.now()
@@ -50,12 +51,13 @@ run('npm', ['run', 'build', '--workspace', '@icaros/web'], {
   env: { ...process.env, ICAROS_SNAPSHOT: snapshotFile, ICAROS_SNAPSHOT_SHA256: snapshotHash },
 })
 const buildReady = Date.now()
-const output = resolve('apps/web/out')
+const output = resolve(sourceRoot, 'apps/web/out')
 const data = JSON.parse(readFileSync(snapshotFile, 'utf8'))
 if (data.version !== String(version)) throw new Error('Snapshot publication version mismatch')
 const prepared = prepareReleaseExport(output, data)
 const files = prepared.files
 const exportReady = Date.now()
+assertSource(revision)
 const s3 = new S3Client({})
 // Old tabs retain these keys through both forward promotion and rollback.
 // AWS template grants create-only shared asset writes; no API promotion changes.

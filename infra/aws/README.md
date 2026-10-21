@@ -8,9 +8,10 @@
 - `certificate.template.json`: us-east-1 DNS validation. parent 요청 certificate 재사용 여부를 확인하며 중복 요청하지 않는다.
 - `config.schema.json`/`config.example.json`: 플레이스홀더만. approvals=true는 최신 승인 반영, codeFixes/gates=false는 합성 예시이며 부모 검증 상태를 취소하지 않는다.
 - `review.mjs`: 검증/private bundle 생성만. deploy 명령 없음, 값 출력 없음. 실제 값은 저장소 밖 private config와 0700/0600 bundle에 저장한다.
-- `media-proxy.mjs`, `package.json`, `package-lock.json`, `proxy.package.json`: 별도 Node22 artifact. public/private selected copies, active index/member allowlist, MIME/hash/size 검증, no-store. SigV4a pinned side-effect import 포함.
+- `media-proxy.mjs`, `package.json`, `package-lock.json`: 별도 Node22 artifact. 이 manifest/lock이 유일한 packaging 정본이다. selected copies와 current API/DB authority, MIME/hash/size 검증, no-store. SigV4a pinned side-effect import 포함.
 - `NETWORK.md`: 선택된 proxy 구성과 IPv6/NAT 대안·비용·운영 비교.
 - `preflight.sql`: 읽기 검증 쿼리. migration 아님.
+- 보안 헤더(`WebSecurityHeadersPolicy`·`CmsSecurityHeadersPolicy`, Web/CMS DefaultCacheBehavior): 운영 반영은 승인 후 change set 생성 → diff 확인 → 실행 순서로만 한다. 이 저장소 작업은 CloudFront를 변경하지 않는다.
 - `alerts/`: 독립 CloudWatch 경보와 Slack·Discord 게시 알림 스택. 현재 경보 5개만 운영 적용됐고, webhook이 없어 채널 전달은 비활성화됐다. 세부 절차는 [alerts/README.md](alerts/README.md).
 
 ```sh

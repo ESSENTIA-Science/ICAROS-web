@@ -11,6 +11,7 @@ import MarkdownField from './MarkdownField'
 import ImagePreview from './ImagePreview'
 import type { ResourceRecord } from '../lib/resources'
 import VehicleClassification from './VehicleClassification'
+import { preserveOnSessionExpiry, restoredMessage, takeExpiredDraft } from '../lib/sessionRecovery'
 
 const fields = {
   rockets: [
@@ -20,8 +21,8 @@ const fields = {
   posts: [['title', '제목'], ['displayDate', '표시 날짜'], ['bodyMd', '본문 (Markdown)']],
 } as const
 
-export default function Editor<K extends ContentKind>({ kind, record, onSaved }: {
-  kind: K; record: ContentMap[K]; onSaved: (record: ContentMap[K]) => void
+export default function Editor<K extends ContentKind>({ kind, record, onSaved, disabled = false }: {
+  kind: K; record: ContentMap[K]; onSaved: (record: ContentMap[K]) => void; disabled?: boolean
 }) {
   const [draft, setDraft] = useState<Editable<K>>(() => editable(kind, record))
   const [busy, setBusy] = useState<boolean>(false)
@@ -29,6 +30,9 @@ export default function Editor<K extends ContentKind>({ kind, record, onSaved }:
   const [message, setMessage] = useState('')
   const [vehicleTypes, setVehicleTypes] = useState<ResourceRecord[]>([])
   const [vehicleSeries, setVehicleSeries] = useState<ResourceRecord[]>([])
+  const [conflict, setConflict] = useState(false)
+  const [latestChecked, setLatestChecked] = useState(false)
+  const [latestRecord, setLatestRecord] = useState<ContentMap[K] | null>(null)
   const [chosenType, setChosenType] = useState<string | null>(null)
   const dirty = isDirty(kind, record, draft)
   const demo = import.meta.env.VITE_ICAROS_DEMO === '1'
@@ -44,6 +48,15 @@ export default function Editor<K extends ContentKind>({ kind, record, onSaved }:
 
   const savedRecord = useRef(record)
   useEffect(() => { savedRecord.current = record }, [record])
+  useEffect(() => {
+    const restored = takeExpiredDraft<Editable<K>>(`${kind}:${record.id}`)
+    if (!restored) return
+    queueMicrotask(() => {
+      setDraft(restored.draft); setMessage(restoredMessage)
+      if (restored.baseVersion !== record.version) { setConflict(true); setLatestChecked(false) }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- restore once per mounted record
+  }, [kind, record.id])
   async function save() {
     setError(''); setMessage('')
     const sent = JSON.stringify(draft)
@@ -54,6 +67,8 @@ export default function Editor<K extends ContentKind>({ kind, record, onSaved }:
       onSaved(saved)
       setDraft(previous => JSON.stringify(previous) === sent ? editable(kind, saved) : previous)
     } catch (cause) {
+      preserveOnSessionExpiry(cause, `${kind}:${savedRecord.current.id}`, savedRecord.current.version, draft)
+      if (typeof cause === 'object' && cause !== null && 'status' in cause && cause.status === 409) { setConflict(true); setLatestChecked(false) }
       setError(cause instanceof Error ? cause.message : '저장에 실패했습니다.')
       throw cause
     }
@@ -61,8 +76,25 @@ export default function Editor<K extends ContentKind>({ kind, record, onSaved }:
   const seriesId = kind === 'rockets' ? (draft as Editable<'rockets'>).series : ''
   const typeId = chosenType ?? vehicleSeries.find(series => series.id === seriesId)?.typeId ?? ''
   const classificationValid = kind !== 'rockets' || (!!seriesId && (chosenType === null || vehicleSeries.some(series => series.id === seriesId && series.typeId === chosenType)))
-  const autosave = useAutosave({ key: `${kind}:${record.id}`, dirty, fingerprint: JSON.stringify(draft), enabled: !demo && classificationValid && (kind !== 'rockets' || validVehicleSpecs((draft as Editable<'rockets'>).specs)), save })
+  const autosave = useAutosave({ key: `${kind}:${record.id}`, dirty, fingerprint: JSON.stringify(draft), enabled: !demo && !busy && !disabled && !conflict && classificationValid && (kind !== 'rockets' || validVehicleSpecs((draft as Editable<'rockets'>).specs)), save })
+  async function readLatest() {
+    if (busy || disabled) return
+    setBusy(true); setError('')
+    try {
+      const next = (await api.list(kind)).find(item => item.id === record.id) ?? null
+      setLatestRecord(next); setLatestChecked(true)
+      if (next) { savedRecord.current = next; onSaved(next) }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : '최신본을 불러오지 못했습니다.') }
+    finally { setBusy(false) }
+  }
+  function resolveConflict(reapply: boolean) {
+    autosave.reset()
+    if (!reapply) { setDraft(editable(kind, latestRecord ?? record)); setChosenType(null) }
+    if (latestRecord) savedRecord.current = latestRecord
+    setConflict(false); setLatestChecked(false); setError('')
+  }
   async function uploadCover(file: File) {
+    if (busy || disabled || demo) return
     setBusy(true); setError(''); setMessage('')
     try {
       const media = await resourcesApi.upload(file)
@@ -80,7 +112,8 @@ export default function Editor<K extends ContentKind>({ kind, record, onSaved }:
       {kind === 'posts' && <p className="hint">작성자 표시는 ESSENTIA가 관리합니다.</p>}
       {error && <p className="notice error" role="alert">{error}</p>}
       {message && <p className="notice" role="status">{message}</p>}
-      {kind === 'rockets' && <VehicleClassification types={vehicleTypes} series={vehicleSeries} typeId={typeId} seriesId={seriesId} disabled={demo || busy} onTypeChange={next => {
+      {conflict && <div className="notice" role="status"><p>다른 관리자의 변경과 충돌했습니다. 내 입력을 보존하고 자동 저장을 중지했습니다.</p><button type="button" disabled={disabled || busy} onClick={() => void readLatest()}>내 수정본 유지하며 최신본 확인</button>{latestChecked && <><pre>{latestRecord ? JSON.stringify(editable(kind, latestRecord), null, 2) : '서버에서 삭제된 항목입니다.'}</pre><button type="button" disabled={disabled || busy || !latestRecord} onClick={() => resolveConflict(true)}>내 수정본 재적용</button><button type="button" disabled={disabled || busy} onClick={() => resolveConflict(false)}>수정본 폐기</button></>}</div>}
+      {kind === 'rockets' && <VehicleClassification types={vehicleTypes} series={vehicleSeries} typeId={typeId} seriesId={seriesId} disabled={disabled || demo || busy} onTypeChange={next => {
         setChosenType(next)
         setDraft(previous => ({ ...previous, series: vehicleSeries.find(series => series.typeId === next)?.id ?? '' }))
       }} onSeriesChange={next => setDraft(previous => ({ ...previous, series: next }))} />}
@@ -88,15 +121,15 @@ export default function Editor<K extends ContentKind>({ kind, record, onSaved }:
         const fieldLabel = kind === 'site' && record.id === 'donate.cta_href' ? '후원 섹션 이동 버튼 링크' : kind === 'site' && record.id === 'donate.cta_label' ? '후원 섹션 이동 버튼 문구' : label
         const value = String(draft[field as keyof Editable<K>] ?? '')
         const large = ['descriptionMd', 'bodyMd', 'value'].includes(field) && !(kind === 'site' && (record.id === 'donate.cta_href' || record.id === 'donate.cta_label'))
-        if (large && field !== 'value') return <MarkdownField key={field} label={fieldLabel} rows={field === 'bodyMd' ? 12 : 5} value={value} onChange={next => setDraft({ ...draft, [field]: next })} />
+        if (large && field !== 'value') return <MarkdownField key={field} label={fieldLabel} rows={field === 'bodyMd' ? 12 : 5} value={value} disabled={disabled || demo || busy} onChange={next => setDraft({ ...draft, [field]: next })} />
         return <label key={field}>{fieldLabel}
-          {large ? <textarea rows={5} value={value} onChange={event => setDraft({ ...draft, [field]: event.target.value })} />
-            : <input type={field === 'displayDate' ? 'date' : 'text'} placeholder={kind === 'site' && record.id === 'donate.cta_href' ? '/posts' : undefined} value={value} onChange={event => setDraft({ ...draft, [field]: event.target.value })} />}
+          {large ? <textarea disabled={disabled || demo || busy} rows={5} value={value} onChange={event => setDraft({ ...draft, [field]: event.target.value })} />
+            : <input disabled={disabled || demo || busy} type={field === 'displayDate' ? 'date' : 'text'} placeholder={kind === 'site' && record.id === 'donate.cta_href' ? '/posts' : undefined} value={value} onChange={event => setDraft({ ...draft, [field]: event.target.value })} />}
         </label>
       })}</div>
-      {kind === 'rockets' && <><VehicleSpecsEditor specs={(draft as Editable<'rockets'>).specs ?? []} disabled={demo} onChange={specs => setDraft(previous => ({ ...previous, specs }))} />{!validVehicleSpecs((draft as Editable<'rockets'>).specs) && <p className="notice">추가한 제원의 항목명과 값을 입력해야 자동 저장됩니다.</p>}</>}
-      {kind === 'rockets' && <div className="fields"><label>대표 이미지<input readOnly value={String((draft as Editable<'rockets'>).coverMediaId ?? '')} /><input aria-label="대표 이미지 업로드" type="file" accept="image/jpeg,image/png,image/webp" disabled={demo || busy} onChange={event => { const file = event.target.files?.[0]; if (file) void uploadCover(file); event.target.value = '' }} /></label><ImagePreview key={(draft as Editable<'rockets'>).coverMediaId ?? 'none'} mediaId={(draft as Editable<'rockets'>).coverMediaId} alt="대표 이미지 미리보기" /><button type="button" disabled={demo || busy || !(draft as Editable<'rockets'>).coverMediaId} onClick={() => setDraft({ ...draft, coverMediaId: null })}>대표 이미지 연결 해제</button></div>}
-      {kind === 'rockets' && <label className="check"><input type="checkbox" checked={(draft as Editable<'rockets'>).published ?? true} onChange={event => setDraft({ ...draft, published: event.target.checked })} />공개</label>}
+      {kind === 'rockets' && <><VehicleSpecsEditor specs={(draft as Editable<'rockets'>).specs ?? []} disabled={disabled || demo || busy} onChange={specs => setDraft(previous => ({ ...previous, specs }))} />{!validVehicleSpecs((draft as Editable<'rockets'>).specs) && <p className="notice">추가한 제원의 항목명과 값을 입력해야 자동 저장됩니다.</p>}</>}
+      {kind === 'rockets' && <div className="fields"><label>대표 이미지<input readOnly value={String((draft as Editable<'rockets'>).coverMediaId ?? '')} /><input aria-label="대표 이미지 업로드" type="file" accept="image/jpeg,image/png,image/webp" disabled={disabled || demo || busy} onChange={event => { const file = event.target.files?.[0]; if (file) void uploadCover(file); event.target.value = '' }} /></label><ImagePreview key={(draft as Editable<'rockets'>).coverMediaId ?? 'none'} mediaId={(draft as Editable<'rockets'>).coverMediaId} alt="대표 이미지 미리보기" /><button type="button" disabled={disabled || demo || busy || !(draft as Editable<'rockets'>).coverMediaId} onClick={() => setDraft({ ...draft, coverMediaId: null })}>대표 이미지 연결 해제</button></div>}
+      {kind === 'rockets' && <label className="check"><input type="checkbox" disabled={disabled || demo || busy} checked={(draft as Editable<'rockets'>).published ?? true} onChange={event => setDraft({ ...draft, published: event.target.checked })} />공개</label>}
       <p className="hint" role="status">{{ idle: '자동 저장 대기', pending: '저장 대기 중…', saving: '저장 중…', saved: '자동 저장됨', error: '자동 저장 실패' }[autosave.status]}</p>
       {autosave.error && <p className="notice error" role="alert">{autosave.error}</p>}
 

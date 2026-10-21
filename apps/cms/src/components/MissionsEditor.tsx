@@ -6,6 +6,7 @@ import { noteCmsChange } from '../lib/cmsChanges'
 import type { ResourceRecord } from '../lib/resources'
 import MarkdownField from './MarkdownField'
 import ImagePreview from './ImagePreview'
+import { preserveOnSessionExpiry, restoredMessage, takeExpiredDraft } from '../lib/sessionRecovery'
 
 const outcomes = { planned: '예정', success: '성공', partial: '부분 성공', failure: '실패' } as const
 const empty = (): Partial<ResourceRecord> => ({ title: '', launchDate: '', vehicleId: '', location: '', outcome: 'planned', summary: '', bodyMd: '', coverMediaId: null, published: false })
@@ -20,18 +21,36 @@ export default function MissionsEditor() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const active = items.find(item => item.id === selected)
+  const [conflict, setConflict] = useState(false)
+  const [latestChecked, setLatestChecked] = useState(false)
+  const [sessionKey, setSessionKey] = useState(() => selected ?? crypto.randomUUID())
+  const session = useRef<{ id: string | null; attempt: { id: string; draft: Partial<ResourceRecord> } | null }>({ id: selected, attempt: null })
   const records = useRef(items)
   useEffect(() => { records.current = items }, [items])
-  const load = useCallback(async () => {
+  const readId = useRef(0)
+  const load = useCallback(async (preserveDraft = false) => {
+    const currentRead = ++readId.current
     setBusy(true); setError('')
     try {
       const [missions, vehicleList] = await Promise.all([resourcesApi.list('missions'), demo ? resourcesApi.list('vehicles') : api.list('rockets')])
-      setItems(missions); setVehicles(vehicleList)
-    } catch (cause) { setError(cause instanceof Error ? cause.message : '목록을 불러오지 못했습니다.') }
-    finally { setBusy(false) }
+      if (currentRead !== readId.current) return
+      records.current = missions; setItems(missions); setVehicles(vehicleList)
+      if (!preserveDraft) {
+        const next = missions.find(item => item.id === session.current.id)
+        if (!next) session.current.attempt = null
+        session.current.id = next?.id ?? null
+        setSelected(next?.id ?? null); setDraft(next ? { ...next } : empty())
+        const restored = takeExpiredDraft<Partial<ResourceRecord>>(`missions:${next?.id ?? 'new'}`)
+        if (restored) {
+          setDraft(restored.draft); setMessage(restoredMessage)
+          if (next && restored.baseVersion !== next.version) { setConflict(true); setLatestChecked(false) }
+        }
+      } else setLatestChecked(true)
+    } catch (cause) { if (currentRead === readId.current) setError(cause instanceof Error ? cause.message : '목록을 불러오지 못했습니다.') }
+    finally { if (currentRead === readId.current) setBusy(false) }
   }, [demo])
   useEffect(() => { queueMicrotask(() => void load()) }, [load])
-  function select(item: ResourceRecord | null) { setSelected(item?.id ?? null); setDraft(item ? { ...item } : empty()); setError(''); setMessage('') }
+  function select(item: ResourceRecord | null) { setSessionKey(item?.id ?? crypto.randomUUID()); session.current = { id: item?.id ?? null, attempt: null }; setSelected(item?.id ?? null); setDraft(item ? { ...item } : empty()); setError(''); setMessage('') }
   function set<K extends keyof ResourceRecord>(key: K, value: ResourceRecord[K]) { setDraft(previous => ({ ...previous, [key]: value })) }
   function payload(value: Partial<ResourceRecord>) {
     return { title: value.title?.trim() ?? '', launchDate: value.launchDate?.slice(0, 10) ?? '', vehicleId: value.vehicleId || null, location: value.location?.trim() ?? '', outcome: value.outcome ?? 'planned', summary: value.summary?.trim() ?? '', bodyMd: value.bodyMd ?? '', coverMediaId: value.coverMediaId || null, published: value.published ?? false }
@@ -45,24 +64,48 @@ export default function MissionsEditor() {
     if (invalid) { setError(invalid); throw new Error(invalid) }
     setError(''); setMessage('')
     const sent = JSON.stringify(draft)
-    const current = records.current.find(item => item.id === selected)
+    const current = records.current.find(item => item.id === session.current.id)
     try {
-      const result = current ? await resourcesApi.update('missions', current.id, current.version, payload(draft)) : await resourcesApi.create('missions', payload(draft))
-      records.current = current ? records.current.map(item => item.id === result.id ? result : item) : [result, ...records.current]
+      if (!current && !session.current.attempt) session.current.attempt = { id: resourcesApi.newId('missions'), draft: payload(draft) }
+      let result = current ? await resourcesApi.update('missions', current.id, current.version, payload(draft)) : await resourcesApi.create('missions', session.current.attempt!.draft, session.current.attempt!.id)
+      if (!current) {
+        session.current.id = result.id
+        records.current = [...records.current, result]
+        setItems(records.current); setSelected(result.id)
+      }
+      if (!current && JSON.stringify(payload(draft)) !== JSON.stringify(session.current.attempt!.draft))
+        result = await resourcesApi.update('missions', result.id, result.version, payload(draft))
+      records.current = records.current.map(item => item.id === result.id ? result : item)
+      session.current.id = result.id
       setItems(records.current)
       setSelected(result.id)
       setDraft(previous => JSON.stringify(previous) === sent ? { ...result } : previous)
-    } catch (cause) { setError(cause instanceof Error ? cause.message : '저장에 실패했습니다.'); throw cause }
+    } catch (cause) {
+      preserveOnSessionExpiry(cause, `missions:${current?.id ?? 'new'}`, current?.version ?? '', draft)
+      if (typeof cause === 'object' && cause !== null && 'status' in cause && cause.status === 409) { setConflict(true); setLatestChecked(false) }
+      setError(cause instanceof Error ? cause.message : '저장에 실패했습니다.'); throw cause
+    }
   }
-  const autosave = useAutosave({ key: `missions:${selected ?? 'new'}`, dirty, fingerprint: JSON.stringify(payload(draft)), enabled: !demo && !invalid && !busy, save })
+  const autosave = useAutosave({ key: `missions:${sessionKey}`, dirty, fingerprint: JSON.stringify(payload(draft)), enabled: !demo && !invalid && !busy && !conflict, save })
   async function changeSelection(id: string | null) {
+    if (busy) return
     try {
       if (dirty && invalid && !demo) throw new Error(invalid)
       await autosave.flush()
       select(records.current.find(item => item.id === id) ?? null)
     } catch (cause) { setError(cause instanceof Error ? cause.message : '저장을 완료한 후 미션을 전환하세요.') }
   }
+  function resolveConflict(reapply: boolean) {
+    autosave.reset()
+    if (!reapply) select(records.current.find(item => item.id === session.current.id) ?? null)
+    else if (!records.current.some(item => item.id === session.current.id)) {
+      setSessionKey(crypto.randomUUID()); session.current = { id: null, attempt: null }; setSelected(null)
+    }
+    setConflict(false); setLatestChecked(false); setError('')
+  }
   async function refresh() {
+    if (busy) return
+    if (conflict) { await load(true); return }
     try {
       if (dirty && invalid && !demo) throw new Error(invalid)
       await autosave.flush()
@@ -107,8 +150,9 @@ export default function MissionsEditor() {
     finally { setBusy(false) }
   }
   const disabled = demo || busy
-  return <div className="workspace"><aside className="card list"><h2>미션 목록 <span className="count">{items.length}</span></h2><button type="button" disabled={disabled} onClick={() => void changeSelection(null)}>새 미션</button><button type="button" disabled={busy} onClick={() => void refresh()}>새로고침</button><div className="listItems">{items.map(item => <button type="button" className="listItem" key={item.id} aria-current={selected === item.id ? 'true' : undefined} onClick={() => void changeSelection(item.id)}><strong>{item.title || item.id}</strong><small>{item.launchDate} · {item.outcome ? outcomes[item.outcome] : ''}{item.published ? ' · 공개' : ' · 비공개'}</small></button>)}</div></aside>
+  return <div className="workspace"><aside className="card list"><h2>미션 목록 <span className="count">{items.length}</span></h2><button type="button" disabled={disabled} onClick={() => void changeSelection(null)}>새 미션</button><button type="button" disabled={busy} onClick={() => void refresh()}>새로고침</button><div className="listItems">{items.map(item => <button type="button" className="listItem" disabled={busy} key={item.id} aria-current={selected === item.id ? 'true' : undefined} onClick={() => void changeSelection(item.id)}><strong>{item.title || item.id}</strong><small>{item.launchDate} · {item.outcome ? outcomes[item.outcome] : ''}{item.published ? ' · 공개' : ' · 비공개'}</small></button>)}</div></aside>
     <section className="card editor"><div className="cardHead"><h3>{active ? '미션 편집' : '새 미션'}</h3></div>{demo && <p className="notice" role="status">로컬 DB 미리보기는 읽기 전용입니다.</p>}{error && <p className="notice error" role="alert">{error}</p>}{message && <p className="notice" role="status">{message}</p>}
+    {conflict && <div className="notice" role="status"><p>다른 관리자의 변경과 충돌했습니다. 내 입력은 보존되어 있으며 자동 저장을 중지했습니다.</p><button type="button" disabled={busy} onClick={() => void refresh()}>내 수정본 유지하며 최신본 확인</button>{latestChecked && <><pre>{active ? JSON.stringify(active, null, 2) : '서버에서 삭제된 항목입니다.'}</pre><button type="button" disabled={busy} onClick={() => resolveConflict(true)}>내 수정본 재적용</button><button type="button" disabled={busy} onClick={() => resolveConflict(false)}>수정본 폐기</button></>}</div>}
       <div className="fields"><label>제목<input disabled={disabled} value={draft.title ?? ''} onChange={event => set('title', event.target.value)} /></label><label>발사 날짜<input type="date" disabled={disabled} value={draft.launchDate?.slice(0, 10) ?? ''} onChange={event => set('launchDate', event.target.value)} /></label><label>기체<select disabled={disabled} value={draft.vehicleId ?? ''} onChange={event => set('vehicleId', event.target.value)}><option value="">선택 안 함</option>{vehicles.map(vehicle => <option key={vehicle.id} value={vehicle.id}>{vehicle.name || vehicle.title || vehicle.id}</option>)}</select></label><label>장소<input disabled={disabled} value={draft.location ?? ''} onChange={event => set('location', event.target.value)} /></label><label>결과<select disabled={disabled} value={draft.outcome ?? 'planned'} onChange={event => set('outcome', event.target.value as ResourceRecord['outcome'])}>{Object.entries(outcomes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>요약<textarea disabled={disabled} value={draft.summary ?? ''} onChange={event => set('summary', event.target.value)} /></label><MarkdownField label="본문 (Markdown)" disabled={disabled} rows={12} value={draft.bodyMd ?? ''} onChange={value => set('bodyMd', value)} /><label>본문 사진·PDF 추가<input aria-label="본문 파일 추가" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={disabled} onChange={event => { const file = event.target.files?.[0]; if (file) void uploadBody(file); event.target.value = '' }} /></label><label>표지 이미지<input readOnly value={draft.coverMediaId ?? ''} /><input aria-label="표지 이미지 업로드" type="file" accept="image/jpeg,image/png,image/webp" disabled={disabled} onChange={event => { const file = event.target.files?.[0]; if (file) void upload(file); event.target.value = '' }} /></label><ImagePreview key={draft.coverMediaId ?? 'none'} mediaId={draft.coverMediaId} alt="미션 표지 이미지 미리보기" /><button type="button" disabled={disabled || !draft.coverMediaId} onClick={() => set('coverMediaId', null)}>표지 연결 해제</button><label>공개 <input type="checkbox" disabled={disabled} checked={draft.published ?? false} onChange={event => set('published', event.target.checked)} /></label></div>
       <div className="card"><h3>미리보기</h3><h4>{draft.title || '제목 없음'}</h4><p>{draft.launchDate?.slice(0, 10) || '날짜 미입력'} · {draft.location || '장소 미입력'} · {outcomes[draft.outcome ?? 'planned']}</p><p>{draft.summary}</p><div className="missionBodyPreview">{draft.bodyMd || '본문 미입력'}</div><p className="hint">표지 미디어 ID: {draft.coverMediaId || '없음'} · {draft.published ? '공개' : '비공개'}</p></div>
       {!demo && <p className="hint" role="status">{invalid && dirty ? invalid : { idle: '자동 저장 대기', pending: '저장 대기 중…', saving: '저장 중…', saved: '자동 저장됨', error: '자동 저장 실패' }[autosave.status]}</p>}

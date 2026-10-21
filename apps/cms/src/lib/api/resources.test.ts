@@ -20,7 +20,7 @@ function fetchWith(data: unknown) {
 
 describe('resources API DTO adapter', () => {
   it('round-trips member profile photos and sends null to remove them', async () => {
-    const member = { id, version, name: '부원', imageMediaId: mediaId, published: true }
+    const member = { id, version, name: '부원', imageMediaId: mediaId, published: true, departmentIds: [] }
     const fetcher = fetchWith([member])
     await expect(resourcesApi.list('members')).resolves.toEqual([member])
     fetcher.mockResolvedValueOnce(reply({ ...member, version: nextVersion }))
@@ -83,8 +83,8 @@ describe('resources API DTO adapter', () => {
     expect(JSON.parse(fetcher.mock.calls[1]?.[1].body)).toEqual({ ctaLabel: '기록 보기', ctaHref: '/posts' })
   })
   it.each([
-    ['departments', 'departments', { id, version, name: '추진', sortOrder: 2 }, { id, version, name: '추진', position: 2 }],
-    ['members', 'members', { id, version, name: '김', bioMd: '소개', sortOrder: 3 }, { id, version, name: '김', description: '소개', position: 3 }],
+    ['departments', 'departments', { id, version, name: '추진', sortOrder: 2 }, { id, version, name: '추진', position: 2, leadMemberId: null }],
+    ['members', 'members', { id, version, name: '김', bioMd: '소개', sortOrder: 3 }, { id, version, name: '김', description: '소개', position: 3, departmentIds: [] }],
     ['vehicle-types', 'vehicle-types', { id: 'rocket', version, label: '로켓', sortOrder: 4 }, { id: 'rocket', version, name: '로켓', position: 4 }],
     ['vehicle-series', 'rocket-series', { id: 'icx', version, label: 'ICX', descriptionMd: '설명', sortOrder: 5 }, { id: 'icx', version, name: 'ICX', description: '설명', position: 5 }],
     ['panels', 'panels', { id, version, headline: '첫 발사', body: '설명', mediaId, sortOrder: 6 }, { id, version, title: '첫 발사', description: '설명', mediaId, position: 6 }],
@@ -122,6 +122,14 @@ describe('resources API DTO adapter', () => {
     expect(fetcher.mock.calls[0]?.[0]).toBe('/api/admin/content/rocket-series/icx')
     expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ method: 'PUT', headers: { 'If-Match': version } })
     expect(JSON.parse(fetcher.mock.calls[0]?.[1].body)).toEqual({ label: 'ICX II', descriptionMd: '새 설명', sortOrder: 7 })
+  })
+
+  it('sends multiple member departments in their selected order', async () => {
+    const departments = ['59f0649e-ed79-47a2-bf9d-e299204641b8', 'f86d389e-4e9c-4df0-a45c-d17f73676e45']
+    const fetcher = fetchWith({ id, version: nextVersion, name: '김', departmentIds: departments })
+    await expect(resourcesApi.update('members', id, version, { name: '김', departmentIds: departments }))
+      .resolves.toMatchObject({ departmentIds: departments })
+    expect(JSON.parse(fetcher.mock.calls[0]?.[1].body)).toEqual({ name: '김', departmentIds: departments })
   })
 
   it('deletes with If-Match and an encoded ID', async () => {
@@ -220,4 +228,59 @@ describe('media upload', () => {
     await expect(resourcesApi.upload(new File(['%PDF-'], 'x.pdf', { type: 'application/pdf' }))).rejects.toMatchObject({ status: 403 })
     expect(fetcher).toHaveBeenCalledTimes(2)
   })
+})
+
+it('recovers an uncertain create with the original client ID and original payload', async () => {
+  const fetcher = vi.fn().mockRejectedValueOnce(new Error('lost response'))
+    .mockResolvedValueOnce(reply(null, 409)).mockResolvedValueOnce(reply([{ id, version, name: 'original', sortOrder: 0 }]))
+  vi.stubGlobal('fetch', fetcher)
+  await expect(resourcesApi.create('departments', { name: 'original', position: 0 }, id)).rejects.toMatchObject({ status: 0 })
+  await expect(resourcesApi.create('departments', { name: 'original', position: 0 }, id)).resolves.toMatchObject({ id, name: 'original' })
+  expect(JSON.parse(fetcher.mock.calls[0]?.[1].body)).toEqual(JSON.parse(fetcher.mock.calls[1]?.[1].body))
+})
+it('does not claim a conflicting client create ID with different saved content', async () => {
+  const fetcher = vi.fn().mockResolvedValueOnce(reply(null, 409)).mockResolvedValueOnce(reply([{ id, version, name: 'other' }]))
+  vi.stubGlobal('fetch', fetcher)
+  await expect(resourcesApi.create('departments', { name: 'original' }, id)).rejects.toMatchObject({ status: 409 })
+})
+it.each(['departments', 'panels'] as const)('reorders the full %s list in one request', async kind => {
+  const ordered = [{ id: mediaId, version }, { id, version }]
+  const fetcher = fetchWith([{ id: mediaId, version: nextVersion, sortOrder: 0 }, { id, version: nextVersion, sortOrder: 1 }])
+  await expect(resourcesApi.reorder(kind, ordered)).resolves.toMatchObject([{ id: mediaId, position: 0 }, { id, position: 1 }])
+  expect(fetcher.mock.calls[0]?.[0]).toBe(`/api/admin/content/${kind}/order`)
+  expect(fetcher.mock.calls[0]?.[1].method).toBe('PUT')
+  expect(JSON.parse(fetcher.mock.calls[0]?.[1].body)).toEqual({ ordered })
+})
+
+it('does not accept a different server ID as confirmation of the attempted creation', async () => {
+  fetchWith({ id: mediaId, version, name: 'original' })
+  await expect(resourcesApi.create('departments', { name: 'original' }, id)).rejects.toMatchObject({ status: 200 })
+})
+
+it('presigns member photos with member privacy intent before any entity attachment', async () => {
+  const fetcher = vi.fn().mockResolvedValueOnce(reply({ mediaId, uploadUrl: 'https://upload.example/portrait', contentType: 'image/webp' })).mockResolvedValueOnce(new Response(null, { status: 200 })).mockResolvedValueOnce(reply({ id: mediaId }))
+  vi.stubGlobal('fetch', fetcher)
+  await resourcesApi.upload(new File(['RIFFportrait'], 'portrait.webp', { type: 'image/webp' }), 'member')
+  expect(JSON.parse(fetcher.mock.calls[0]![1].body)).toMatchObject({ kind: 'member', contentType: 'image/webp' })
+})
+
+it('normalizes older department DTOs and writes nullable leaders with the current version', async () => {
+  const fetcher = fetchWith([{ id, version, name: '부서', sortOrder: 0 }])
+  await expect(resourcesApi.list('departments')).resolves.toEqual([{ id, version, name: '부서', position: 0, leadMemberId: null }])
+  for (const leadMemberId of [mediaId, null]) {
+    fetcher.mockResolvedValueOnce(reply({ id, version: nextVersion, name: '부서', sortOrder: 0, leadMemberId }))
+    await expect(resourcesApi.update('departments', id, version, { leadMemberId })).resolves.toMatchObject({ leadMemberId })
+    const call = fetcher.mock.calls.at(-1)!
+    expect(JSON.parse(call[1].body)).toEqual({ leadMemberId })
+    expect(call[1].headers['If-Match']).toBe(version)
+  }
+})
+it('rejects malformed department leader DTOs and writes before sending', async () => {
+  for (const leadMemberId of ['', 'not-uuid', 3, [], {}]) {
+    fetchWith([{ id, version, name: '부서', leadMemberId }])
+    await expect(resourcesApi.list('departments')).rejects.toThrow()
+    const fetcher = fetchWith(receipt)
+    await expect(resourcesApi.update('departments', id, version, { leadMemberId } as never)).rejects.toThrow()
+    expect(fetcher).not.toHaveBeenCalled()
+  }
 })

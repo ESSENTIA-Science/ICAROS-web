@@ -10,6 +10,7 @@ import ImagePreview from './ImagePreview'
 import { resourcesApi } from '../lib/api/resources'
 import { insertGalleryMarkdown, insertTableMarkdown, parseSpreadsheetCells, readGalleryAt, readSelectedImages, readTableAt, type GalleryAlign, type GalleryColumns, type GalleryImage } from './markdownBlocks'
 import { remarkGallery } from './remarkGallery'
+import { remarkRestoreTextDirectives } from '../lib/markdown/restoreTextDirectives'
 import MarkdownBodyMedia from './MarkdownBodyMedia'
 import { bodyMediaFileKind, insertBodyMediaMarkdown, rememberBodyMediaPreview } from './bodyMedia'
 
@@ -74,24 +75,31 @@ class ImageWidget extends WidgetType {
   destroy() { this.root?.unmount(); this.root = null }
 }
 
-function imageDecorations(view: EditorView): DecorationSet {
-  const ranges = []
-  for (const match of view.state.doc.toString().matchAll(embeddedImage)) {
-    const start = match.index
-    const end = start + match[0].length
-    if (view.state.selection.ranges.some(range => range.empty
-      ? range.from > start && range.from < end
-      : range.from < end && range.to > start)) continue
-    ranges.push(Decoration.replace({ widget: new ImageWidget(match[2]!, match[1]!) }).range(start, end))
-  }
-  return Decoration.set(ranges)
+function readInlineImages(state: EditorState) {
+  return Array.from(state.doc.toString().matchAll(embeddedImage), match => ({
+    from: match.index,
+    to: match.index + match[0].length,
+    decoration: Decoration.replace({ widget: new ImageWidget(match[2]!, match[1]!) }),
+  }))
+}
+
+function imageDecorations(state: EditorState, images: ReturnType<typeof readInlineImages>): DecorationSet {
+  return Decoration.set(images.filter(image => !state.selection.ranges.some(range => range.empty
+    ? range.from > image.from && range.from < image.to
+    : range.from < image.to && range.to > image.from))
+    .map(image => image.decoration.range(image.from, image.to)))
 }
 
 const inlineImages = ViewPlugin.fromClass(class {
+  images: ReturnType<typeof readInlineImages>
   decorations: DecorationSet
-  constructor(view: EditorView) { this.decorations = imageDecorations(view) }
+  constructor(view: EditorView) {
+    this.images = readInlineImages(view.state)
+    this.decorations = imageDecorations(view.state, this.images)
+  }
   update(update: ViewUpdate) {
-    if (update.docChanged || update.selectionSet || update.viewportChanged) this.decorations = imageDecorations(update.view)
+    if (update.docChanged) this.images = readInlineImages(update.state)
+    if (update.docChanged || update.selectionSet) this.decorations = imageDecorations(update.state, this.images)
   }
 }, { decorations: plugin => plugin.decorations })
 
@@ -120,8 +128,8 @@ export function insertImageMarkdown(value: string, start: number, end: number, m
   return { value: value.slice(0, start) + markdown + value.slice(end), start: start + markdown.length, end: start + markdown.length }
 }
 
-export default function MarkdownField({ label, value, onChange, rows = 6, disabled = false }: {
-  label: string; value: string; onChange: (value: string) => void; rows?: number; disabled?: boolean
+export default function MarkdownField({ label, value, onChange, rows = 6, disabled = false, uploadIntent }: {
+  label: string; value: string; onChange: (value: string) => void; rows?: number; disabled?: boolean; uploadIntent?: 'member'
 }) {
   const id = useId()
   const mountRef = useRef<HTMLDivElement>(null)
@@ -140,12 +148,29 @@ export default function MarkdownField({ label, value, onChange, rows = 6, disabl
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([])
   const [columns, setColumns] = useState<GalleryColumns>(2)
   const [align, setAlign] = useState<GalleryAlign>('center')
-  const editRange = useRef({ from: 0, to: 0 })
+  const editRange = useRef<{ from: number; to: number } | null>(null)
+  const [editConflict, setEditConflict] = useState(false)
   useEffect(() => {
     if (!mountRef.current) return
     const extensions: Extension[] = [markdownLanguage(), inlineImages, EditorView.lineWrapping,
       EditorView.updateListener.of(update => {
         if (update.docChanged) {
+          for (const transaction of update.transactions) {
+            const range = editRange.current
+            if (!range || !transaction.docChanged) continue
+            let changedTarget = false
+            transaction.changes.iterChangedRanges((from, to) => {
+              if (from < range.to && to > range.from) changedTarget = true
+            })
+            if (changedTarget) {
+              editRange.current = null
+              setEditConflict(true)
+            } else {
+              // Exclude text inserted at either edge from the block being edited.
+              const from = transaction.changes.mapPos(range.from, 1)
+              editRange.current = { from, to: range.from === range.to ? from : transaction.changes.mapPos(range.to, -1) }
+            }
+          }
           selectionRef.current = { start: update.changes.mapPos(selectionRef.current.start, -1), end: update.changes.mapPos(selectionRef.current.end, 1) }
           onChangeRef.current(update.state.doc.toString())
         }
@@ -181,6 +206,7 @@ export default function MarkdownField({ label, value, onChange, rows = 6, disabl
     editRange.current = existing ? { from: existing.from, to: existing.to } : { from, to }
     setTableCells(existing?.cells ?? (from !== to && source.slice(from, to).includes('\t') ? parseSpreadsheetCells(source.slice(from, to)) : [['항목', '값'], ['', '']]))
     setSpreadsheet('')
+    setEditConflict(false)
     setPanel('table')
   }
   function openGallery() {
@@ -193,6 +219,7 @@ export default function MarkdownField({ label, value, onChange, rows = 6, disabl
     setGalleryImages(existing?.images ?? (from !== to ? readSelectedImages(source, from, to) : []))
     setColumns(existing?.columns ?? 2)
     setAlign(existing?.align ?? 'center')
+    setEditConflict(false)
     setPanel('gallery')
   }
   function updateCell(row: number, column: number, text: string) {
@@ -216,7 +243,7 @@ export default function MarkdownField({ label, value, onChange, rows = 6, disabl
     try {
       for (const file of Array.from(files)) {
         if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('JPG, PNG, WebP 이미지만 선택할 수 있습니다.')
-        const media = await resourcesApi.upload(file)
+        const media = await resourcesApi.upload(file, uploadIntent)
         setGalleryImages(previous => [...previous, { src: `/api/media/${media.id}`, alt: file.name.replace(/\.[^.]+$/, ''), caption: '' }])
       }
     } catch (error) { setUploadError(error instanceof Error ? error.message : '이미지 업로드에 실패했습니다.') }
@@ -229,7 +256,7 @@ export default function MarkdownField({ label, value, onChange, rows = 6, disabl
     try {
       const kind = bodyMediaFileKind(file)
       if (kind !== expectedKind) throw new Error('선택한 삽입 도구에 맞는 파일 형식을 선택하세요.')
-      const media = await resourcesApi.upload(file)
+      const media = await resourcesApi.upload(file, uploadIntent)
       const view = viewRef.current
       if (!view) return
       const { start, end } = selectionRef.current
@@ -259,19 +286,21 @@ export default function MarkdownField({ label, value, onChange, rows = 6, disabl
           event.target.value = ''
           if (file) void uploadFile(file, 'image')
         }} />
-      {([{ kind: 'pdf', label: 'PDF', accept: 'application/pdf', ref: pdfRef }, { kind: 'video', label: '영상', accept: 'video/mp4', ref: videoRef }] as const).map(tool => <span key={tool.kind}>
-        <button type="button" title={`${tool.label} 삽입`} aria-label={`${tool.label} 삽입`} disabled={disabled || uploading} onMouseDown={event => event.preventDefault()} onClick={() => {
+      {([{ kind: 'pdf', label: 'PDF', accept: 'application/pdf' }, { kind: 'video', label: '영상', accept: 'video/mp4' }] as const).map(tool => <span key={tool.kind} hidden={uploadIntent === 'member'}>
+        <button type="button" title={`${tool.label} 삽입`} aria-label={`${tool.label} 삽입`} disabled={disabled || uploading || uploadIntent === 'member'} onMouseDown={event => event.preventDefault()} onClick={() => {
           const selection = viewRef.current?.state.selection.main
           if (selection) selectionRef.current = { start: selection.from, end: selection.to }
-          tool.ref.current?.click()
+          const fileInput = tool.kind === 'pdf' ? pdfRef : videoRef
+          fileInput.current?.click()
         }}>{tool.label}</button>
-        <input ref={tool.ref} className="markdownImageInput" type="file" accept={tool.accept} tabIndex={-1} aria-label={`${label} ${tool.label} 파일`} disabled={disabled || uploading} onChange={event => {
+        <input ref={tool.kind === 'pdf' ? pdfRef : videoRef} className="markdownImageInput" type="file" accept={tool.accept} tabIndex={-1} aria-label={`${label} ${tool.label} 파일`} disabled={disabled || uploading || uploadIntent === 'member'} onChange={event => {
           const file = event.target.files?.[0]
           event.target.value = ''
           if (file) void uploadFile(file, tool.kind)
         }} />
       </span>)}
     </div>
+    {uploadIntent === 'member' && <p className="notice">멤버 소개에는 이미지만 추가할 수 있습니다. JPG·PNG·WebP는 WebP로 저장하며 PDF·영상은 지원하지 않습니다.</p>}
     {panel === 'table' && <section className="markdownToolPanel" aria-label="표 편집">
       <h3>표 편집</h3>
       <div className="markdownTableScroll"><table><tbody>{tableCells.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, columnIndex) => <td key={columnIndex}><input aria-label={`${rowIndex === 0 ? '제목' : `${rowIndex}행`} ${columnIndex + 1}열`} value={cell} onChange={event => updateCell(rowIndex, columnIndex, event.target.value)} /></td>)}</tr>)}</tbody></table></div>
@@ -283,12 +312,14 @@ export default function MarkdownField({ label, value, onChange, rows = 6, disabl
       </div>
       <label>스프레드시트 데이터 붙여넣기<textarea value={spreadsheet} onChange={event => setSpreadsheet(event.target.value)} placeholder="탭으로 구분된 셀을 붙여넣으세요" /></label>
       <button type="button" disabled={!spreadsheet.trim()} onClick={() => { setTableCells(parseSpreadsheetCells(spreadsheet)); setSpreadsheet('') }}>데이터 반영</button>
-      <div className="actions"><button type="button" onClick={() => {
+      <div className="actions"><button type="button" disabled={disabled || editConflict} onClick={() => {
         const view = viewRef.current
-        if (!view) return
-        replace(insertTableMarkdown(view.state.doc.toString(), editRange.current.from, editRange.current.to, tableCells))
+        const range = editRange.current
+        if (!view || !range || disabled) return
+        editRange.current = null
+        replace(insertTableMarkdown(view.state.doc.toString(), range.from, range.to, tableCells))
         setPanel(null)
-      }}>본문에 적용</button><button type="button" onClick={() => setPanel(null)}>취소</button></div>
+      }}>본문에 적용</button><button type="button" onClick={() => { editRange.current = null; setPanel(null) }}>취소</button></div>
     </section>}
     {panel === 'gallery' && <section className="markdownToolPanel" aria-label="이미지 배치 편집">
       <h3>이미지 배치</h3>
@@ -301,15 +332,18 @@ export default function MarkdownField({ label, value, onChange, rows = 6, disabl
         <label>캡션<input value={image.caption} onChange={event => updateImage(index, 'caption', event.target.value)} /></label>
         <div className="actions"><button type="button" aria-label={`${index + 1}번 사진 위로`} disabled={index === 0} onClick={() => moveImage(index, -1)}>위로</button><button type="button" aria-label={`${index + 1}번 사진 아래로`} disabled={index === galleryImages.length - 1} onClick={() => moveImage(index, 1)}>아래로</button><button type="button" onClick={() => setGalleryImages(previous => previous.filter((_, imageIndex) => imageIndex !== index))}>제거</button></div>
       </li>)}</ol>
-      <div className="actions"><button type="button" disabled={uploading || galleryImages.length === 0} onClick={() => {
+      <div className="actions"><button type="button" disabled={disabled || editConflict || uploading || galleryImages.length === 0} onClick={() => {
         const view = viewRef.current
-        if (!view) return
-        replace(insertGalleryMarkdown(view.state.doc.toString(), editRange.current.from, editRange.current.to, galleryImages, columns, align))
+        const range = editRange.current
+        if (!view || !range || disabled) return
+        editRange.current = null
+        replace(insertGalleryMarkdown(view.state.doc.toString(), range.from, range.to, galleryImages, columns, align))
         setPanel(null)
-      }}>본문에 적용</button><button type="button" disabled={uploading} onClick={() => setPanel(null)}>취소</button></div>
+      }}>본문에 적용</button><button type="button" disabled={uploading} onClick={() => { editRange.current = null; setPanel(null) }}>취소</button></div>
     </section>}
+    {panel && editConflict && <p className="notice error" role="alert">편집 중인 본문이 변경되거나 삭제되었습니다. 표 또는 이미지 배치를 다시 선택해 편집하세요.</p>}
     <div ref={mountRef} className="markdownEditor" role="textbox" aria-labelledby={id} aria-multiline="true" style={{ minHeight: `${Math.max(rows, 3) * 2.4}rem` }} />
     {uploadError && <p className="notice error" role="alert">{uploadError}</p>}
-    <div className="markdownRendered" aria-label={`${label} 미리보기`}><ReactMarkdown remarkPlugins={[remarkGfm, remarkDirective, remarkGallery]} skipHtml components={{ img: PreviewImage, div: GalleryPreview, a: MarkdownBodyMedia }}>{value}</ReactMarkdown></div>
+    <div className="markdownRendered" aria-label={`${label} 미리보기`}><ReactMarkdown remarkPlugins={[remarkGfm, remarkDirective, remarkRestoreTextDirectives, remarkGallery]} skipHtml components={{ img: PreviewImage, div: GalleryPreview, a: MarkdownBodyMedia }}>{value}</ReactMarkdown></div>
   </div>
 }
