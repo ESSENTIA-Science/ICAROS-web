@@ -11,6 +11,7 @@
 - `media-proxy.mjs`, `package.json`, `package-lock.json`: 별도 Node22 artifact. 이 manifest/lock이 유일한 packaging 정본이다. selected copies와 current API/DB authority, MIME/hash/size 검증, no-store. SigV4a pinned side-effect import 포함.
 - `NETWORK.md`: 선택된 proxy 구성과 IPv6/NAT 대안·비용·운영 비교.
 - `preflight.sql`: 읽기 검증 쿼리. migration 아님.
+- 보안 헤더(`WebSecurityHeadersPolicy`·`CmsSecurityHeadersPolicy`, Web/CMS DefaultCacheBehavior): 운영 반영은 승인 후 change set 생성 → diff 확인 → 실행 순서로만 한다. 이 저장소 작업은 CloudFront를 변경하지 않는다.
 
 ```sh
 npm ci --prefix infra/aws --ignore-scripts --no-audit --no-fund
